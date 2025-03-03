@@ -1,0 +1,94 @@
+
+      // Eveniment "tap" pe rută -> Adaugă un waypoint
+      routeLine.addEventListener("tap", (evt) => {
+        let tapPosition = mapRef.current.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
+      
+        // Ștergem marker-ul anterior (dacă există)
+        mapRef.current.getObjects().forEach((obj) => {
+          if (obj instanceof window.H.map.Marker) {
+            mapRef.current.removeObject(obj);
+          }
+        });
+      
+        // Creăm un nou marker
+        let marker = new window.H.map.Marker(tapPosition, { volatility: true });
+        marker.draggable = true;
+        mapRef.current.addObject(marker);
+      
+        // Setăm un singur waypoint nou
+        setWaypoints([{ lat: tapPosition.lat, lng: tapPosition.lng }]);
+      
+        // Eveniment "dragstart" -> Dezactivează mutarea hărții
+        marker.addEventListener("dragstart", () => {
+          if (behaviorRef.current) behaviorRef.current.disable();
+        });
+      
+        // Eveniment "dragend" -> Mută markerul și recalculează ruta
+        marker.addEventListener("dragend", (ev) => {
+          let target = ev.target;
+          let newPos = mapRef.current.screenToGeo(ev.currentPointer.viewportX, ev.currentPointer.viewportY);
+          target.setGeometry(newPos);
+      
+          // Ștergem waypoint-ul vechi și adăugăm doar pe cel nou
+          setWaypoints((prev)=> [...prev, { lat: newPos.lat, lng: newPos.lng }]);
+      
+          // Recalculăm traseul
+          getRoute(startCoordinates, endCoordinates, [{ lat: newPos.lat, lng: newPos.lng }]);
+      
+          if (behaviorRef.current) behaviorRef.current.enable();
+        });
+      
+        // Recalculăm traseul inițial
+        getRoute(startCoordinates, endCoordinates, [{ lat: tapPosition.lat, lng: tapPosition.lng }]);
+      });      
+
+
+
+
+
+
+
+
+
+
+
+      routeLine.addEventListener("tap", (evt) => {
+        let tapPosition = mapRef.current.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
+
+        // Ștergem marker-ul anterior (dacă există)
+        mapRef.current.getObjects().forEach((obj) => {
+          if (obj instanceof window.H.map.Marker) {
+            mapRef.current.removeObject(obj);
+          }
+        });
+
+        let marker = new window.H.map.Marker(tapPosition, { volatility: true });
+        marker.draggable = true;
+        mapRef.current.addObject(marker);
+
+        newWaypoints.push(tapPosition);
+
+        // Eveniment "dragstart" -> Dezactivează mutarea hărții
+        marker.addEventListener("dragstart", () => {
+          if (behaviorRef.current) behaviorRef.current.disable();
+        });
+
+        // Eveniment "dragend" -> Mută markerul și recalculează ruta
+        marker.addEventListener("dragend", (ev) => {
+          let target = ev.target;
+          let newPos = mapRef.current.screenToGeo(ev.currentPointer.viewportX, ev.currentPointer.viewportY);
+          target.setGeometry(newPos);
+
+          // Actualizăm waypoint-ul mutat
+          newWaypoints = newWaypoints.map((wp) =>
+            wp.lat === tapPosition.lat && wp.lng === tapPosition.lng ? { lat: newPos.lat, lng: newPos.lng } : wp
+          );
+
+          setWaypoints(newWaypoints);
+          getRoute(startCoordinates, endCoordinates, newWaypoints); // Recalculare doar după mutare
+
+          if (behaviorRef.current) behaviorRef.current.enable();
+        });
+
+        setWaypoints(newWaypoints);
+      });
