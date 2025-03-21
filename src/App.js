@@ -12,9 +12,6 @@ const App = () => {
   const [distance, setDistance] = useState(null);
   const [vehicleType, setVehicleType] = useState({ axles: 5, weight: 30000 });
   const [tollCost, setTollCost] = useState({ totalCost: 0, tollList: [] }); // Adăugăm obiectul cu detalii
-  const [oldStartCoordinates, setOldStartCoordinates] = useState(null);
-  const [oldEndCoordinates, setOldEndCoordinates] = useState(null);
-  const [markers, setMarkers] = useState([]); // Folosește un state pentru a păstra marker-ele
   const [intermediateCoordinates, setIntermediateCoordinates] = useState(null);
   const mapRef = useRef(null);
   const routingControlRef = useRef(null);
@@ -191,6 +188,10 @@ const App = () => {
               Tonaj (kg):
               <input type="number" name="weight" value={vehicleType.weight} onChange={handleVehicleTypeChange} min="1000" max="40000" />
             </label>
+            <label>
+              Euro per km:
+              <input type="decimal" name="EuroPerKm" onChange={handleVehicleTypeChange} min="0" max="10" />
+            </label>
             <button type="submit">Calculare rută</button>
           </form>
 
@@ -198,7 +199,9 @@ const App = () => {
           <h3>Detalii Taxe Rutiere</h3>
           <p><strong>Distanta:</strong> {distance} km</p>
           <p><strong>Durata deplasării:</strong> {duration}</p>
-          <p><strong>Cost Total:</strong> {tollCost.totalCost} EUR</p>
+          <p><strong>Cost per Km:</strong> {" "} {distance && vehicleType.EuroPerKm ? (distance * vehicleType.EuroPerKm).toFixed(2) : 0} EUR</p>
+          <p><strong>Cost Taxe:</strong> {tollCost.totalCost} EUR</p>
+          <p><strong>Cost Total:</strong> {" "} {distance && vehicleType.EuroPerKm ? ((distance * vehicleType.EuroPerKm) + tollCost.totalCost).toFixed(2) : 0}{" "} EUR</p>
           <ul>
             {tollCost.tollList.map((toll, index) => (
               <li key={index}>
