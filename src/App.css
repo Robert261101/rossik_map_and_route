@@ -8,12 +8,11 @@ ul {
   margin: 0;
   border: 1px solid #ccc;
   background-color: white;
-  position: absolute;
-  z-index: 1000;
-  width: 100%;
-  max-height: 200px;
-  overflow-y: auto;
+  max-height: 200px; /* Limitează înălțimea listei */
+  overflow-y: auto; /* Adaugă un scrollbar dacă lista depășește max-height */
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  position: relative; /* Schimbă de la absolute la relative pentru a nu depăși */
+  z-index: 1; /* Asigură că lista nu va trece peste alte elemente */
 }
 li {
   padding: 8px;

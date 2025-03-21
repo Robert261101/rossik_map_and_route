@@ -7,7 +7,7 @@ const AutoCompleteInput = ({ apiKey, onSelect }) => {
 
   useEffect(() => {
     const fetchSuggestions = async () => {
-      if (query.length > 2) {
+      if (query.length > 2 && apiKey) {  // Verifică dacă apiKey există
         const url = `https://autocomplete.search.hereapi.com/v1/autocomplete?q=${encodeURIComponent(query)}&apiKey=${apiKey}`;
         try {
           const response = await fetch(url);
@@ -69,8 +69,6 @@ const AutoCompleteInput = ({ apiKey, onSelect }) => {
                 e.stopPropagation();
                 handleSelect(suggestion);
               }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
             >
               {suggestion.address.label}
             </li>

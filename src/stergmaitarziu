@@ -42,16 +42,6 @@
         getRoute(startCoordinates, endCoordinates, [{ lat: tapPosition.lat, lng: tapPosition.lng }]);
       });      
 
-
-
-
-
-
-
-
-
-
-
       routeLine.addEventListener("tap", (evt) => {
         let tapPosition = mapRef.current.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
 
