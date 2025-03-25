@@ -1,84 +1,60 @@
+return (
+  <div className="App">
+    <h1>Calculare Rută Camion</h1>
+    <div className="container">
+      <div className="sidebar">
+        <form onSubmit={handleSubmit}>
+          <label>
+            Locație plecare:
+            <AutoCompleteInput apiKey="ykLQWx4MFaivuUY1XxQzByycPVwKT4ERPsvB4a830oE" iconUrl = "/green_arrow.jpg" onSelect={setStartCoordinates} />
+          </label>
+          <label>
+            Locație destinație:
+            <AutoCompleteInput apiKey="ykLQWx4MFaivuUY1XxQzByycPVwKT4ERPsvB4a830oE" iconUrl = "/red_arrow.jpg" onSelect={setEndCoordinates} />
+          </label>
+          <label>
+            Numar de axe:
+            <input type="number" name="axles" value={vehicleType.axles} onChange={handleVehicleTypeChange} min="2" max="10" />
+          </label>
+          <label>
+            Tonaj (kg):
+            <input type="number" name="weight" value={vehicleType.weight} onChange={handleVehicleTypeChange} min="1000" max="40000" />
+          </label>
+          <label>
+            Euro per km:
+            <input type="decimal" name="EuroPerKm" onChange={handleVehicleTypeChange} min="0" max="10" />
+          </label>
+          <button type="submit">Calculare rută</button>
+        </form>
 
-      // Eveniment "tap" pe rută -> Adaugă un waypoint
-      routeLine.addEventListener("tap", (evt) => {
-        let tapPosition = mapRef.current.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
-      
-        // Ștergem marker-ul anterior (dacă există)
-        mapRef.current.getObjects().forEach((obj) => {
-          if (obj instanceof window.H.map.Marker) {
-            mapRef.current.removeObject(obj);
-          }
-        });
-      
-        // Creăm un nou marker
-        let marker = new window.H.map.Marker(tapPosition, { volatility: true });
-        marker.draggable = true;
-        mapRef.current.addObject(marker);
-      
-        // Setăm un singur waypoint nou
-        setWaypoints([{ lat: tapPosition.lat, lng: tapPosition.lng }]);
-      
-        // Eveniment "dragstart" -> Dezactivează mutarea hărții
-        marker.addEventListener("dragstart", () => {
-          if (behaviorRef.current) behaviorRef.current.disable();
-        });
-      
-        // Eveniment "dragend" -> Mută markerul și recalculează ruta
-        marker.addEventListener("dragend", (ev) => {
-          let target = ev.target;
-          let newPos = mapRef.current.screenToGeo(ev.currentPointer.viewportX, ev.currentPointer.viewportY);
-          target.setGeometry(newPos);
-      
-          // Ștergem waypoint-ul vechi și adăugăm doar pe cel nou
-          setWaypoints((prev)=> [...prev, { lat: newPos.lat, lng: newPos.lng }]);
-      
-          // Recalculăm traseul
-          getRoute(startCoordinates, endCoordinates, [{ lat: newPos.lat, lng: newPos.lng }]);
-      
-          if (behaviorRef.current) behaviorRef.current.enable();
-        });
-      
-        // Recalculăm traseul inițial
-        getRoute(startCoordinates, endCoordinates, [{ lat: tapPosition.lat, lng: tapPosition.lng }]);
-      });      
+        {/* Afișăm detaliile taxelor */}
+        <h3>Detalii Taxe Rutiere</h3>
+        <p><strong>Distanta:</strong> {distance} km</p>
+        <p><strong>Durata deplasării:</strong> {duration}</p>
+        <p><strong>Pret per Km:</strong> {" "} {distance && vehicleType.EuroPerKm ? (distance * vehicleType.EuroPerKm).toFixed(2) : 0} EUR</p>
+        <p><strong>Cost Taxe:</strong> {tollCost.totalCost} EUR</p>
+        <p><strong>Cost Total:</strong> {" "} {distance && vehicleType.EuroPerKm ? ((distance * vehicleType.EuroPerKm) + tollCost.totalCost).toFixed(2) : 0}{" "} EUR</p>
+        <ul>
+          {tollCost.tollList.map((toll, index) => (
+            <li key={index}>
+              {toll.name} - {toll.country}: {toll.cost} {toll.currency}
+            </li>
+          ))}
+        </ul>
+      </div>
 
-      routeLine.addEventListener("tap", (evt) => {
-        let tapPosition = mapRef.current.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
+      <div id="mapContainer" style={{ height: "90vh", border: "2px solid black" }} />
+    </div>
+    {/* Transmite coordonatele către RouteDetails */}
+    <TollCalculator
+      startCoordinates={startCoordinates}
+      endCoordinates={endCoordinates}
+      vehicleType={vehicleType}
+      rawDuration={rawDuration}
+      rawDistance={rawDistance}
+      onTollUpdate={handleTollUpdate} // Callback pentru a actualiza costurile
+    />
+  </div>
+);
 
-        // Ștergem marker-ul anterior (dacă există)
-        mapRef.current.getObjects().forEach((obj) => {
-          if (obj instanceof window.H.map.Marker) {
-            mapRef.current.removeObject(obj);
-          }
-        });
-
-        let marker = new window.H.map.Marker(tapPosition, { volatility: true });
-        marker.draggable = true;
-        mapRef.current.addObject(marker);
-
-        newWaypoints.push(tapPosition);
-
-        // Eveniment "dragstart" -> Dezactivează mutarea hărții
-        marker.addEventListener("dragstart", () => {
-          if (behaviorRef.current) behaviorRef.current.disable();
-        });
-
-        // Eveniment "dragend" -> Mută markerul și recalculează ruta
-        marker.addEventListener("dragend", (ev) => {
-          let target = ev.target;
-          let newPos = mapRef.current.screenToGeo(ev.currentPointer.viewportX, ev.currentPointer.viewportY);
-          target.setGeometry(newPos);
-
-          // Actualizăm waypoint-ul mutat
-          newWaypoints = newWaypoints.map((wp) =>
-            wp.lat === tapPosition.lat && wp.lng === tapPosition.lng ? { lat: newPos.lat, lng: newPos.lng } : wp
-          );
-
-          setWaypoints(newWaypoints);
-          getRoute(startCoordinates, endCoordinates, newWaypoints); // Recalculare doar după mutare
-
-          if (behaviorRef.current) behaviorRef.current.enable();
-        });
-
-        setWaypoints(newWaypoints);
-      });
+export default App;

@@ -48,7 +48,7 @@ const AutoCompleteInput = ({ apiKey, onSelect }) => {
     }
     setQuery(suggestion.address.label);
     setSuggestions([]);
-    onSelect({ lat, lng });
+    onSelect({ lat, lng, label: suggestion.address.label});
   };
 
   return (
@@ -61,7 +61,20 @@ const AutoCompleteInput = ({ apiKey, onSelect }) => {
         placeholder="Introdu adresa sau codul poștal"
       />
       {suggestions.length > 0 && (
-        <ul>
+        <ul
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            background: 'white',
+            listStyle: 'none',
+            padding: '5px',
+            margin: 0,
+            border: '1px solid #ccc',
+            width: '100%',
+            zIndex: 999,
+          }}
+        >
           {suggestions.map((suggestion, index) => (
             <li
               key={index}
@@ -69,6 +82,7 @@ const AutoCompleteInput = ({ apiKey, onSelect }) => {
                 e.stopPropagation();
                 handleSelect(suggestion);
               }}
+              style={{ cursor: 'pointer', padding: '5px 0' }}
             >
               {suggestion.address.label}
             </li>

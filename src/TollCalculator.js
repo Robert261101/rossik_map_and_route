@@ -64,7 +64,6 @@ import React, { useEffect, useState } from "react";
 let rovinietaPricesCache = null;
 
 // Funcție care preia prețurile dintr-un endpoint extern.
-// Actualizează URL-ul cu endpoint-ul real care furnizează prețurile.
 const fetchRovinietaPrices = async () => {
   if (rovinietaPricesCache) return rovinietaPricesCache;
   try {
@@ -77,39 +76,17 @@ const fetchRovinietaPrices = async () => {
   }
 };
 
-// Funcție utilitară pentru conversia duratei (ex: "10h 30m") în secunde
-const durationToSeconds = (durationStr) => {
-  if (!durationStr || typeof durationStr !== "string") {
-    console.warn("Duration is not valid:", durationStr);
-    return 0;
-  }
-  // Se presupune că durationStr are formatul "10h 30m" sau "10h30m"
-  const parts = durationStr.split("h");
-  const hours = parseInt(parts[0].trim(), 10) || 0;
-  const minutes = parts[1] ? parseInt(parts[1].replace("m", "").trim(), 10) : 0;
-  return hours * 3600 + minutes * 60;
-};
-
 // 1. Funcții de calcul specifice fiecărei țări
 const countryCalculators = {
   // România - Vignietă fixă
   ROU: async (tollData, duration, vehicleAxles) => {
-    // Calculăm numărul de zile necesare pe baza duratei traseului (în secunde)
     const requiredDays = Math.ceil(duration / (24 * 3600));
-    //console.log("duration (sec):", duration);
-    //console.log("requiredDays:", requiredDays);
-    
     const pricesData = await fetchRovinietaPrices();
-    // Folosim doar datele pentru 5 axe
     const vehiclePrices = pricesData && pricesData.ROU && pricesData.ROU["5"];
-
-    // Dacă nu avem date pentru numărul de axe, folosim un fallback
     if (!vehiclePrices) {
       console.warn("No pricing data for vehicle with 5 axles.");
       return { cost: 0, type: "fixed" };
     }
-
-    // Calculăm costul total pentru fiecare opțiune disponibilă.
     let bestCost = Infinity;
     let bestValidity = null;
     for (const validityStr of Object.keys(vehiclePrices)) {
@@ -122,31 +99,18 @@ const countryCalculators = {
         bestValidity = validity;
       }
     }
-
-    return {
-      cost: bestCost,
-      type: "fixed"
-    };
+    return { cost: bestCost, type: "fixed" };
   },
-  
+
   // Olanda - Vignietă fixă
   NLD: async (tollData, duration, vehicleAxles) => {
-    // Calculăm numărul de zile necesare pe baza duratei traseului (în secunde)
     const requiredDays = Math.ceil(duration / (24 * 3600));
-    //console.log("duration (sec):", duration);
-    //console.log("requiredDays:", requiredDays);
-    
     const pricesData = await fetchRovinietaPrices();
-    // Folosim doar datele pentru 5 axe
     const vehiclePrices = pricesData && pricesData.NLD && pricesData.NLD["5"];
-
-    // Dacă nu avem date pentru numărul de axe, folosim un fallback
     if (!vehiclePrices) {
       console.warn("No pricing data for vehicle with 5 axles.");
       return { cost: 0, type: "fixed" };
     }
-
-    // Calculăm costul total pentru fiecare opțiune disponibilă.
     let bestCost = Infinity;
     let bestValidity = null;
     for (const validityStr of Object.keys(vehiclePrices)) {
@@ -159,31 +123,18 @@ const countryCalculators = {
         bestValidity = validity;
       }
     }
-
-    return {
-      cost: bestCost,
-      type: "fixed"
-    };
+    return { cost: bestCost, type: "fixed" };
   },
 
-  // România - Vignietă fixă
+  // România - Vignietă fixă (LUX)
   LUX: async (tollData, duration, vehicleAxles) => {
-    // Calculăm numărul de zile necesare pe baza duratei traseului (în secunde)
     const requiredDays = Math.ceil(duration / (24 * 3600));
-    //console.log("duration (sec):", duration);
-    //console.log("requiredDays:", requiredDays);
-    
     const pricesData = await fetchRovinietaPrices();
-    // Folosim doar datele pentru 5 axe
     const vehiclePrices = pricesData && pricesData.LUX && pricesData.LUX["5"];
-
-    // Dacă nu avem date pentru numărul de axe, folosim un fallback
     if (!vehiclePrices) {
       console.warn("No pricing data for vehicle with 5 axles.");
       return { cost: 0, type: "fixed" };
     }
-
-    // Calculăm costul total pentru fiecare opțiune disponibilă.
     let bestCost = Infinity;
     let bestValidity = null;
     for (const validityStr of Object.keys(vehiclePrices)) {
@@ -196,11 +147,7 @@ const countryCalculators = {
         bestValidity = validity;
       }
     }
-
-    return {
-      cost: bestCost,
-      type: "fixed"
-    };
+    return { cost: bestCost, type: "fixed" };
   },
 
   // Germania - Taxă pe km
@@ -233,54 +180,53 @@ const countryCalculators = {
     return { cost, type: "perKm" };
   },
 
-  //Slovenia
-  SVN: async(tollData) =>{
+  // Slovenia
+  SVN: async (tollData) => {
     const cost = await convertToEuro(tollData.price.value, tollData.price.currency);
     return { cost, type: "perKm" };
   },
 
-  //Slovacia
-  SVK: async(tollData) =>{
+  // Slovacia
+  SVK: async (tollData) => {
     const cost = await convertToEuro(tollData.price.value, tollData.price.currency);
     return { cost, type: "perKm" };
   },
 
-  //Portugalia
-  PRT: async(tollData) =>{
+  // Portugalia
+  PRT: async (tollData) => {
     const cost = await convertToEuro(tollData.price.value, tollData.price.currency);
     return { cost, type: "perKm" };
   },
   
-  //Spania
-  ESP: async(tollData) =>{
+  // Spania
+  ESP: async (tollData) => {
     const cost = await convertToEuro(tollData.price.value, tollData.price.currency);
     return { cost, type: "perKm" };
   },
 
-  //Belgia
-  BEL: async(tollData) =>{
+  // Belgia
+  BEL: async (tollData) => {
     const cost = await convertToEuro(tollData.price.value, tollData.price.currency);
     return { cost, type: "perKm" };
   },
 
-  //Polonia
-  POL: async(tollData) =>{
+  // Polonia
+  POL: async (tollData) => {
     const cost = await convertToEuro(tollData.price.value, tollData.price.currency);
     return { cost, type: "perKm" };
   },
 
-  //Cehia
-  CZE: async(tollData) =>{
+  // Cehia
+  CZE: async (tollData) => {
     const cost = await convertToEuro(tollData.price.value, tollData.price.currency);
     return { cost, type: "perKm" };
   },
 
-  //Elvetia
-  CHE: async(tollData) =>{
+  // Elveția
+  CHE: async (tollData) => {
     const cost = await convertToEuro(tollData.price.value, tollData.price.currency);
     return { cost, type: "perKm" };
   }
-
 };
 
 // 2. Funcții utilitare
@@ -294,75 +240,74 @@ const convertToEuro = async (amount, currency) => {
   const rates = await exchangeRates();
   if (!rates[currency]) {
     console.error(`Rata de schimb pentru ${currency} nu este disponibilă.`);
-    return amount; // Sau o altă valoare implicită
+    return amount;
   }
   return currency === "EUR" ? amount : amount / rates[currency];
 };
 
 // 3. Componenta principală
-const TollCalculator = ({ startCoordinates, endCoordinates, vehicleType, rawDistance, rawDuration, onTollUpdate }) => {
+const TollCalculator = ({ startCoordinates, endCoordinates, intermediatePoints = [], vehicleType, rawDistance, rawDuration, onTollUpdate }) => {
   const [tollDetails, setTollDetails] = useState({ totalCost: 0, tollList: [] });
 
   useEffect(() => {
-    if (startCoordinates && endCoordinates && rawDuration) {
-      fetchTollData(startCoordinates, endCoordinates, vehicleType);
+    if (startCoordinates && endCoordinates) {
+      fetchTollData(startCoordinates, intermediatePoints, endCoordinates, vehicleType);
     }
-  }, [startCoordinates, endCoordinates, vehicleType, rawDuration]);
+  }, [startCoordinates, endCoordinates, intermediatePoints, vehicleType, rawDuration]);
 
-  const fetchTollData = async (start, end, vehicle) => {
-    //asta e originalul
-    //const url = `https://router.hereapi.com/v8/routes?origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}&transportMode=truck&truck[axleCount]=${vehicle.axles}&return=tolls,summary&apikey=NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s`;
-    
-    //asta e ala nou
-    const url = `https://router.hereapi.com/v8/routes?origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}&return=polyline,summary,actions,instructions,tolls&transportMode=truck&truck[axleCount]=5&vehicle[grossWeight]=40000&apikey=NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s`;
-    
-
+  const fetchTollData = async (start, intermediateList, end, vehicle) => {
     try {
+      let url = `https://router.hereapi.com/v8/routes?origin=${start.lat},${start.lng}`;
+      intermediateList.forEach((point) => {
+        url += `&via=${point.lat},${point.lng}`;
+      });
+      url += `&destination=${end.lat},${end.lng}`;
+      url += `&return=polyline,summary,actions,instructions,tolls`;
+      url += `&transportMode=truck`;
+      url += `&truck[axleCount]=5`;
+      url += `&vehicle[grossWeight]=40000`;
+      url += `&apikey=NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s`;
+
       const response = await fetch(url);
       const data = await response.json();
-  
-      console.log("Raspuns API:", data);
-      //console.log("Total duration (sec):", duration);
 
-      const totalDuration = rawDuration; 
-      if (!totalDuration || totalDuration <= 0) {
-        console.error("Durata traseului (rawDuration) nu este definită corect.");
-        return;
-      }
-  
+      console.log("Raspuns API: ", data);
+
       if (!data.routes || data.routes.length === 0) {
         console.error("No routes found");
         return;
       }
-  
-      // Decizie: Folosim tollSystems dacă există în cel puțin o secțiune
-      const useTollSystems = data.routes[0].sections.some(
-        section => section.tollSystems && section.tollSystems.length > 0
-      );
-  
+
+      const totalDuration = rawDuration && rawDuration > 0 ? rawDuration : 1;
+
       let tollList = [];
-  
+      const route = data.routes[0];
+
+      const useTollSystems = route.sections.some(
+        (section) => section.tollSystems && section.tollSystems.length > 0
+      );
+
       if (useTollSystems) {
-        // Folosim datele din tollSystems
         let aggregatedSystems = {};
-        for (const section of data.routes[0].sections) {
+        for (const section of route.sections) {
           if (section.tollSystems && section.tollSystems.length > 0) {
             for (const system of section.tollSystems) {
               if (system.price && system.price.value !== undefined && system.price.currency) {
                 const countryCode = system.countryCode;
                 if (countryCode && countryCalculators[countryCode]) {
-                  // Transmitem totalDuration (timpul total al traseului în secunde)
-                  const result = await countryCalculators[countryCode](system, totalDuration, vehicle.axles);
+                  const result = await countryCalculators[countryCode](
+                    system,
+                    totalDuration,
+                    vehicle.axles
+                  );
                   aggregatedSystems[countryCode] = {
                     operator: countryCode,
                     cost: result.cost,
                     type: result.type,
                     tollCollectionLocations: system.tollCollectionLocations || [],
-                    // Dacă e România, adăugăm detaliul despre validitatea vignietei
                     ...(countryCode === "ROU" && { vignietaValidity: result.vignietaValidity })
                   };
                 } else {
-                  // Fallback: metoda originală
                   const costInEuro = await convertToEuro(system.price.value, system.price.currency);
                   const key = system.tollSystem;
                   if (aggregatedSystems[key]) {
@@ -382,40 +327,38 @@ const TollCalculator = ({ startCoordinates, endCoordinates, vehicleType, rawDist
             }
           }
         }
-  
-        // Dacă avem date în aggregatedSystems, folosim rezultatul
+
         if (Object.keys(aggregatedSystems).length > 0) {
           tollList = Object.values(aggregatedSystems);
         } else {
-          // Dacă aggregatedSystems nu conține date, folosim fallback-ul cu tolls
           tollList = await processTollsFallback(data);
         }
       } else {
-        // Folosim direct fallback-ul cu tolls
         tollList = await processTollsFallback(data);
       }
-  
-      // Calculăm costul total final.
+
       let totalCost = tollList.reduce((sum, toll) => sum + toll.cost, 0);
-    const days = Math.ceil(totalDuration / (24 * 3600));
-    if (days > 1) {
-      totalCost = tollList.reduce((sum, toll) => sum + toll.cost * days, 0);
+      const days = Math.ceil(totalDuration / (24 * 3600));
+      if (days > 1) {
+        totalCost = tollList.reduce((sum, toll) => sum + toll.cost * days, 0);
+      }
+
+      const hours = Math.floor(totalDuration / 3600);
+      const minutes = Math.floor((totalDuration % 3600) / 60);
+      const formattedDuration = `${hours}h ${minutes}m`;
+
+      const newTollDetails = {
+        totalCost,
+        tollList,
+        duration: formattedDuration,
+      };
+      setTollDetails(newTollDetails);
+      onTollUpdate(newTollDetails);
+    } catch (error) {
+      console.error("Error fetching toll data:", error);
     }
-
-    const hours = Math.floor(totalDuration / 3600);
-    const minutes = Math.floor((totalDuration % 3600) / 60);
-    const formattedDuration = `${hours}h ${minutes}m`;
-
-    setTollDetails({ totalCost, tollList });
-    onTollUpdate({ totalCost, tollList, duration: formattedDuration });
-  } catch (error) {
-    console.error("Error fetching toll data:", error);
-  }
-
-    
   };
-  
-  // Funcție fallback pentru procesarea datelor din array-ul tolls
+
   const processTollsFallback = async (data) => {
     let tollMap = {};
     for (const section of data.routes[0].sections) {
@@ -424,14 +367,33 @@ const TollCalculator = ({ startCoordinates, endCoordinates, vehicleType, rawDist
           const countryCode = toll.countryCode;
           for (const fare of toll.fares) {
             if (countryCode && countryCalculators[countryCode]) {
-              const sectionMetric = (countryCode === "DEU" || countryCode === "HUN" || countryCode === "AUT" || countryCode === "FRA"  || countryCode === "ITA" || countryCode === "SVN" || countryCode === "PRT" || countryCode === "ESP" || countryCode === "BEL" || countryCode === "POL"  || countryCode === "CZE" || countryCode === "SVK" || countryCode === "CHE")
-              ? (section.summary?.length || 0)
-              : rawDuration;
-            const result = await countryCalculators[countryCode](fare, sectionMetric);
+              const sectionMetric = 
+                (countryCode === "DEU" || countryCode === "HUN" || countryCode === "AUT" ||
+                 countryCode === "FRA" || countryCode === "ITA" || countryCode === "SVN" ||
+                 countryCode === "PRT" || countryCode === "ESP" || countryCode === "BEL" ||
+                 countryCode === "POL" || countryCode === "CZE" || countryCode === "SVK" ||
+                 countryCode === "CHE")
+                  ? (section.summary?.length || 0)
+                  : rawDuration;
+              const result = await countryCalculators[countryCode](fare, sectionMetric);
               const key = `${countryCode}-${fare.name}`;
               if (tollMap[key]) {
-                if (countryCode === "DEU" || countryCode === "HUN" || countryCode === "AUT" || countryCode === "FRA"  || countryCode === "ITA" || countryCode === "SVN" || countryCode === "PRT" || countryCode === "ESP" || countryCode === "BEL" || countryCode === "POL"  || countryCode === "CZE" || countryCode === "SVK" || countryCode === "CHE") {
-                  tollMap[key].cost += result.cost; // adunăm costurile pentru DEU
+                if (
+                  countryCode === "DEU" ||
+                  countryCode === "HUN" ||
+                  countryCode === "AUT" ||
+                  countryCode === "FRA" ||
+                  countryCode === "ITA" ||
+                  countryCode === "SVN" ||
+                  countryCode === "PRT" ||
+                  countryCode === "ESP" ||
+                  countryCode === "BEL" ||
+                  countryCode === "POL" ||
+                  countryCode === "CZE" ||
+                  countryCode === "SVK" ||
+                  countryCode === "CHE"
+                ) {
+                  tollMap[key].cost += result.cost;
                 } else {
                   tollMap[key].cost = Math.min(tollMap[key].cost, result.cost);
                 }
@@ -469,10 +431,11 @@ const TollCalculator = ({ startCoordinates, endCoordinates, vehicleType, rawDist
     return Object.values(tollMap);
   };
 
-  return null; // Componentul nu afișează nimic direct
+  return null;
 };
 
 export default TollCalculator;
+
 
 
 
