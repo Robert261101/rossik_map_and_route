@@ -28,10 +28,18 @@ const App = () => {
   // --- Eveniment de schimbare a tipului de vehicul (nr. axe, greutate etc.)
   const handleVehicleTypeChange = (e) => {
     const { name, value } = e.target;
-    setVehicleType((prev) => ({
-      ...prev,
-      [name]: Number(value),
-    }));
+  
+    const raw = e.target.value.trim().replace(",", ".");
+    const parsed = parseFloat(raw);
+
+    if (!isNaN(parsed)) {
+      setVehicleType((prev) => ({
+        ...prev,
+        [name]: parsed
+      }));
+    } else {
+      // Opțional: salvează valoarea brută ca string (dacă vrei feedback vizual)
+    }
   };
 
   // --- Adăugăm locația intermediară din buffer în lista de locații intermediare
@@ -68,16 +76,6 @@ const App = () => {
     newArr.splice(index, 1);
     setIntermediatePoints(newArr);
   };
-
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   if (startCoordinates && endCoordinates && vehicleType.axles && vehicleType.weight) {
-  //     await getRoute(startCoordinates, endCoordinates, vehicleType);
-  //   }
-  //    else {
-  //     alert("Te rog selectează locațiile pentru plecare și destinație!");
-  //   }
-  // };
 
   // --- Funcție de calcul al rutei
   const getRoute = async () => {
@@ -266,7 +264,7 @@ const App = () => {
                   <input type="number" name="weight" value={vehicleType.weight} onChange={handleVehicleTypeChange} min="1000" max="40000"/>
                   </td>
                   <td>
-                  <input type="decimal" step="0.01" name="EuroPerKm" value={vehicleType.EuroPerKm} onChange={handleVehicleTypeChange} min="0"max="10" />
+                  <input type="number" inputMode="decimal" step="0.01" pattern="[0-9]+([,.][0-9]+)?" name="EuroPerKm" value={vehicleType.EuroPerKm} onChange={handleVehicleTypeChange} min="0"max="10" />
                   </td>
                 </tr>
               </tbody>
