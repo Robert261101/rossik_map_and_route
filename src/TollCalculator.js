@@ -169,8 +169,12 @@ const TollCalculator = ({ startCoordinates, endCoordinates, intermediatePoints =
       url += `&destination=${end.lat},${end.lng}`;
       url += `&return=polyline,summary,actions,instructions,tolls`;
       url += `&transportMode=truck`;
-      url += `&truck[axleCount]=5`;
-      url += `&vehicle[grossWeight]=40000`;
+      url += `&vehicle[height]=400`;
+      url += `&vehicle[width]=255`;
+      url += `&vehicle[length]=1600`;
+      url += `&truck[axleCount]=${vehicleType.axles}`;
+      url += `&vehicle[grossWeight]=${vehicleType.weight}`;
+      url += `&tolls[emissionType]=euro6`;
       url += `&apikey=NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s`;
 
       const response = await fetch(url);

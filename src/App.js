@@ -11,7 +11,7 @@ const App = () => {
   // Fiecare element va fi un obiect de forma: { lat, lng, label }
   const [addresses, setAddresses] = useState([]);
   const [distance, setDistance] = useState(null);
-  const [vehicleType, setVehicleType] = useState({ axles: 5, weight: 30000, EuroPerKm: 0 });
+  const [vehicleType, setVehicleType] = useState({ axles: 5, weight: 40000, EuroPerKm: 0 });
   const [tollCost, setTollCost] = useState({ totalCost: 0, tollList: [] });
   const [duration, setDuration] = useState(null);
   const [rawDistance, setRawDistance] = useState(null);
@@ -68,8 +68,12 @@ const App = () => {
       url += `&destination=${endCoordinates.lat},${endCoordinates.lng}`;
       url += `&return=polyline,summary,actions,instructions,tolls`;
       url += `&transportMode=truck`;
-      url += `&vehicle[axleCount]=${vehicleType.axles}`;
+      url += `&vehicle[height]=400`;
+      url += `&vehicle[width]=255`;
+      url += `&vehicle[length]=1600`;
+      url += `&truck[axleCount]=${vehicleType.axles}`;
       url += `&vehicle[grossWeight]=${vehicleType.weight}`;
+      url += `&tolls[emissionType]=euro6`;
       url += `&apikey=NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s`;
 
       const response = await fetch(url);
@@ -166,11 +170,11 @@ const App = () => {
   }, []);
 
   // Recalculăm automat ruta doar dacă sunt cel puțin două adrese și parametrii vehiculului se modifică
-  useEffect(() => {
-    if (addresses.length >= 2) {
-      getRoute();
-    }
-  }, [addresses, vehicleType]);
+  // useEffect(() => {
+  //   if (addresses.length >= 2) {
+  //     getRoute();
+  //   }
+  // }, [addresses, vehicleType]);
 
   return (
     <div className="App">
@@ -246,7 +250,7 @@ const App = () => {
                         }));
                       }}
                       min="1000"
-                      max="40000"
+                      max="60000"
                     />
                   </td>
                   <td>
