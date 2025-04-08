@@ -54,7 +54,7 @@ const AutoCompleteInput = ({ apiKey, onSelect }) => {
     }
 
     setSelectedAddress(suggestion.address.label); // Salvează adresa selectată
-    setQuery(suggestion.address.label);
+    setQuery('');
     setSuggestions([]);
     inputRef.current?.blur();
     onSelect({ lat, lng, label: suggestion.address.label });
