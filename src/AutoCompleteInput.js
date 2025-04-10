@@ -75,7 +75,7 @@ const AutoCompleteInput = ({ apiKey, onSelect }) => {
         onChange={(e) => {
           setQuery(e.target.value);
         }}
-        placeholder="Introdu adresa sau codul poștal"
+        placeholder="Enter address or postal code"
       />
       {loading && (
         <div style={{ position: 'absolute', top: '100%', left: 0 }}>
