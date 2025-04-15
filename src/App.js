@@ -525,7 +525,7 @@
 
 // export default App;
 
-return (<div>Under maintenance</div>)
+return <div>Under maintenance</div>
 
 
 
