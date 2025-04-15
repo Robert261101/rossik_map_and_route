@@ -15,14 +15,8 @@ const App = () => {
     weight: 40000,
     EuroPerKm: 0.1, // exemplu
   });
-  
-  // 1) Stocăm costurile taxelor pentru fiecare rută sub forma unui array numeric simplu
-  //   "routeTaxCosts[index]" e costul taxelor pentru ruta "index"
   const [routeTaxCosts, setRouteTaxCosts] = useState([]);
-
-  // 2) Totodată stocăm și listele de taxe, dacă vrei să le afișezi detaliat (cum era înainte).
   const [tollCosts, setTollCosts] = useState([]);
-
   const [duration, setDuration] = useState(null);
   const [rawDistance, setRawDistance] = useState(null);
   const [rawDuration, setRawDuration] = useState(null);
@@ -69,7 +63,7 @@ const App = () => {
   // Obținere rute
   const getRoute = async () => {
     if (addresses.length < 2) {
-      alert("Te rog introdu cel puțin două adrese!");
+      alert("Please enter at least two addresses!");
       return;
     }
     
@@ -102,7 +96,7 @@ const App = () => {
 
       if (!data.routes || data.routes.length === 0) {
         console.error("No routes found:", data);
-        alert("Nu s-au găsit rute pentru adresele selectate. Încercați alte locații.");
+        alert("No routes found for the selected addresses. Try other locations.");
         setIsLoading(false);
         return;
       }
@@ -143,7 +137,7 @@ const App = () => {
       setIsLoading(false);
     } catch (error) {
       console.error("Error fetching route:", error);
-      alert("A apărut o eroare la calcularea rutei. Încercați din nou.");
+      alert("An error occurred while calculating the route. Please try again.");
       setIsLoading(false);
     }
   };
@@ -155,7 +149,7 @@ const App = () => {
     route.sections.forEach((section) => {
       const lineString = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
       const routeLine = new window.H.map.Polyline(lineString, {
-        style: { strokeColor: "blue", lineWidth: 6 },
+        style: { strokeColor: "blue", lineWidth: 4 },
       });
       mapRef.current.addObject(routeLine);
       const boundingBox = routeLine.getBoundingBox();
@@ -192,12 +186,22 @@ const App = () => {
     await getRoute();
   };
 
-  // 3) Callback - când TollCalculator calculează costul pt o rută, îl salvăm și
-  //    într-un array numeric simplu routeTaxCosts, și în tollCosts (pt listă).
+  // Funcție pentru inserarea viastation (un punct intermediar) în lista de adrese
+  const addViaStationToAddresses = (viaStation) => {
+    // Nu permite adăugarea dacă nu există cel puțin o adresă de start și una de sosire
+    if (addresses.length < 2) {
+      alert("You must have at least one starting point and one destination point in advance.");
+      return;
+    }
+    // Inserăm viaStation între primul (start) și ultimul (destinație).
+    // Pentru cea mai simplă variantă, o inserăm pe a doua poziție.
+    setAddresses((prev) => {
+      return [prev[0], viaStation, ...prev.slice(1)];
+    });
+  };
+
+  // 3) Callback - când TollCalculator calculează costul pt o rută, îl salvăm și într-un array numeric simplu routeTaxCosts, și în tollCosts (pt listă).
   const updateTollCostForRoute = (index, tollData) => {
-    //console.log("🔵 Actualizare taxe pentru ruta:", index);
-    //console.log("📋 Lista taxelor:", tollData.tollList);
-    //console.log("💰 Total taxe:", tollData.totalCost);
 
     // actualizăm array-ul numeric
     setRouteTaxCosts((prev) => {
@@ -214,12 +218,45 @@ const App = () => {
     });
   };
 
+  // Event listener pentru click dreapta pe hartă
   useEffect(() => {
-    if (selectedRouteIndex !== null) {
-      //console.log("📌 Ruta selectată:", selectedRouteIndex);
-      //console.log("📊 Taxe curente:", tollCosts[selectedRouteIndex]);
-    }
-    if (mapRef.current) return;
+    if (!mapRef.current) return;
+    // Ascultă evenimentul de click dreapta (contextmenu) pe hartă
+    const map = mapRef.current;
+    const onRightClick = (evt) => {
+      // Previne meniul implicit al browserului
+      evt.originalEvent.preventDefault();
+    
+      // Folosește currentPointer dacă există, altfel încercă changedPointers[0]
+      const pointer = evt.currentPointer || (evt.changedPointers && evt.changedPointers[0]);
+      if (!pointer) {
+        console.error("No pointer information available in contextmenu event");
+        return;
+      }
+    
+      // Transformă coordonatele ecran în coordonate geografice
+      const coord = mapRef.current.screenToGeo(pointer.viewportX, pointer.viewportY);
+      console.log("Right-click at:", coord);
+    
+      // Creează obiectul viaStation (poți adăuga și alte proprietăți, precum "isVia")
+      const viaStation = {
+        lat: coord.lat,
+        lng: coord.lng,
+        label: "Via Station", // Pentru o versiune îmbunătățită, apelează un serviciu de reverse geocoding
+        isVia: true,
+      };
+    
+      addViaStationToAddresses(viaStation);
+    };
+    
+    map.addEventListener("contextmenu", onRightClick);
+    return () => {
+      map.removeEventListener("contextmenu", onRightClick);
+    };
+  }, [addresses]);
+  
+  useEffect(() => {
+    if (mapRef.current) return; 
     
     // Initialize map
     const platform = new window.H.service.Platform({
@@ -253,19 +290,8 @@ const App = () => {
       {/* HEADER */}
       <header className="bg-white shadow-sm p-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6 text-blue-600"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 2l.01 6L7 8c0 1.333 4 2 4 2s4-.667 4-2l-2-.01V2H9zM3 13h7v7H5.5a2.5 2.5 0 01-2.5-2.5V13zM21 13h-7v7h4.5a2.5 2.5 0 002.5-2.5V13z"
-            />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 2l.01 6L7 8c0 1.333 4 2 4 2s4-.667 4-2l-2-.01V2H9zM3 13h7v7H5.5a2.5 2.5 0 01-2.5-2.5V13zM21 13h-7v7h4.5a2.5 2.5 0 002.5-2.5V13z" />
           </svg>
           <h1 className="text-xl font-bold text-gray-800">Rossik Route Calculation</h1>
         </div>
@@ -281,45 +307,23 @@ const App = () => {
               <h2 className="text-lg font-semibold mb-2">Address</h2>
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 <div>
-                  <label className="block mb-1 font-medium text-sm text-gray-700">
-                    Enter the address:
-                  </label>
+                  <label className="block mb-1 font-medium text-sm text-gray-700">Enter the address:</label>
                   <AutoCompleteInput
                     apiKey="NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s"
                     onSelect={addAddress}
                   />
                 </div>
-                {addresses.length === 0 && (
-                  <p className="text-sm text-gray-500">No address entered.</p>
-                )}
+                {addresses.length === 0 && <p className="text-sm text-gray-500">No address entered.</p>}
                 <ul className="border rounded p-2 max-h-40 overflow-y-auto space-y-1">
                   {addresses.map((point, index) => (
                     <li key={index} className="flex justify-between items-center">
                       <div className="text-sm text-gray-800">
-                        {point.label || `Lat: ${point.lat}, Lng: ${point.lng}`}
+                        {point.isVia ? <em>{point.label}</em> : (point.label || `Lat: ${point.lat}, Lng: ${point.lng}`)}
                       </div>
                       <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => moveUp(index)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          Up
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveDown(index)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          Down
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeAddress(index)}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          X
-                        </button>
+                        <button type="button" onClick={() => moveUp(index)} className="text-xs text-blue-600 hover:underline">Up</button>
+                        <button type="button" onClick={() => moveDown(index)} className="text-xs text-blue-600 hover:underline">Down</button>
+                        <button type="button" onClick={() => removeAddress(index)} className="text-xs text-red-600 hover:underline">X</button>
                       </div>
                     </li>
                   ))}
@@ -327,15 +331,12 @@ const App = () => {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className={`mt-3 ${
-                    isLoading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
-                  } text-white py-2 px-4 rounded font-semibold text-sm transition-colors`}
+                  className={`mt-3 ${isLoading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"} text-white py-2 px-4 rounded font-semibold text-sm transition-colors`}
                 >
                   {isLoading ? "Calculare..." : "Calculate route"}
                 </button>
               </form>
             </div>
-
             <div className="w-1/2 bg-white p-4 rounded shadow-sm">
               <h2 className="text-lg font-semibold mb-2">Vehicle Parameters</h2>
               <div className="grid grid-cols-1 gap-2">
@@ -347,10 +348,7 @@ const App = () => {
                     value={vehicleType.axles}
                     onChange={(e) => {
                       const value = parseFloat(e.target.value);
-                      setVehicleType((prev) => ({
-                        ...prev,
-                        axles: isNaN(value) ? prev.axles : value,
-                      }));
+                      setVehicleType((prev) => ({ ...prev, axles: isNaN(value) ? prev.axles : value }));
                     }}
                     min="2"
                     max="10"
@@ -365,10 +363,7 @@ const App = () => {
                     value={vehicleType.weight}
                     onChange={(e) => {
                       const value = parseFloat(e.target.value);
-                      setVehicleType((prev) => ({
-                        ...prev,
-                        weight: isNaN(value) ? prev.weight : value,
-                      }));
+                      setVehicleType((prev) => ({ ...prev, weight: isNaN(value) ? prev.weight : value }));
                     }}
                     min="1000"
                     max="60000"
@@ -386,10 +381,7 @@ const App = () => {
                     onChange={(e) => {
                       const raw = e.target.value.trim().replace(",", ".");
                       const parsed = parseFloat(raw);
-                      setVehicleType((prev) => ({
-                        ...prev,
-                        EuroPerKm: isNaN(parsed) ? prev.EuroPerKm : parsed,
-                      }));
+                      setVehicleType((prev) => ({ ...prev, EuroPerKm: isNaN(parsed) ? prev.EuroPerKm : parsed }));
                     }}
                     min="0"
                     max="10"
@@ -430,19 +422,10 @@ const App = () => {
                     const hours = Math.floor(altDuration / 3600);
                     const minutes = Math.floor((altDuration % 3600) / 60);
                     const displayTime = `${hours}h ${minutes}m`;
-
-                    // Get toll cost for this route
                     const routeTax = routeTaxCosts[index] || 0;
-
-                    // Total cost = cost per km + toll cost
                     const totalCost = costPerKm + routeTax;
-
                     return (
-                      <tr
-                        key={index}
-                        className={`cursor-pointer ${selectedRouteIndex === index ? "bg-blue-50" : ""} hover:bg-gray-50`}
-                        onClick={() => handleRouteSelect(index)}
-                      >
+                      <tr key={index} className={`cursor-pointer ${selectedRouteIndex === index ? "bg-blue-50" : ""} hover:bg-gray-50`} onClick={() => handleRouteSelect(index)}>
                         <td className="px-3 py-2 border text-center">Route {index + 1}</td>
                         <td className="px-3 py-2 border text-center">{km.toFixed(2)}</td>
                         <td className="px-3 py-2 border text-center">{displayTime}</td>
@@ -467,10 +450,7 @@ const App = () => {
                 tollCosts[selectedRouteIndex].tollList.length > 0 ? (
                   <ul className="space-y-1 text-sm text-gray-700 max-h-40 overflow-y-auto">
                     {tollCosts[selectedRouteIndex].tollList.map((toll, idx) => (
-                      <li
-                        key={idx}
-                        className={`px-2 py-1 ${idx % 2 === 0 ? "bg-white" : "bg-gray-100"}`}
-                      >
+                      <li key={idx} className={`px-2 py-1 ${idx % 2 === 0 ? "bg-white" : "bg-gray-100"}`}>
                         {toll.name} - {toll.country}: {toll.cost.toFixed(2)} {toll.currency || "EUR"}
                       </li>
                     ))}
@@ -492,29 +472,18 @@ const App = () => {
                     </p>
                     <p className="text-sm text-gray-700">
                       <strong>Price per Km:</strong>{" "}
-                      {distance && vehicleType.EuroPerKm
-                        ? (distance * vehicleType.EuroPerKm).toFixed(2)
-                        : "0.00"}{" "}
-                      EUR
+                      {distance && vehicleType.EuroPerKm ? (distance * vehicleType.EuroPerKm).toFixed(2) : "0.00"} EUR
                     </p>
                     <p className="text-sm text-gray-700">
-                      <strong>Tolls:</strong>{" "}
-                      {routeTaxCosts[selectedRouteIndex]
-                        ? routeTaxCosts[selectedRouteIndex].toFixed(2)
-                        : "0.00"}{" "}
-                      EUR
+                      <strong>Tolls:</strong> {routeTaxCosts[selectedRouteIndex] ? routeTaxCosts[selectedRouteIndex].toFixed(2) : "0.00"} EUR
                     </p>
                     <p className="text-sm text-gray-700 font-semibold">
                       <strong>Total Cost:</strong>{" "}
                       {distance && vehicleType.EuroPerKm
-                        ? (
-                            costPerKmForSelected() +
-                            (routeTaxCosts[selectedRouteIndex] || 0)
-                          ).toFixed(2)
+                        ? (costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0)).toFixed(2)
                         : routeTaxCosts[selectedRouteIndex]
                         ? routeTaxCosts[selectedRouteIndex].toFixed(2)
-                        : "0.00"}{" "}
-                      EUR
+                        : "0.00"} EUR
                     </p>
                   </>
                 ) : (
@@ -541,9 +510,7 @@ const App = () => {
             key={index}
             startCoordinates={addresses.length >= 2 ? addresses[0] : null}
             endCoordinates={addresses.length >= 2 ? addresses[addresses.length - 1] : null}
-            intermediatePoints={
-              addresses.length > 2 ? addresses.slice(1, addresses.length - 1) : []
-            }
+            intermediatePoints={addresses.length > 2 ? addresses.slice(1, addresses.length - 1) : []}
             vehicleType={vehicleType}
             rawDuration={rawDuration}
             rawDistance={rawDistance}
