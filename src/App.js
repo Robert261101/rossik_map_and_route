@@ -388,6 +388,8 @@ const App = () => {
     new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
     mapRef.current = map;
     
+    map.getViewPort().resize();
+    
     window.addEventListener("resize", () => map.getViewPort().resize());
     return () => {
       window.removeEventListener("resize", () => map.getViewPort().resize());
