@@ -5,6 +5,11 @@ body {
   font-family: Arial, sans-serif;
 }
 
+.h-map-circle {
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
 ul {
   list-style-type: none;
   padding: 0;

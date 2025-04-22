@@ -164,7 +164,7 @@ const TollCalculator = ({
   // Funcția ta processTollData rămâne aceeași
   const processTollData = async (route) => {
     try {
-      console.log("Processing toll data for route:", route);
+      // console.log("Processing toll data for route:", route);
       
       // Folosim rawDuration (sau 1 dacă nu e valid)
       const totalDuration = rawDuration && rawDuration > 0 ? rawDuration : 1;
@@ -223,8 +223,8 @@ const TollCalculator = ({
       const minutes = Math.floor((totalDuration % 3600) / 60);
       const formattedDuration = `${hours}h ${minutes}m`;
       
-      console.log("Final toll list:", tollList);
-      console.log("Total toll cost:", totalCost);
+      // console.log("Final toll list:", tollList);
+      // console.log("Total toll cost:", totalCost);
       
       const newTollDetails = {
         totalCost,
@@ -319,14 +319,14 @@ const TollCalculator = ({
   };
 
   useEffect(() => {
-    console.log("TollCalculator - Dependencies updated", {
-      rawDuration,
-      rawDistance,
-      hasSelectedRoute: !!selectedRoute,
-      hasStartCoords: !!startCoordinates,
-      hasEndCoords: !!endCoordinates,
-      vehicleAxles: vehicleType?.axles
-    });
+    // console.log("TollCalculator - Dependencies updated", {
+    //   rawDuration,
+    //   rawDistance,
+    //   hasSelectedRoute: !!selectedRoute,
+    //   hasStartCoords: !!startCoordinates,
+    //   hasEndCoords: !!endCoordinates,
+    //   vehicleAxles: vehicleType?.axles
+    // });
 
     if (selectedRoute && selectedRoute.id) {
       // Dacă ruta deja a fost procesată, nu o mai procesăm
