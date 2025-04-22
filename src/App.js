@@ -391,7 +391,7 @@ const App = () => {
     setTimeout(() => {
       map.getViewPort().resize();
     }, 0);
-
+``
     window.addEventListener("resize", () => map.getViewPort().resize());
     return () => {
       window.removeEventListener("resize", () => map.getViewPort().resize());
