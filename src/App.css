@@ -33,11 +33,6 @@ li:hover {
   background-color: #f0f0f0;
 }
 
-html, body, #root, .App {
-  height: 100%;
-  margin: 0;
-}
-
 .App {
   height: 100vh;
 }
