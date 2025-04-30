@@ -350,7 +350,7 @@ const TollCalculator = ({
           url += `&vehicle[grossWeight]=${vehicleType.weight}`;
           url += `&truck[limitedWeight]=7500`;
           url += `&tolls[emissionType]=euro6`;
-          url += `&apikey=NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s`;
+          url += `&apikey=${process.env.REACT_APP_HERE_API_KEY}`;
 
           const response = await fetch(url);
           const data = await response.json();

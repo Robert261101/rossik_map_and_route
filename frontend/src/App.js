@@ -3,6 +3,7 @@ import "leaflet/dist/leaflet.css";
 import AutoCompleteInput from "./AutoCompleteInput";
 import TollCalculator from "./TollCalculator";
 import "./App.css";
+import arrowSvg from './arrow.svg';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState("input"); // "input" | "results"
@@ -21,10 +22,9 @@ const App = () => {
   const [rawDistance, setRawDistance] = useState(null);
   const [rawDuration, setRawDuration] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-
   const mapRef = useRef(null);
   const circleRef = useRef(null);
-  const timeoutRef = useRef(null);
+  const markerGroupRef = useRef(null);
   let apiCallCount = 0;
 
   // Helper pentru calcule
@@ -97,7 +97,7 @@ const App = () => {
       url += `&vehicle[grossWeight]=${vehicleType.weight}`;
       url += `&truck[limitedWeight]=7500`;
       url += `&tolls[emissionType]=euro6`;
-      url += `&apikey=NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s`;
+      url += `&apikey=${process.env.REACT_APP_HERE_API_KEY}`;
 
       const response = await fetch(url);
       const data = await response.json();
@@ -154,7 +154,12 @@ const App = () => {
   // Afișare rută pe hartă
   const displayRoute = (route) => {
     if (!mapRef.current) return;
-    mapRef.current.getObjects().forEach((obj) => mapRef.current.removeObject(obj));
+    //mapRef.current.getObjects().forEach((obj) => mapRef.current.removeObject(obj));
+    mapRef.current.getObjects().forEach((obj) => {
+      if (obj instanceof window.H.map.Polyline) {
+        mapRef.current.removeObject(obj);
+      }
+    });
     route.sections.forEach((section) => {
       const lineString = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
       const routeLine = new window.H.map.Polyline(lineString, {
@@ -216,7 +221,7 @@ const App = () => {
 
   // 0) Funcţia de reverse‑geocoding HERE
   const reverseGeocode = async (lat, lng) => {
-    const apiKey = "NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s";  // înlocuieşte cu cheia ta
+    const apiKey = process.env.REACT_APP_HERE_API_KEY;  // înlocuieşte cu cheia ta
     const revUrl = `https://revgeocode.search.hereapi.com/v1/revgeocode` +
                   `?at=${lat},${lng}` +
                   `&lang=en-US` +
@@ -287,7 +292,8 @@ const App = () => {
       url.searchParams.set("truck[axleCount]", `${vehicleType.axles}`);
       url.searchParams.set("vehicle[grossWeight]", `${vehicleType.weight}`);
       url.searchParams.set("vehicle[length]", "1875");
-      url.searchParams.set("apikey", "NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s");
+      url.searchParams.set("apikey", `${process.env.REACT_APP_HERE_API_KEY}`);
+      
 
 
       try {
@@ -335,13 +341,14 @@ const App = () => {
         const viaStation = {
           lat: best.via.lat,
           lng: best.via.lng,
-          label: "Via station",
+          label: `Lat: ${best.via.lat.toFixed(4)}, Lng: ${best.via.lng.toFixed(4)}`,
           isVia: true,
           radius: 10000
         };
 
         // obține numele locației prin reverse geocode
         const locationInfo = await reverseGeocode(best.via.lat, best.via.lng);
+        //const label = `Lat: ${item.position.lat}, Lng: ${item.position.lng}`;
         const label = locationInfo?.label || "Via zone";
 
         // Înlocuim lista de adrese cu noul via
@@ -373,10 +380,9 @@ const App = () => {
   
   useEffect(() => {
     if (mapRef.current) return; 
-    
-    // Initialize map
+  
     const platform = new window.H.service.Platform({
-      apikey: "NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s",
+      apikey: process.env.REACT_APP_HERE_API_KEY,
     });
     const defaultLayers = platform.createDefaultLayers();
     const map = new window.H.Map(
@@ -384,19 +390,26 @@ const App = () => {
       defaultLayers.vector.normal.map,
       { zoom: 6, center: { lat: 44.4268, lng: 26.1025 } }
     );
-    new window.H.ui.UI.createDefault(map, defaultLayers);
-    new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
+    
+    // Important: initialize behavior & UI
+    const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
+    const ui = window.H.ui.UI.createDefault(map, defaultLayers);
+  
+    // Important: asigurăm vector base layer activ
+    const mapSettings = ui.getControl('mapsettings');
+  
     mapRef.current = map;
     
     setTimeout(() => {
       map.getViewPort().resize();
     }, 0);
-
+  
     window.addEventListener("resize", () => map.getViewPort().resize());
     return () => {
       window.removeEventListener("resize", () => map.getViewPort().resize());
     };
   }, [tollCosts, selectedRouteIndex]);
+  
 
   // cost per km pt ruta selectată
   const costPerKmForSelected = () => {
@@ -404,6 +417,94 @@ const App = () => {
     const { costPerKm } = computeRouteMetrics(routes[selectedRouteIndex]);
     return costPerKm;
   };
+
+  // Zoom-scaler pentru marker-ele DOM
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+
+    const onMapViewChange = () => {
+      const zoom = map.getZoom();
+      if (markerGroupRef.current) {
+        markerGroupRef.current.getObjects().forEach(marker => {
+          const el = marker.__domElement;
+          if (el) {
+            const scale = 0.5 + zoom * 0.1;
+            el.style.transform = `translate(-50%,-110%) scale(${scale})`;
+          }
+        });
+      }
+    };
+    
+
+    map.addEventListener('mapviewchange', onMapViewChange);
+
+    return () => {
+      map.removeEventListener('mapviewchange', onMapViewChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (addresses.length === 0) return;
+  
+    if (markerGroupRef.current) {
+      mapRef.current.removeObject(markerGroupRef.current);
+    }
+  
+    const group = new window.H.map.Group();
+  
+    addresses.forEach((pt, idx) => {
+      const el = document.createElement('div');
+      el.className = 'numbered-marker';
+      el.style.transform = 'translate(-50%,-110%)';
+      
+      let color = "blue";
+      if (idx === 0) color = "green";
+      else if (idx === addresses.length - 1) color = "red";
+    
+      el.innerHTML = 
+      `<svg viewBox="0 0 24 24" class="arrow-icon">
+        <path d="M12 2 L15 8 H9 L12 2 Z" fill="${ idx===0 ? 'green' : idx===addresses.length-1 ? 'red' : 'blue' }" />
+      </svg>
+      <span class="marker-label">${idx+1}</span>
+      `;
+    
+      // Fix: asigurăm că dimensiunea DOM-ului e gata
+      document.body.appendChild(el);
+      const { offsetWidth, offsetHeight } = el;
+      document.body.removeChild(el);
+
+      el.style.marginLeft = `-${offsetWidth/2}px`;   // center horizontally
+      el.style.marginTop  = `0px`;                   // pin the TOP edge at the geo point
+
+    
+      console.log("el: ", el);
+      console.log("offW: ", offsetWidth);
+      console.log("offH: ", offsetHeight);
+
+      const domIcon = new window.H.map.DomIcon(el);
+    
+      const marker = new window.H.map.DomMarker(
+        { lat: pt.lat, lng: pt.lng },
+        { icon: domIcon, volatility: true }
+      );
+
+      marker.__domElement = el;
+    
+      //const simpleMarker = new window.H.map.Marker({lat: pt.lat, lng: pt.lng});
+      //mapRef.current.addObject(simpleMarker);
+
+      group.addObject(marker);
+    });
+    
+  
+    mapRef.current.addObject(group);
+    markerGroupRef.current = group;
+  }, [addresses, mapRef.current]);
+  
+  
+
 
   return (
     <div className="App flex flex-col h-screen">
@@ -429,7 +530,7 @@ const App = () => {
                 <div>
                   <label className="block mb-1 font-medium text-sm text-gray-700">Enter the address:</label>
                   <AutoCompleteInput
-                    apiKey="NtdXMcSjbr4h__U2wEhaC7i-4wTlX71ofanOwpm5E3s"
+                    apiKey={process.env.REACT_APP_HERE_API_KEY}
                     onSelect={addAddress}
                   />
                 </div>

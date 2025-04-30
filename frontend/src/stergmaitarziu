@@ -1,0 +1,63 @@
+// 1. Preluăm valorile VATNumber și ZIP din model
+var vat = model.VATNumber;
+var zip = model.Address?.PlaceObj?.ZIP;
+
+if (string.IsNullOrEmpty(vat) || string.IsNullOrEmpty(zip))
+{
+    // Dacă unul dintre câmpuri este gol, nu are sens să verificăm. Ieșim din acțiune.
+    return;
+}
+
+// 2. Construim Finder-ul pentru a verifica existența aceleiași combinații VATNumber + ZIP
+var sqlParameterDict = new Dictionary<string, object>
+{
+    { "@VATNumber", vat },
+    { "@ZIP", zip }
+};
+
+// Definim Finder-ul pentru căutare
+var compl = new InfPro.BusinessObjects.Finder.ComplexFinder();
+
+// Join cu Place, ca să putem accesa ZIP
+compl.JoinStatement += " INNER JOIN Place on Place.PlaceID = Address.PlaceID";
+
+// Excludem înregistrarea curentă (pentru a evita auto-detectarea ca duplicat)
+compl.AddToken(new InfPro.BusinessObjects.Finder.FinderSingleToken(
+    InfPro.BusinessObjects.Finder.ELogicType.And,
+    "dbo.Address.AddressID",
+    InfPro.BusinessObjects.Finder.ECompareType.NotEquals,
+    model.Address.AddressID));
+
+// Filtru pentru VATNumber
+compl.AddToken(new InfPro.BusinessObjects.Finder.FinderSingleToken(
+    InfPro.BusinessObjects.Finder.ELogicType.And,
+    "dbo.Address.VATNumber",
+    InfPro.BusinessObjects.Finder.ECompareType.Equals,
+    vat));
+
+// Filtru pentru ZIP
+compl.AddToken(new InfPro.BusinessObjects.Finder.FinderSingleToken(
+    InfPro.BusinessObjects.Finder.ELogicType.And,
+    "dbo.Place.ZIP",
+    InfPro.BusinessObjects.Finder.ECompareType.Equals,
+    zip));
+
+// Ne asigurăm că nu returnează duplicate multiple
+compl.UseDistinct = true;
+
+// 3. Căutăm în baza de date înregistrările existente
+var duplicateRecords = AddressDAC.Instance.Find(compl);
+
+// 4. Dacă există deja o astfel de înregistrare, blocăm salvarea
+if (duplicateRecords != null && duplicateRecords.Count > 0)
+{
+    // Varianta 1: Blocare prin excepție (oprește salvarea complet)
+    throw new Exception("Există deja o înregistrare cu același VATNumber și același ZIP. Salvarea este blocată!");
+
+    // Varianta 2: Afișare mesaj de eroare în interfață (fără excepție)
+    // model.AddMessage(InfPro.BusinessObjects.EMessageType.Error, 
+    //     "Există deja un client cu același VATNumber și același ZIP. Salvarea nu este permisă.");
+    
+    // Varianta 3: Anulare salvare fără excepție (dacă framework-ul permite)
+    // model.CancelSave();
+}
