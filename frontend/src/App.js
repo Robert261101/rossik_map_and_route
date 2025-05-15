@@ -8,44 +8,47 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // load token once on mount
+  // 1. setează token-ul în supabase client
   useEffect(() => {
-    const token = sessionStorage.getItem('token');
+    const token = sessionStorage.getItem('sb_token');
     if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setUser({ username: payload.username, role: payload.role });
-      } catch {
-        sessionStorage.removeItem('token');
-      }
+      supabase.auth.setAuth(token);
     }
-    setLoading(false);
   }, []);
 
-  if (loading) return null; // or a spinner
+  // 2. ascultă schimbări de auth & aduce user curent
+  useEffect(() => {
+    // curent la reload
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+
+    // pe viitor, dacă fresh login/logout
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <Router>
       <Routes>
-        {/* 1) Public login route */}
-        <Route path="/login" element={<Login setUser={setUser} />} />
-
-        {/* 2) Protected app routes */}
+        
+        <Route
+          path="/login"
+          element={user ? <Navigate to="/" /> : <LoginPage />}
+        />
         <Route
           path="/"
-          element={
-            user
-              ? <MainPage user={user}/>
-              : <Navigate to="/login" replace/>
-          }
+          element={user ? <MainPage /> : <Navigate to="/login" />}
         />
         <Route
           path="/history"
-          element={
-            user
-              ? <HistoryPage user={user}/>
-              : <Navigate to="/login" replace/>
-          }
+          element={user ? <HistoryPage /> : <Navigate to="/login" />}
         />
 
         {/* 3) Catch‑all: if no route matched, redirect appropriately */}
