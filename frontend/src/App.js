@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './Login';
+import LoginPage from './Login';
 import MainPage from './MainPage';
 import HistoryPage from './HistoryPage';
+import { supabase } from './lib/supabase'; 
 
 function App() {
   const [user, setUser] = useState(null);
@@ -37,7 +38,7 @@ function App() {
   return (
     <Router>
       <Routes>
-        
+
         <Route
           path="/login"
           element={user ? <Navigate to="/" /> : <LoginPage />}
