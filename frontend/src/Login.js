@@ -1,35 +1,23 @@
-// frontend/src/Login.js
+// src/Login.js
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
+import { useNavigate } from 'react-router-dom'
 
-export default function Login({ setUser }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const navigate = useNavigate();
+export default function LoginPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
+  const navigate = useNavigate()
 
   const handleLogin = async (e) => {
-    e.preventDefault();
-    setErrorMsg('');
-
-    // Supabase sign-in by email/password:
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,                // ← must match your new email column
-      password
-    });
-
+    e.preventDefault()
+    setErrorMsg('')  // resetăm mesajul de eroare înainte
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      setErrorMsg(error.message);
-      return;
+      setErrorMsg(error.message)
+    } else {
+      navigate('/')  // onAuthStateChange din App.js îți va actualiza user
     }
-
-    // store session token
-    sessionStorage.setItem('sb_token', data.session.access_token)
-    // decode payload for role, etc. (if you stored custom claims)
-    const payload = data.session.user  // Supabase user object
-    setUser(data.user);
-    navigate('/');
   }
 
   return (
@@ -53,11 +41,13 @@ export default function Login({ setUser }) {
               className="w-full border p-2 rounded focus:outline-none focus:ring focus:border-blue-500"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
               required
             />
           </div>
-          {errorMsg && <p className="text-red-500 text-sm text-center">{errorMsg}</p>}
+          {errorMsg && (
+            <p className="text-red-500 text-sm text-center">{errorMsg}</p>
+          )}
           <button
             type="submit"
             className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
@@ -69,6 +59,7 @@ export default function Login({ setUser }) {
     </div>
   )
 }
+
 
 
 

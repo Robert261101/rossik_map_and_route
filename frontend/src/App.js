@@ -1,44 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import LoginPage from './Login';
-import MainPage from './MainPage';
-import HistoryPage from './HistoryPage';
-import { supabase } from './lib/supabase'; 
+// src/App.js
+import React, { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { supabase } from './lib/supabase'
+import LoginPage from './Login'
+import MainPage from './MainPage'
+import HistoryPage from './HistoryPage'
 
-function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+export default function App() {
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  // 1. setează token-ul în supabase client
   useEffect(() => {
-    const token = sessionStorage.getItem('sb_token');
-    if (token) {
-      supabase.auth.setAuth(token);
-    }
-  }, []);
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setUser(session?.user ?? null)
+        setLoading(false)
+      })
 
-  // 2. ascultă schimbări de auth & aduce user curent
-  useEffect(() => {
-    // curent la reload
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
 
-    // pe viitor, dacă fresh login/logout
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-      }
-    );
     return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
+      listener.subscription.unsubscribe()
+    }
+  }, [])
+
+  if (loading) return <div>Loading...</div>
 
   return (
-    <Router>
+    <BrowserRouter>
       <Routes>
-
         <Route
           path="/login"
           element={user ? <Navigate to="/" /> : <LoginPage />}
@@ -51,18 +43,7 @@ function App() {
           path="/history"
           element={user ? <HistoryPage /> : <Navigate to="/login" />}
         />
-
-        {/* 3) Catch‑all: if no route matched, redirect appropriately */}
-        <Route
-          path="*"
-          element={
-            user
-              ? <Navigate to="/" replace/>
-              : <Navigate to="/login" replace/>
-          }
-        />
       </Routes>
-    </Router>
-  );
+    </BrowserRouter>
+  )
 }
-export default App;
