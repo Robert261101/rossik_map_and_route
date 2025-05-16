@@ -1,7 +1,7 @@
 // backend/makeHash.js
 const bcrypt = require('bcrypt');
 (async () => {
-  const plain = "cvtb7754+";
+  const plain = "Start123!";
   const hash  = await bcrypt.hash(plain, 10);
   console.log(plain);
   console.log(hash);
@@ -9,22 +9,3 @@ const bcrypt = require('bcrypt');
   process.exit(0);
 })();
 
-/*
-id,username,password,role,team_id,created_at,updated_at
-7005f062-4354-4dbf-8142-ef119b1641e4,erwin.rossik@rossik.eu,$2b$10$L.jz5bGJ4BuMTDCDfqF1.OtIptt7AeoftPJBrgbglqzKenx/fBWZS,admin,,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-8a9b0c1d-2e3f-4a5b-6c7d-890fabcd1234,alexandru.moldovan@rossik.eu,BCRYPT_HASH_2,manager,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-9b0c1d2e-3f4a-5b6c-7d8e-9012abcdef34,robert.balacescu@rossik.eu,BCRYPT_HASH_3,manager,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-0c1d2e3f-4a5b-6c7d-8e9f-0123456789ab,florin.jurca@rossik.eu,BCRYPT_HASH_4,dispatcher,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-1d2e3f4a-5b6c-7d8e-9f0a-1234567890bc,jessika.birsan@rossik.eu,BCRYPT_HASH_5,team_lead,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-2e3f4a5b-6c7d-8e9f-0a1b-2345678901cd,robert.sava@rossik.eu,BCRYPT_HASH_6,manager,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-3f4a5b6c-7d8e-9f0a-1b2c-3456789012de,laura.demian@rossik.eu,BCRYPT_HASH_7,team_lead,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-4a5b6c7d-8e9f-0a1b-2c3d-4567890123ef,catalin.ivan@rossik.eu,BCRYPT_HASH_8,manager,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-5b6c7d8e-9f0a-1b2c-3d4e-5678901234f0,dragana.petrea@rossik.eu,BCRYPT_HASH_9,manager,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-6c7d8e9f-0a1b-2c3d-4e5f-6789012345a1,mihaela.balogh@rossik.eu,BCRYPT_HASH_10,dispatcher,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-7d8e9f0a-1b2c-3d4e-5f6a-7890123456b2,mihai.cerna@rossik.eu,BCRYPT_HASH_11,manager,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-8e9f0a1b-2c3d-4e5f-6a7b-8901234567c3,vlad.erdei@rossik.eu,BCRYPT_HASH_12,manager,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-9f0a1b2c-3d4e-5f6a-7b8c-9012345678d4,claudiu.negura@rossik.eu,BCRYPT_HASH_13,dispatcher,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-0a1b2c3d-4e5f-6a7b-8c9d-0123456789e5,diana.dobroleja@rossik.eu,BCRYPT_HASH_14,dispatcher,11111111-2222-3333-4444-555555555555,2025-05-14T12:00:00Z,2025-05-14T12:00:00Z
-
-
-*/

@@ -767,46 +767,9 @@ const MainPage = ({ user })  => {
               </div>
             </div>
           )}
-
-          {/* ROW 4: Buton salvare ruta */}
-          {routes.length > 0 && (
-            <div className="mt-4 p-4 border rounded bg-gray-50">
-              <h3 className="font-semibold mb-2">Save this route</h3>
-
-              <div className="flex flex-row gap-4 items-end mb-4">
-                <div className="flex-1">
-                  <label className="block text-sm">Truck Plate</label>
-                  <input
-                    className="border p-1 w-full"
-                    placeholder="e.g. TM 00 RTS"
-                    value={plate}
-                    onChange={e => setPlate(e.target.value)}
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <label className="block text-sm">Tour Number</label>
-                  <input
-                    className="border p-1 w-full"
-                    placeholder="unique ID"
-                    value={identifier}
-                    onChange={e => setIdentifier(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <button
-                    onClick={handleSaveRoute}
-                    className="bg-green-600 text-white px-4 py-2"
-                  >
-                    Save Route
-                  </button>
-                </div>
-              </div>
-
-              {saveMsg && <p className="mt-2 text-sm">{saveMsg}</p>}
-            </div>
-          )}
+        
+          
+        
 
         </div>
 
