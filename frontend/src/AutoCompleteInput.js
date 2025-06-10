@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const AutoCompleteInput = ({ apiKey, onSelect }) => {
+const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
@@ -77,6 +77,7 @@ const AutoCompleteInput = ({ apiKey, onSelect }) => {
           setQuery(e.target.value);
         }}
         placeholder="Enter address or postal code"
+        className="w-full border-2 border-indigo-300 rounded p-2 shadow-sm transition focus-within:ring-2 focus-within:ring-indigo-300 focus:outline-none border-none"
       />
       {loading ? (
         <div style={{ position: 'absolute', top: '100%', left: 0 }}>

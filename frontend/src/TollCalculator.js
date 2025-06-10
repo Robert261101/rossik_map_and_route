@@ -247,7 +247,7 @@ const TollCalculator = ({
       if (section.tolls && section.tolls.length > 0) {
         for (const toll of section.tolls) {
           const countryCode = toll.countryCode;
-          
+          if (toll.pass?.returnJourney) continue;
           // Dacă nu există tarife în toll.fares, folosim numele din toll.tollSystem (acum cu înlocuire)
           if ((!toll.fares || toll.fares.length === 0) && countryCode && countryCalculators[countryCode]) {
             const dummyFare = { 
@@ -270,6 +270,7 @@ const TollCalculator = ({
           
           if (toll.fares && toll.fares.length > 0) {
             for (const fare of toll.fares) {
+              if (fare.pass?.returnJourney) continue;
               if (countryCode && countryCalculators[countryCode]) {
                 const sectionMetric = (["DEU", "HUN", "AUT", "FRA", "ITA", "SVN", "PRT", "ESP", "BEL", "POL", "CZE", "SVK", "CHE"].includes(countryCode))
                   ? (section.summary?.length || 0)

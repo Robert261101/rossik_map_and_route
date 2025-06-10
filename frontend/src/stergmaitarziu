@@ -1,39 +1,43 @@
-{/* ROW 4: Buton salvare ruta */}
-          {routes.length > 0 && (
-            <div className="mt-4 p-4 border rounded bg-gray-50">
-              <h3 className="font-semibold mb-2">Save this route</h3>
 
-              <div className="flex flex-row gap-4 items-end mb-4">
-                <div className="flex-1">
-                  <label className="block text-sm">Truck Plate</label>
-                  <input
-                    className="border p-1 w-full"
-                    placeholder="e.g. TM 00 RTS"
-                    value={plate}
-                    onChange={e => setPlate(e.target.value)}
-                  />
-                </div>
+@{
+  Guid mandantM1 = new Guid("9f5bd0ba-becd-457a-8fd2-fc51f23d4c96"); 
+  Guid mandantM2 = new Guid(""); 
+  string TourNumber = Model.TourNo;
 
-                <div className="flex-1">
-                  <label className="block text-sm">Tour Number</label>
-                  <input
-                    className="border p-1 w-full"
-                    placeholder="unique ID"
-                    value={identifier}
-                    onChange={e => setIdentifier(e.target.value)}
-                  />
-                </div>
+  var result = "";
+  if (Model.CfgCompany ID == mandantM1)
+  {
+  result =
+    $@"Sehr geehrte Damen und Herren,
 
-                <div>
-                  <button
-                    onClick={handleSaveRoute}
-                    className="bg-green-600 text-white px-4 py-2"
-                  >
-                    Save Route
-                  </button>
-                </div>
-              </div>
+    Anbei unser Ladeauftrag " + TourNumber + @".
+    Bitte senden Sie den unterzeichneten Ladeauftrag mit dem gewünschten Zahlungsziel an accounting@rossik.eu.
+    Auch bei Inland-Transporten ist ein CMR erforderlich.
 
-              {saveMsg && <p className="mt-2 text-sm">{saveMsg}</p>}
-            </div>
-          )}
+    Achtung, wir arbeiten im Gutschriftsverfahren. Rechnungen werden nicht akzeptiert.
+    Unangeforderte Dokumente, die per Post eingereicht werden, unterliegen einer Archivierungsgebühr von EUR 30,00.
+    Die Gutschrift wird nach Eingang des Stammdatenblattes erstellt.
+
+    Bei Rückfragen zur Ihrer Rechnung oder Zahlungen wenden Sie sich bitte an carrier.payment@rossik.eu.
+    
+    Dear Sir or Madam,
+
+    Attached you will find our loading order" + TourNumber +@".
+    Please send the signed loading order with the desired payment term to accounting@rossik.eu.
+    A CMR is also required for domestic transports.
+
+    Please note, we operate on a credit note procedure. Invoices will not be accepted.
+    Unsolicited documents submitted by post are subject to an archiving fee of EUR 30.00.
+    The credit note will be issued upon receipt of the master data sheet.
+
+    For any inquiries regarding your invoice or payments, please contact carrier.payment@rossik.eu.
+
+    ";
+  }
+  else if (Model.CfgCompanyID == mandantM2)
+  {
+  result =
+    $@"PUT THE OTHER TEXT HERE";
+  }
+}
+@result

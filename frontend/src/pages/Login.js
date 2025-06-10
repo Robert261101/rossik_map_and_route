@@ -1,6 +1,6 @@
 // src/Login.js
 import React, { useState } from 'react'
-import { supabase } from './lib/supabase'
+import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 
 export default function LoginPage() {
@@ -12,10 +12,11 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault()
     setErrorMsg('')  // resetăm mesajul de eroare înainte
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setErrorMsg(error.message)
     } else {
+      localStorage.setItem('token', data.session.access_token);
       navigate('/')  // onAuthStateChange din App.js îți va actualiza user
     }
   }
