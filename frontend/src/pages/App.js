@@ -120,7 +120,16 @@ export default function App() {
           element={user && user.role === 'admin' ? <DeleteTruck user={user} /> : <Navigate to="/" />} 
         />
         <Route path="/admin/team/add" element={<Navigate to="/admin/teams/add" replace />} />
-<Route path="/admin/team/delete" element={<Navigate to="/admin/teams/delete" replace />} />
+        <Route path="/admin/team/delete" element={<Navigate to="/admin/teams/delete" replace />} />
+        
+        <Route
+          path="/admin/teams/add"
+          element={user && user.role === 'admin' ? <AddTeam user={user} /> : <Navigate to="/" />}
+        />
+        <Route
+          path="/admin/teams/delete"
+          element={user && user.role === 'admin' ? <DeleteTeam user={user} /> : <Navigate to="/" />}
+        />
 
       </Routes>
     </BrowserRouter>
