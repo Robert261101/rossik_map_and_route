@@ -4,15 +4,14 @@ import { supabase } from '../lib/supabase'
 import LoginPage from './Login'
 import MainPage from './MainPage'
 import HistoryPage from './HistoryPage'
-import AdminDashboard from './admin/AdminDashboard';
-import TeamList from './admin/TeamList';
-import AddUser from './admin/AddUser';
-import DeleteUser from './admin/DeleteUser';
-import ResetPassword from './admin/ResetPassword';
-import AddTruck from './admin/AddTruck';
+import AdminDashboard from './admin/AdminDashboard'
+import TeamList from './admin/TeamList'
+import AddUser from './admin/AddUser'
+import DeleteUser from './admin/DeleteUser'
+import ResetPassword from './admin/ResetPassword'
+import AddTruck from './admin/AddTruck'
 import DeleteTruck from './admin/DeleteTruck'
-import AddTeam from './admin/AddTeam';
-import DeleteTeam from './admin/DeleteTeam';
+import AddTeam from './admin/AddTeam'
 
 
 export default function App() {
@@ -118,18 +117,10 @@ export default function App() {
         <Route 
           path="/admin/truck/delete" 
           element={user && user.role === 'admin' ? <DeleteTruck user={user} /> : <Navigate to="/" />} 
-          //TODO3: route problems with add and delete(?), pull branch
         />
-        <Route path="/admin/team/add" element={<Navigate to="/admin/teams/add" replace />} />
-        <Route path="/admin/team/delete" element={<Navigate to="/admin/teams/delete" replace />} />
-        
-        <Route
-          path="/admin/teams/add"
-          element={user && user.role === 'admin' ? <AddTeam user={user} /> : <Navigate to="/" />}
-        />
-        <Route
-          path="/admin/teams/delete"
-          element={user && user.role === 'admin' ? <DeleteTeam user={user} /> : <Navigate to="/" />}
+        <Route 
+          path="/add" 
+          element={<AddTeam user={user} />} 
         />
 
       </Routes>

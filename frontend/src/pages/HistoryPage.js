@@ -15,8 +15,6 @@ export default function HistoryPage({ user }) {
     ? savedRoutes.filter(r => r.id === selectedId)
     : savedRoutes;
 
-  // TODO2: afisarea de harta pe history AND admin can only delete stuff if he's part of team
-  
   // 1️⃣ Load your routes + truck plates + HERE 'sections'
   useEffect(() => {
     (async () => {
@@ -92,7 +90,7 @@ export default function HistoryPage({ user }) {
 
     // ensure it redraws after the container animates open
     setTimeout(() => map.getViewPort().resize(), 100);
-  }, [mapVisible, selectedId, savedRoutes]);
+  }, [mapVisible, selectedId, savedRoutes, expandedIds]);
 
   // Scroll table up & show only selected row
   const handleSelect = id => {

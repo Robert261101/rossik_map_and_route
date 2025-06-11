@@ -7,51 +7,53 @@ export default function TeamList({ user }) {
     const [teams, setTeams] = useState([]);
     const navigate = useNavigate();
 
-    useEffect(() => {
-        (async () => {
-            const { data: teamUsers, error } = await supabase
-                .from('users')
-                .select('id, username, team_id, role')
-                .order('team_id');
+    // fetch necesar pentru refresh
+    const fetchTeamsAndUsers = async () => {
+        try {
+        const { data: teamUsers, error } = await supabase
+            .from('users')
+            .select('id, username, team_id, role')
+            .order('team_id');
 
-            console.log('Loaded users:', teamUsers);
-            if (error) {
-                console.error('Error fetching users:', error);
-                return;
-            }
+        if (error) {
+            console.error('Error fetching users:', error);
+            return;
+        }
 
+        const { data: teams, errorTteams } = await supabase
+            .from('teams')
+            .select('id, name');
 
+        if (errorTteams) {
+            console.error('Error fetching teams:', errorTteams);
+            return;
+        }
 
-            const { data: teams, errorTteams } = await supabase
-                .from('teams')
-                .select('id, name');
+        const grouped = {};
+        for (const u of teamUsers) {
+            if (!grouped[u.team_id]) grouped[u.team_id] = [];
+            grouped[u.team_id].push(u);
+        }
 
-            console.log('Loaded teams:', teams);
-            if (errorTteams) {
-                console.error('Error fetching teams:', errorTteams);
-                return;
-            }
-
-
+        //TODO: check No Team idk why it works
+        const teamList = Object.entries(grouped).map(([teamId, members]) => {
+            const teamData = teams.find(t => t.id === teamId);
+            return {
+            teamId,
+            name: teamData?.name || 'No Team',
+            members,
+            };
             
-            const grouped = {};
-            for (const u of teamUsers) {
-                if (!grouped[u.team_id]) grouped[u.team_id] = [];
-                grouped[u.team_id].push(u);
-            }
+        });
 
-            const teamList = Object.entries(grouped).map(([teamId, members]) => {
-                const teamData = teams.find(t => t.id === teamId);
-                return {
-                    teamId,
-                    name: teamData?.name || 'Fără Nume',
-                    members,
-                };
-            });
+        setTeams(teamList);
+        } catch (err) {
+        console.error('Error loading teams and users:', err);
+        }
+    };
 
-            console.log('Teams:', teams);
-            setTeams(teamList);
-        })();
+    useEffect(() => {
+        fetchTeamsAndUsers();
     }, []);
 
     const formatName = (username = '') => {
@@ -67,8 +69,51 @@ export default function TeamList({ user }) {
         navigate('/login');
     };
 
+    // Delete
+    const handleDelete = async (teamId) => {
+        if (!window.confirm('Ești sigur că vrei să ștergi echipa? Această acțiune este ireversibilă.')) {
+            return;
+        }
+
+        try {
+            // Delete team functionality
+            console.log('deleted team: ' + teamId);
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            const deleteTeam = await fetch(`/api/admin/teams/${teamId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            // Delete check + TODO: update users without a team to fallback team
+            if (deleteTeam.ok) {
+                console.log('deleteOk')
+                const { error: updateError } = await supabase
+                .from('users')
+                .update({ team_id: 'cf70d8dc-5451-4979-a50d-c288365c77b4' })
+                .eq('team_id', teamId);
+
+            if (updateError) {
+                console.log('reassign error')
+                alert('Eroare la reasignarea utilizatorilor: ' + updateError.message);
+                return;
+            }
+                await fetchTeamsAndUsers();
+            } else {
+                const err = await res.json();
+                alert('Eroare la ștergere: ' + err.error);
+            }
+        } catch (err) {
+            alert('A apărut o eroare: ' + err.message);
+        }
+    }
+
+
     return (
-        <div className="App flex flex-col h-screen">
+        <div className="min-h-screen bg-gradient-to-br from-red-600 via-white to-gray-400 relative">
             <header className="bg-white shadow-sm p-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg"
@@ -125,7 +170,15 @@ export default function TeamList({ user }) {
             </header>
 
             <div className="p-6">
-                <h1 className="text-2xl font-bold mb-4">Echipe</h1>
+                <div className="flex justify-between items-center mb-4">
+                    <h1 className="text-2xl font-bold">Echipe</h1>
+                    <button 
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+                        onClick={()=>navigate("/add")}
+                    >
+                        Add Team
+                    </button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {teams.map((team, index) => (
                         <div key={index} className="border rounded p-4 shadow bg-white">
@@ -136,7 +189,6 @@ export default function TeamList({ user }) {
                                     ? formatName(team.members.find(member => member.role === 'team_lead').username) 
                                     : 'Nespecificat'
                                 }
-                                 {/* teams.id?.find(teams.name => team.teamId ===teams.id)? teams.name : team.teamId */}
                             </p>
                             <div className="mb-3">
                                 <h3 className="text-sm font-semibold">Membri:</h3>
@@ -147,10 +199,10 @@ export default function TeamList({ user }) {
                                 </ul>
                             </div>
                             <button
-                                onClick={() => navigate(`/admin/teams/${team.teamId}`)}
-                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+                                onClick={() => handleDelete(team.teamId)}
+                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded mr-2"
                             >
-                                Vezi echipa
+                                Șterge echipa
                             </button>
                         </div>
                     ))}
