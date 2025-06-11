@@ -49,7 +49,7 @@ export default function AdminDashboard({ user }) {
 
 
   return (
-    <div className="App flex flex-col min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-600 via-white to-gray-400 relative">
       {/* HEADER */}
       <header className="bg-white shadow-sm p-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -109,10 +109,9 @@ export default function AdminDashboard({ user }) {
         <h1 className="text-3xl font-bold mb-8 text-gray-800 text-center">
             Panou Administrativ
         </h1>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-8">
             <Box label="Cont" type="user" />
             <Box label="Camion" type="truck" />
-            <Box label="Echipă" type="team" />
         </div>
         </main>
 

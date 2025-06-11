@@ -163,8 +163,11 @@ export default function TeamList({ user }) {
                             Log out
                         </button>
                     </div>
-                    <div className="text-lg font-bold text-gray-800">
-                        {user?.username ? formatName(user.username) : ""}
+                    <div className="text-lg font-semibold text-gray-800">
+                        {user.email
+                        .split('@')[0]
+                        .replace('.', ' ')
+                        .replace(/\b\w/g, c => c.toUpperCase())}
                     </div>
                 </div>
             </header>
