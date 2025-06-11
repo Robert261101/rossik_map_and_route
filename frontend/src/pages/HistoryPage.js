@@ -184,7 +184,7 @@ export default function HistoryPage({ user }) {
               </tr>
             </thead>
             <tbody>
-              {savedRoutes.map(rt => {
+              {rowsToShow.map(rt => {
                 const km        = rt.distance_km.toFixed(2);
                 const dur       = rt.duration;
                 const epkm      = rt.euro_per_km.toFixed(2);
@@ -226,7 +226,7 @@ export default function HistoryPage({ user }) {
                     </td>
                     <td className="px-3 py-2 border">{feesList}</td>
                     <td className="px-3 py-2 border text-center flex space-x-2">
-                      {isLeadOrAdmin && (
+                      {/* {isLeadOrAdmin && (
                         <button
                           onClick={e => {
                             e.stopPropagation();
@@ -236,7 +236,7 @@ export default function HistoryPage({ user }) {
                         >
                           Edit
                         </button>
-                      )}
+                      )} */}
                       {isLeadOrAdmin && (
                         <button
                           onClick={async e => {
