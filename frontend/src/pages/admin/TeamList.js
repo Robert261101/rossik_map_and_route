@@ -103,7 +103,7 @@ export default function TeamList({ user }) {
             }
                 await fetchTeamsAndUsers();
             } else {
-                const err = await res.json();
+                const err = await deleteTeam.json();
                 alert('Eroare la ștergere: ' + err.error);
             }
         } catch (err) {
