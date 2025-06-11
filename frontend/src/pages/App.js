@@ -118,6 +118,7 @@ export default function App() {
         <Route 
           path="/admin/truck/delete" 
           element={user && user.role === 'admin' ? <DeleteTruck user={user} /> : <Navigate to="/" />} 
+          //TODO3: route problems with add and delete(?), pull branch
         />
         <Route path="/admin/team/add" element={<Navigate to="/admin/teams/add" replace />} />
 <Route path="/admin/team/delete" element={<Navigate to="/admin/teams/delete" replace />} />
