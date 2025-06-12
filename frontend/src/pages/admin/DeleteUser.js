@@ -42,7 +42,8 @@ console.log(user)
     });
 
     if (res.ok) {
-      // TODO3: Reîncarcă lista sau scoate userul local
+      setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
+      setSelected('');
     } else {
       const err = await res.json();
       alert('Eroare la ștergere: ' + err.error);
