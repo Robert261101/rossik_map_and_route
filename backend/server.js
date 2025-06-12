@@ -3,6 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const FALLBACK_TEAM_ID = 'cf70d8dc-5451-4979-a50d-c288365c77b4';
+
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
@@ -355,21 +357,24 @@ app.delete('/api/admin/teams/:id', requireRole('admin'), async (req, res) => {
   const teamId = req.params.id;
 
   try {
-    // Setezi la null echipa pentru userii din echipă
-    await supabase
+    // Reasignezi userii care raman fara echipa
+    const { error: updateError } = await supabase
       .from('users')
-      .update({ team_id: null })
+      .update({ team_id: FALLBACK_TEAM_ID })
       .eq('team_id', teamId);
 
+    if (updateError) throw updateError;
+
     // Ștergi echipa
-    const { error } = await supabase
+    const { error: deleteError } = await supabase
       .from('teams')
       .delete()
       .eq('id', teamId);
 
-    if (error) throw error;
+    if (deleteError) throw deleteError;
 
-    res.status(200).json({ message: 'Echipă ștearsă' });
+
+    res.status(200).json({ message: 'Echipă ștearsă și utilizatorii reasignați' });
   } catch (err) {
     console.error('Eroare la ștergere echipă:', err);
     res.status(500).json({ error: 'Eroare la ștergere echipă' });

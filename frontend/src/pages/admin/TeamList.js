@@ -3,8 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
-export default function TeamList({ user }) {
+export default  function TeamList({ user }) {
     const [teams, setTeams] = useState([]);
+    const [viewedTeamId, setViewedTeamId] = useState(null);
     const navigate = useNavigate();
 
     // fetch necesar pentru refresh
@@ -29,26 +30,30 @@ export default function TeamList({ user }) {
             return;
         }
 
+        const FALLBACK_TEAM_ID = 'cf70d8dc-5451-4979-a50d-c288365c77b4';
+
         const grouped = {};
         for (const u of teamUsers) {
-            if (!grouped[u.team_id]) grouped[u.team_id] = [];
-            grouped[u.team_id].push(u);
+            const teamId = u.team_id || FALLBACK_TEAM_ID;
+            if (!grouped[teamId]) grouped[teamId] = [];
+            grouped[teamId].push(u);
         }
 
-        //TODO: check No Team idk why it works
+
+
         const teamList = Object.entries(grouped).map(([teamId, members]) => {
             const teamData = teams.find(t => t.id === teamId);
             return {
-            teamId,
-            name: teamData?.name || 'No Team',
-            members,
+                teamId,
+                name: teamData?.name || 'No Team',
+                members,
             };
             
         });
 
         setTeams(teamList);
         } catch (err) {
-        console.error('Error loading teams and users:', err);
+            console.error('Error loading teams and users:', err);
         }
     };
 
@@ -69,47 +74,58 @@ export default function TeamList({ user }) {
         navigate('/login');
     };
 
-    // Delete
     const handleDelete = async (teamId) => {
         if (!window.confirm('Ești sigur că vrei să ștergi echipa? Această acțiune este ireversibilă.')) {
             return;
         }
 
         try {
-            // Delete team functionality
-            console.log('deleted team: ' + teamId);
+            // Get the current session to extract the token
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
-            const deleteTeam = await fetch(`/api/admin/teams/${teamId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                }
+
+            if (!token) {
+            alert('Nu ești autentificat');
+            return;
+            }
+
+            // Call your server API to delete the team
+            const res = await fetch(`/api/admin/teams/${teamId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
             });
 
-            // Delete check + TODO: update users without a team to fallback team
-            if (deleteTeam.ok) {
-                console.log('deleteOk')
-                const { error: updateError } = await supabase
-                .from('users')
-                .update({ team_id: 'cf70d8dc-5451-4979-a50d-c288365c77b4' })
-                .eq('team_id', teamId);
+            if (!res.ok) {
+            const err = await res.json();
+            alert('Eroare la ștergere: ' + (err.error || 'Unknown error'));
+            return;
+            }
 
-            if (updateError) {
-                console.log('reassign error')
-                alert('Eroare la reasignarea utilizatorilor: ' + updateError.message);
-                return;
-            }
-                await fetchTeamsAndUsers();
-            } else {
-                const err = await deleteTeam.json();
-                alert('Eroare la ștergere: ' + err.error);
-            }
-        } catch (err) {
-            alert('A apărut o eroare: ' + err.message);
+            const result = await res.json();
+            alert(result.message || 'Echipă ștearsă cu succes');
+
+            // Refresh the teams list after deletion
+            await fetchTeamsAndUsers();
+
+        } catch (error) {
+            console.error('Eroare la ștergere echipă:', error);
+            alert('Eroare la ștergere echipă');
         }
-    }
+    };
+
+
+    const toggleView = (teamId) => {
+        if (viewedTeamId === teamId) {
+        setViewedTeamId(null); // close if same team clicked again
+        } else {
+        setViewedTeamId(teamId);
+        }
+    };
+
+    
 
 
     return (
@@ -206,6 +222,12 @@ export default function TeamList({ user }) {
                                 className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded mr-2"
                             >
                                 Șterge echipa
+                            </button>
+                            <button
+                                onClick={() => navigate(`/admin/teams/${team.teamId}`)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
+                            >
+                                View
                             </button>
                         </div>
                     ))}

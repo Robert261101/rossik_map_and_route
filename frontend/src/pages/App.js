@@ -12,7 +12,8 @@ import ResetPassword from './admin/ResetPassword'
 import AddTruck from './admin/AddTruck'
 import DeleteTruck from './admin/DeleteTruck'
 import AddTeam from './admin/AddTeam'
-
+import TeamView from './admin/TeamView'
+import AddTeamMembers from './admin/AddTeamMembers'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -122,6 +123,15 @@ export default function App() {
           path="/add" 
           element={<AddTeam user={user} />} 
         />
+        <Route
+          path="admin/teams/:teamId"
+          element={<TeamView />}
+        />
+        <Route 
+          path="/admin/teams/:teamId/add-members"
+          element={<AddTeamMembers />} 
+        />
+
 
       </Routes>
     </BrowserRouter>

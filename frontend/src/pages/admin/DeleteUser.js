@@ -42,7 +42,7 @@ console.log(user)
     });
 
     if (res.ok) {
-      // Reîncarcă lista sau scoate userul local
+      // TODO3: Reîncarcă lista sau scoate userul local
     } else {
       const err = await res.json();
       alert('Eroare la ștergere: ' + err.error);
