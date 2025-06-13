@@ -14,10 +14,21 @@ import DeleteTruck from './admin/DeleteTruck'
 import AddTeam from './admin/AddTeam'
 import TeamView from './admin/TeamView'
 import AddTeamMembers from './admin/AddTeamMembers'
+import ReactDOM from 'react-dom'
+import { ThemeProvider } from '../contexts/ThemeContext'
 
 export default function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  // ReactDOM.render(
+  //   <ThemeProvider>
+  //     <App />
+  //   </ThemeProvider>,
+  //   document.getElementById('root')
+  // );
+
+
 
   useEffect(() => {
     const fetchUser = async () => {

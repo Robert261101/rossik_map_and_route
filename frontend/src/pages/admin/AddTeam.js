@@ -103,11 +103,11 @@ export default function AddTeam({ user }) {
 
     <div className="relative z-10 flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-3xl bg-white shadow-2xl rounded-3xl p-10 space-y-8 border border-gray-200">
-        <h2 className="text-4xl font-bold text-gray-800 border-b pb-5 tracking-tight">Creare Echipă Nouă</h2>
+        <h2 className="text-4xl font-bold text-gray-800 border-b pb-5 tracking-tight">Create New Team</h2>
 
         <form onSubmit={handleSubmit} className="space-y-6 text-lg">
           <div>
-            <label className="block text-base font-medium text-gray-700 mb-2">Nume echipă</label>
+            <label className="block text-base font-medium text-gray-700 mb-2">Team Name</label>
             <input
               type="text"
               value={name}
@@ -119,13 +119,13 @@ export default function AddTeam({ user }) {
           </div>
 
           <div>
-            <label className="block text-base font-medium text-gray-700 mb-2">Team Lead (opțional)</label>
+            <label className="block text-base font-medium text-gray-700 mb-2">Team Lead (optional)</label>
             <select
               value={teamLeadId}
               onChange={(e) => setTeamLeadId(e.target.value)}
               className="w-full px-5 py-3 border border-gray-300 rounded-xl text-lg"
             >
-              <option value="">-- Selectează --</option>
+              <option value="">-- Select --</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
                   {formatName(u.username)} ({u.role})
@@ -136,7 +136,7 @@ export default function AddTeam({ user }) {
 
           <div>
             <label className="block text-base font-medium text-gray-700 mb-3">
-              Membri echipă (opțional)
+              Team Members (optional)
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto border p-3 rounded-xl bg-gray-50">
               {users.map((u, idx) => {
@@ -172,14 +172,14 @@ export default function AddTeam({ user }) {
               onClick={() => navigate('/admin/teams')}
               className="text-red-600 hover:underline text-base"
             >
-              Anulează
+              Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
               className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-xl text-lg shadow-md"
             >
-              {loading ? 'Creare...' : 'Creează Echipă'}
+              {loading ? 'Creating...' : 'Create Team'}
             </button>
           </div>
         </form>

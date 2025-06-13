@@ -2,6 +2,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import Sun from 'lucide-react/dist/esm/icons/sun';
+import Moon from 'lucide-react/dist/esm/icons/moon';
 
 export default function HistoryPage({ user }) {
   const navigate = useNavigate();
@@ -14,7 +16,7 @@ export default function HistoryPage({ user }) {
   const rowsToShow = selectedId
     ? savedRoutes.filter(r => r.id === selectedId)
     : savedRoutes;
-
+  const [darkMode, setDarkMode] = React.useState(false);
   // 1️⃣ Load your routes + truck plates + HERE 'sections'
   useEffect(() => {
     (async () => {
@@ -80,13 +82,15 @@ export default function HistoryPage({ user }) {
 
     // Fit to all segment bounds
     const lines = map.getObjects().filter(o => o instanceof window.H.map.Polyline);
-    let bbox = lines[0].getBoundingBox();
-    lines.slice(1).forEach(p => { bbox = bbox.merge(p.getBoundingBox()); });
-    map.getViewModel().setLookAtData({ bounds: bbox });
+     if (lines.length > 0) {
+      let bbox = lines[0].getBoundingBox();
+      lines.slice(1).forEach(p => { bbox = bbox.merge(p.getBoundingBox()); });
+      map.getViewModel().setLookAtData({ bounds: bbox });
+    }
 
     // bump the zoom in one notch for a tighter view
     const currentZoom = map.getZoom();
-    map.getViewModel().setLookAtData({ zoom: currentZoom + 1 });
+    map.getViewModel().setLookAtData({ zoom: currentZoom });
 
     // ensure it redraws after the container animates open
     setTimeout(() => map.getViewPort().resize(), 100);
@@ -114,58 +118,108 @@ export default function HistoryPage({ user }) {
     navigate('/login');
   };
 
+  // Actualizează poziția tabelului pentru hartă
+  useEffect(() => {
+    const updateTablePosition = () => {
+      const table = document.getElementById('historyTableContainer');
+      if (table) {
+        const rect = table.getBoundingClientRect();
+        document.documentElement.style.setProperty(
+          '--table-bottom', 
+          `${rect.bottom}px`
+        );
+        // Forțează redimensionarea hărții
+        if (mapRef.current) {
+          setTimeout(() => mapRef.current.getViewPort().resize(), 100);
+        }
+      }
+    };
+
+    // Actualizează la încărcare inițială
+    updateTablePosition();
+
+    // Adaugă event listener pentru resize
+    window.addEventListener('resize', updateTablePosition);
+    
+    // Curăță event listener la unmount
+    return () => window.removeEventListener('resize', updateTablePosition);
+  }, [savedRoutes, expandedIds]); // Adăugăm expandedIds la dependencies
+
   console.log("Current user:", user);
   console.log("User role:", user.role);
   console.log("isLeadOrAdmin:", isLeadOrAdmin);
 
   return (
-    <div className="App flex flex-col h-screen">
-      {/* HEADER */}
-      <header className="bg-white shadow-sm p-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">Saved Route History</h1>
-        <div className="flex space-x-2">
-          {user.role === 'admin' && (
-            <>
-              <button
-                onClick={() => navigate('/admin')}
-                className="bg-red-600 text-white px-3 py-1 rounded"
-              >
-                Panou Admin
-              </button>
-              <button
-                onClick={() => navigate('/admin/teams')}
-                className="bg-red-600 text-white px-3 py-1 rounded"
-              >
-                Vezi Echipe
-              </button>
-            </>
-          )}
-          <button onClick={() => navigate('/')} className="bg-red-600 text-white px-3 py-1 rounded">
-            Main Page
-          </button>
-          <button onClick={() => navigate('/history')} className="bg-red-600 text-white px-3 py-1 rounded">
-            History
-          </button>
-          <button
-            onClick={handleLogout}
-            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-          >
-            Log out
-          </button>
-          <div className="text-lg font-semibold text-gray-800">
-            {user.email
-              .split('@')[0]
-              .replace('.', ' ')
-              .replace(/\b\w/g, c => c.toUpperCase())}
+    <div className={`flex flex-col min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
+      <header className="top-0 z-50">
+        <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
+          {/* LEFT: Logo / Titlu */}
+          <div className="flex items-center">
+            <span className="font-bold text-2xl tracking-tight">
+              Rossik Route Calculation
+            </span>
+          </div>
+
+          {/* RIGHT: Butoane */}
+          <div className="flex items-center space-x-3">
+            {/* <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-3 rounded hover:bg-white/40 dark:hover:bg-gray-700"
+            >
+              {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+            </button> */}
+            {user.role === 'admin' && (
+              <>
+                <button
+                  onClick={() => navigate('/admin')}
+                  className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+                >
+                  Admin Panel
+                </button>
+                <button
+                  onClick={() => navigate('/admin/teams')}
+                  className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+                >
+                  Teams
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => navigate('/')}
+              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+            >
+              Main Page
+            </button>
+            <button
+              onClick={() => navigate('/history')}
+              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+            >
+              History
+            </button>
+            
+            <button
+              onClick={handleLogout}
+              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+            >
+              Logout
+            </button>
+
+            {/* Numele user-ului */}
+            <div className="text-xl font-semibold ml-3">
+              {user.email
+                .split('@')[0]
+                .replace('.', ' ')
+                .replace(/\b\w/g, c => c.toUpperCase())}
+            </div>
           </div>
         </div>
       </header>
 
       {/* CONTENT */}
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 overflow-hidden relative">
         {/* TABLE */}
         <div id="historyTableContainer" className="flex-none overflow-auto p-4">
-          <table className="min-w-full border">
+          <table className="min-w-full border bg-white">
             <thead>
               <tr className="bg-gray-50">
                 <th className="px-3 py-2 border">Created By</th>
@@ -295,9 +349,14 @@ export default function HistoryPage({ user }) {
         {/* MAP DETAIL */}
         <div
           id="historyMapContainer"
-          className={`w-full ${mapVisible?'flex-1':'h-0'} overflow-hidden transition-[height] duration-300`}
+          className="fixed inset-x-0 bottom-0"
+          style={{ 
+            top: 'var(--table-bottom, 100px)',
+            display: selectedId ? 'block' : 'none' 
+          }}
         />
       </div>
     </div>
   );
 }
+

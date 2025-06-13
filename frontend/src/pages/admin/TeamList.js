@@ -2,11 +2,15 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import Sun from 'lucide-react/dist/esm/icons/sun';
+import Moon from 'lucide-react/dist/esm/icons/moon';
 
 export default  function TeamList({ user }) {
     const [teams, setTeams] = useState([]);
     const [viewedTeamId, setViewedTeamId] = useState(null);
     const navigate = useNavigate();
+    const [darkMode, setDarkMode] = React.useState(false);
+
 
     // fetch necesar pentru refresh
     const fetchTeamsAndUsers = async () => {
@@ -129,114 +133,122 @@ export default  function TeamList({ user }) {
 
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-red-600 via-white to-gray-400 relative">
-            <header className="bg-white shadow-sm p-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg"
-                        className="h-6 w-6 text-red-600"
-                        fill="none" viewBox="0 0 24 24"
-                        stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M9 2l.01 6L7 8c0 1.333 4 2 4 2s4-.667 4-2l-2-.01V2H9zM3 13h7v7H5.5a2.5 2.5 0 01-2.5-2.5V13zM21 13h-7v7h4.5a2.5 2.5 0 002.5-2.5V13z" />
-                    </svg>
-                    <h1 className="text-xl font-bold text-gray-800">Rossik Route Calculation</h1>
-                </div>
+        <div className={`min-h-screen top-0 z-50 transition-colors duration-500 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
+        <header className="top-0 z-50">
+            <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
+            {/* LEFT: Logo / Title */}
+            <div className="flex items-center">
+                <span className="font-bold text-2xl tracking-tight">
+                Rossik Route Calculation
+                </span>
+            </div>
 
-                <div className="flex space-x-2">
-                    <div className="flex space-x-2">
-                        {user.role === 'admin' && (
-                            <>
-                                <button
-                                    onClick={() => navigate('/admin')}
-                                    className="bg-red-600 text-white px-3 py-1 rounded"
-                                >
-                                    Panou Admin
-                                </button>
-                                <button
-                                    onClick={() => navigate('/admin/teams')}
-                                    className="bg-red-600 text-white px-3 py-1 rounded"
-                                >
-                                    Vezi Echipe
-                                </button>
-                            </>
-                        )}
-                        <button
-                            onClick={() => navigate("/")}
-                            className="bg-red-600 text-white py-1 px-3 rounded hover:bg-red-700 transition"
-                        >
-                            Main Page
-                        </button>
-                        <button
-                            onClick={() => navigate("/history")}
-                            className="bg-red-600 text-white py-1 px-3 rounded hover:bg-red-700 transition"
-                        >
-                            History
-                        </button>
-                        <button
-                            onClick={handleLogout}
-                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-                        >
-                            Log out
-                        </button>
-                    </div>
-                    <div className="text-lg font-semibold text-gray-800">
-                        {user.email
-                        .split('@')[0]
-                        .replace('.', ' ')
-                        .replace(/\b\w/g, c => c.toUpperCase())}
-                    </div>
-                </div>
-            </header>
+            {/* RIGHT: Buttons */}
+            <div className="flex items-center space-x-3">
+                {/* <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="p-3 rounded hover:bg-white/40 dark:hover:bg-gray-700"
+                aria-label="Toggle Dark Mode"
+                >
+                {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+                </button> */}
 
-            <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h1 className="text-2xl font-bold">Echipe</h1>
-                    <button 
-                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-                        onClick={()=>navigate("/add")}
+                {/* Show admin buttons only for admin */}
+                {user.role === 'admin' && (
+                <>
+                    <button
+                    onClick={() => navigate('/admin')}
+                    className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
                     >
-                        Add Team
+                    Admin Panel
                     </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {teams.map((team, index) => (
-                        <div key={index} className="border rounded p-4 shadow bg-white">
-                            <h2 className="font-semibold mb-2">Echipa: {team.name}</h2>
-                            <p className="mb-2 text-sm text-gray-500">
-                                {team.name !== "No Team" && (
-                                    <div>
-                                        Team Lead: {
-                                        team.members?.find(member => member.role === 'team_lead')
-                                            ? formatName(team.members.find(member => member.role === 'team_lead').username)
-                                            : 'Nespecificat'
-                                        }
-                                    </div>
-                                    )}
-                            </p>
-                            <div className="mb-3">
-                                <h3 className="text-sm font-semibold">Membri:</h3>
-                                <ul className="text-sm">
-                                    {team.members.map((member) => (
-                                        <li key={member.id}>• {formatName(member.username)} ({member.role})</li>
-                                    ))}
-                                </ul>
-                            </div>
-                            <button
-                                onClick={() => handleDelete(team.teamId)}
-                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded mr-2"
-                            >
-                                Șterge echipa
-                            </button>
-                            <button
-                                onClick={() => navigate(`/admin/teams/${team.teamId}`)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
-                            >
-                                View
-                            </button>
-                        </div>
-                    ))}
+                    <button
+                    onClick={() => navigate('/admin/teams')}
+                    className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+                    >
+                    Teams
+                    </button>
+                </>
+                )}
+
+                <button
+                onClick={() => navigate('/')}
+                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+                >
+                Main Page
+                </button>
+                <button
+                onClick={() => navigate('/history')}
+                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+                >
+                History
+                </button>
+
+                <button
+                onClick={handleLogout}
+                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+                >
+                Logout
+                </button>
+
+                {/* Username formatted */}
+                <div className="text-xl font-semibold ml-3">
+                {formatName(user?.email)}
                 </div>
             </div>
+            </div>
+        </header>
+
+        <div className="p-6 max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-10">
+            <h1 className="text-4xl font-extrabold">Teams</h1>
+            <button
+                className="bg-gradient-to-r from-emerald-400 to-emerald-600 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
+                onClick={() => navigate('/add')}
+            >
+                Add Team
+            </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+            {teams.map((team, index) => (
+                <div
+                key={index}
+                className="relative border border-white/30 bg-white/80 dark:bg-gray-800/30 backdrop-blur-md rounded-lg p-6 text-center shadow-xl hover:shadow-2xl transition-transform duration-300 transform hover:scale-[1.02]"
+                >
+                <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">{team.name}</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                    Team Lead:{' '}
+                    {team.members?.find(member => member.role === 'team_lead')
+                    ? formatName(team.members.find(member => member.role === 'team_lead').username)
+                    : 'Nespecificat'}
+                </p>
+                <div className="text-left mb-4">
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Members:</h3>
+                    <ul className="text-sm text-gray-800 dark:text-gray-100 list-disc list-inside space-y-1">
+                    {team.members.map((member) => (
+                        <li key={member.id}>
+                        {formatName(member.username)} ({member.role})
+                        </li>
+                    ))}
+                    </ul>
+                </div>
+                <button
+                    onClick={() => handleDelete(team.teamId)}
+                    className="bg-gradient-to-r from-red-400 to-red-600 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
+                >
+                    Delete Team
+                </button>
+                <button
+                    onClick={() => navigate(`/admin/teams/${team.teamId}`)}
+                    className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
+                >
+                    View
+                </button>
+                </div>
+            ))}
+            </div>
+        </div>
         </div>
     );
 }

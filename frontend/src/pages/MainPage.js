@@ -4,6 +4,8 @@ import AutoCompleteInput from "../AutoCompleteInput";
 import TollCalculator from "../TollCalculator";
 import { useNavigate } from 'react-router-dom'
 import { supabase } from "../lib/supabase";
+import Sun from 'lucide-react/dist/esm/icons/sun';
+import Moon from 'lucide-react/dist/esm/icons/moon';
 import "./App.css";
 
 const MainPage = ({ user })  => {
@@ -29,7 +31,7 @@ const MainPage = ({ user })  => {
   const navigate = useNavigate()
   let apiCallCount = 0;
   const isManager = ['transport_manager','team_lead','admin'].includes(user.role);
-  
+  const [darkMode, setDarkMode] = React.useState(false);
 
   //de aici am butonul de salvare rute
   const [trucks, setTrucks] = useState([]);        // lista de { id, plate }
@@ -658,71 +660,77 @@ const MainPage = ({ user })  => {
     })();
   }, [user]);
 
-
-
-
+  useEffect(() => {
+      if (mapRef.current && routes.length > 0) {
+        window.dispatchEvent(new Event('resize'));
+      }
+    }, [routes]);
 
   return (
   <div className="App flex flex-col h-screen">
+    <div className={`flex flex-col flex-1 transition-colors duration-500 ${darkMode ? 'bg-gray-900 ' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
+      
     {/* HEADER */}
-    <header className="bg-white shadow-sm p-4 flex items-center justify-between">
-      {/* Stânga: logo, titlu și butoane */}
-      <div className="flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6 text-red-600"
-            fill="none" viewBox="0 0 24 24"
-            stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 2l.01 6L7 8c0 1.333 4 2 4 2s4-.667 4-2l-2-.01V2H9zM3 13h7v7H5.5a2.5 2.5 0 01-2.5-2.5V13zM21 13h-7v7h4.5a2.5 2.5 0 002.5-2.5V13z" />
-        </svg>
-        <h1 className="text-xl font-bold text-gray-800">Rossik Route Calculation</h1>
-      </div>
+    <header className={`top-0 z-30 ${darkMode ? 'bg-gray-900 text-white' : 'bg-white'}`}>
+        <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
+          {/* LEFT: Logo / Titlu */}
+          <div className="flex items-center">
+            <span className="font-bold text-2xl tracking-tight">
+              Rossik Route Calculation
+            </span>
+          </div>
 
 
-      <div className="flex space-x-2">
+      <div className="flex items-center space-x-3">
         {/* Butoane nav */}
-        <div className="flex space-x-2">
+          {/* <button
+            onClick={() => setDarkMode(!darkMode)}
+            className="p-3 rounded hover:bg-white/40 dark:hover:bg-gray-700"
+          >
+            {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+          </button> */}
           {user.role === 'admin' && (
             <>
               <button
                 onClick={() => navigate('/admin')}
-                className="bg-red-600 text-white px-3 py-1 rounded"
+                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
               >
-                Panou Admin
+                Admin Panel
               </button>
               <button
                 onClick={() => navigate('/admin/teams')}
-                className="bg-red-600 text-white px-3 py-1 rounded"
+                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
               >
-                Vezi Echipe
+                Teams
               </button>
             </>
           )}
           <button
-            onClick={() => navigate("/")}
-            className="bg-red-600 text-white py-1 px-3 rounded hover:bg-red-700 transition"
+            onClick={() => navigate('/')}
+            className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
           >
             Main Page
           </button>
           <button
-            onClick={() => navigate("/history")}
-            className="bg-red-600 text-white py-1 px-3 rounded hover:bg-red-700 transition"
+            onClick={() => navigate('/history')}
+            className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
           >
             History
           </button>
+          
           <button
             onClick={handleLogout}
-            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+            className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
           >
-            Log out
+            Logout
           </button>
-        </div>
-        {/* Dreapta: user */}
-        <div className="text-lg font-bold text-gray-800">
-          {user?.email ? formatName(user.email) : ""}
-        </div>
-      </div>
 
+        {/* Numele user-ului */}
+          <div className="text-xl font-semibold ml-3">
+            {formatName(user?.email)}
+          </div>
+      </div>
+    </div>
       
     </header>
 
@@ -981,7 +989,7 @@ const MainPage = ({ user })  => {
 
       {/* FOOTER */}
       <footer className="bg-white border-t border-gray-200 p-4 text-center text-sm text-gray-500">
-        © 2025 Route Truck Wizard - Planificare rute și calcul taxe rutiere pentru camioane
+        © 2025 Rossik Route Calculation
       </footer>
 
       {/* Montăm un TollCalculator (invizibil) pentru fiecare rută */}
@@ -1000,6 +1008,7 @@ const MainPage = ({ user })  => {
           />
         ))}
       </div>
+    </div>
     </div>
   );
 };
