@@ -203,11 +203,15 @@ export default  function TeamList({ user }) {
                         <div key={index} className="border rounded p-4 shadow bg-white">
                             <h2 className="font-semibold mb-2">Echipa: {team.name}</h2>
                             <p className="mb-2 text-sm text-gray-500">
-                                Team Lead: {
-                                    team.members?.find(member => member.role === 'team_lead') 
-                                    ? formatName(team.members.find(member => member.role === 'team_lead').username) 
-                                    : 'Nespecificat'
-                                }
+                                {team.name !== "No Team" && (
+                                    <div>
+                                        Team Lead: {
+                                        team.members?.find(member => member.role === 'team_lead')
+                                            ? formatName(team.members.find(member => member.role === 'team_lead').username)
+                                            : 'Nespecificat'
+                                        }
+                                    </div>
+                                    )}
                             </p>
                             <div className="mb-3">
                                 <h3 className="text-sm font-semibold">Membri:</h3>
