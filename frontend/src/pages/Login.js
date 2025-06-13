@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import RossikLogo from '../VektorLogo_Rossik_rot.gif'; 
+
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -24,11 +26,11 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-600 via-white to-gray-300 dark:from-gray-800 dark:via-gray-900 dark:to-black transition-colors">
       <div className="fixed top-0 right-0 px-6 py-5">
-        <div className="flex items-center">
-          <span className="font-bold text-4xl tracking-tight text-gray-800 dark:text-white">
-            Rossik Route Calculation
-          </span>
-        </div>
+        <img
+          src={RossikLogo}
+          alt="Rossik Logo"
+          className="h-16 object-contain"
+        />
       </div>
 
       <div className="w-full max-w-md bg-white/90 dark:bg-gray-800/80 backdrop-blur-md shadow-xl rounded-2xl px-8 py-10">
