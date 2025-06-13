@@ -640,6 +640,8 @@ const MainPage = ({ user })  => {
     markerGroupRef.current = group;
   }, [addresses, mapRef.current]);
   
+
+  //TODO: admin can see all trucks
   useEffect(() => {
     (async () => {
       const { data: profile, error: pErr } = await supabase

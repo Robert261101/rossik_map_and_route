@@ -25,12 +25,27 @@ export default function HistoryPage({ user }) {
         .select('team_id')
         .eq('id', user.id)
         .single();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const raw = await fetch('/api/routes', {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${token}`
         }
       });
+
       const routes = await raw.json();
+
+      console.log('Token:', localStorage.getItem('token'));
+
+      console.log('Routes response:', routes);
+
+      if (!Array.isArray(routes)) {
+        console.error('Expected an array but got:', routes);
+        setSavedRoutes([]);
+        return;
+      }
+
 
       setSavedRoutes(routes.map(r => ({
         ...r,
@@ -148,6 +163,8 @@ export default function HistoryPage({ user }) {
   console.log("Current user:", user);
   console.log("User role:", user.role);
   console.log("isLeadOrAdmin:", isLeadOrAdmin);
+
+  //TODO: Filtered search after F, truck plate and date
 
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
