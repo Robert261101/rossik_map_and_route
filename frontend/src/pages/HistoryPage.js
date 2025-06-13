@@ -120,6 +120,7 @@ export default function HistoryPage({ user }) {
     }, 0);
   };
 
+
   const toggleExpand = (id, e) => {
     e.stopPropagation();
     setExpandedIds(curr =>
@@ -179,12 +180,6 @@ export default function HistoryPage({ user }) {
 
           {/* RIGHT: Butoane */}
           <div className="flex items-center space-x-3">
-            {/* <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="p-3 rounded hover:bg-white/40 dark:hover:bg-gray-700"
-            >
-              {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
-            </button> */}
             {user.role === 'admin' && (
               <>
                 <button
@@ -250,10 +245,11 @@ export default function HistoryPage({ user }) {
                 <th className="px-3 py-2 border">Route Cost</th>
                 <th className="px-3 py-2 border">Total</th>
                 <th className="px-3 py-2 border">Addresses</th>
-                <th className="px-3 py-2 border">All Fees</th>
-                <th className="px-3 py-2 border"></th>
+                {/* Removed All Fees column */}
+                <th className="px-3 py-2 border"></th> {/* Actions column */}
               </tr>
             </thead>
+
             <tbody>
               {rowsToShow.map(rt => {
                 const km        = rt.distance_km.toFixed(2);
@@ -267,12 +263,11 @@ export default function HistoryPage({ user }) {
                   : '';
                 const savedBy = rt.created_by_email || 'Unknown';
 
-
                 return (
                   <tr
                     key={rt.id}
                     onClick={() => handleSelect(rt.id)}
-                    className={`cursor-pointer ${selectedId===rt.id?'bg-red-50':''} hover:bg-gray-100`}
+                    className={`cursor-pointer ${selectedId === rt.id ? 'bg-red-50' : ''} hover:bg-gray-100`}
                   >
                     <td className="px-3 py-2 border text-center">{savedBy}</td>
                     <td className="px-3 py-2 border text-center">{rt.date}</td>
@@ -286,28 +281,46 @@ export default function HistoryPage({ user }) {
                     <td className="px-3 py-2 border text-center">{tot}</td>
                     <td className="px-3 py-2 border">
                       {rt.addresses[0].label} → {rt.addresses.slice(-1)[0].label}
-                      <button className="ml-2 text-xs text-red-600" onClick={e => toggleExpand(rt.id, e)}>
-                        ▼
+                      <button
+                      //TODO: make it look better/ possibly change functionality to previous method - see "thingy" text file in your notes
+                        className="ml-2 text-s text-red-600 underline"
+                        onClick={e => {
+                          e.stopPropagation();
+                          toggleExpand(rt.id, e);
+                        }}
+                      >
+                        Details
                       </button>
+
                       {expandedIds.includes(rt.id) && (
-                        <ul className="mt-1 text-sm bg-gray-50 p-2 rounded shadow">
-                          {rt.addresses.map((a,i) => <li key={i}>{i+1}. {a.label}</li>)}
-                        </ul>
+                        <div className="mt-1 text-sm bg-gray-50 p-2 rounded shadow space-y-2">
+                          <ul>
+                            {rt.addresses.map((a, i) => (
+                              <li key={i}>
+                                {i + 1}. {a.label}
+                              </li>
+                            ))}
+                          </ul>
+
+                          {/* Show All Fees here */}
+                          {Array.isArray(rt.tolls) && rt.tolls.length > 0 && (
+                            <div>
+                              <strong>All Fees:</strong>
+                              <ul className="list-disc list-inside">
+                                {rt.tolls.map((t, i) => (
+                                  <li key={i}>
+                                    {t.name} ({t.country}): €{t.cost.toFixed(2)}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                        </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 border">{feesList}</td>
+
                     <td className="px-3 py-2 border text-center flex space-x-2">
-                      {/* {isLeadOrAdmin && (
-                        <button
-                          onClick={e => {
-                            e.stopPropagation();
-                            // TODO: open edit form/modal for rt.id
-                          }}
-                          className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded"
-                        >
-                          Edit
-                        </button>
-                      )} */}
                       {isLeadOrAdmin && (
                         <button
                           onClick={async e => {
@@ -332,21 +345,15 @@ export default function HistoryPage({ user }) {
                                 }
                               );
 
-                              console.log('DELETE status:', res.status);
-                              const body = await res.json().catch(() => null);
-                              console.log('DELETE body:', body);
-
                               if (!res.ok) {
+                                const body = await res.json().catch(() => null);
                                 const msg = body?.error || body?.message || res.statusText;
                                 alert('Delete failed: ' + msg);
                                 return;
                               }
 
-                              // remove from state so it disappears from the table
                               setSavedRoutes(curr => curr.filter(r => r.id !== rt.id));
-
                             } catch (err) {
-                              console.error('Delete exception:', err);
                               alert('Delete failed: ' + err.message);
                             }
                           }}
@@ -360,6 +367,7 @@ export default function HistoryPage({ user }) {
                 );
               })}
             </tbody>
+
           </table>
         </div>
 
