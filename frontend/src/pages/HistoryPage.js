@@ -97,10 +97,31 @@ export default function HistoryPage({ user }) {
 
     // Fit to all segment bounds
     const lines = map.getObjects().filter(o => o instanceof window.H.map.Polyline);
-     if (lines.length > 0) {
-      let bbox = lines[0].getBoundingBox();
-      lines.slice(1).forEach(p => { bbox = bbox.merge(p.getBoundingBox()); });
-      map.getViewModel().setLookAtData({ bounds: bbox });
+
+    if (lines.length > 0) {
+      let bbox = null;
+
+      for (const poly of lines) {
+        const polyBBox = poly.getBoundingBox();
+
+        if (!polyBBox) continue; // skip invalid bounding box
+
+        // Check if polyBBox has merge function
+        if (bbox === null) {
+          bbox = polyBBox;
+        } else if (typeof bbox.merge === 'function') {
+          console.log('Polylines bounding boxes:', lines.map(poly => poly.getBoundingBox()));
+          bbox = bbox.merge(polyBBox);
+        } else {
+          console.warn('bbox object missing merge method:', bbox);
+          // fallback: just assign polyBBox
+          bbox = polyBBox;
+        }
+      }
+
+      if (bbox !== null) {
+        map.getViewModel().setLookAtData({ bounds: bbox });
+      }
     }
 
     // bump the zoom in one notch for a tighter view
@@ -164,8 +185,15 @@ export default function HistoryPage({ user }) {
   console.log("Current user:", user);
   console.log("User role:", user.role);
   console.log("isLeadOrAdmin:", isLeadOrAdmin);
+  console.log('api key: ', process.env.REACT_APP_HERE_API_KEY)
 
-  //TODO: Filtered search after F, truck plate and date
+  //TODO1: Filtered search after F, truck plate in the header admin-everything team lead, transport manager - only for team
+
+  //TODO2: edit button on history
+
+  //TODO3: add get list on admin panel for trucks(+Edit here) and user accounts
+
+  //TODO4: add save this route parameters to vehicle parameters + fix admins can see all trucks - mainpage
 
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
@@ -385,3 +413,4 @@ export default function HistoryPage({ user }) {
   );
 }
 
+//TODO: via station edit
