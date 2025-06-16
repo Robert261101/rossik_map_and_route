@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Sun, Moon } from 'lucide-react';
+import RossikLogo from '../../VektorLogo_Rossik_rot.gif';
 
 export default function AddTruck({ user, handleLogout }) {
   const [plate, setPlate] = useState('');
@@ -46,17 +47,24 @@ export default function AddTruck({ user, handleLogout }) {
     }
   };
 
-  const formatName = (email = '') => email?.split('@')[0] || 'Anonim';
+  const formatName = (email = "") => {
+    if (!email || !email.includes('@')) return 'Fără Nume';
+    const local = email.split("@")[0];
+    const parts = local.split(".");
+    return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
+  };
 
   return (
     <div className={`min-h-screen transition-colors duration-500 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-900'}`}>
       <header className="top-0 z-50 dark:text-white">
         <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
-          <div className="flex items-center">
-            <span className="font-bold text-2xl tracking-tight">
-              Rossik Route Calculation
-            </span>
-          </div>
+          <div className="flex items-center bg-gradient-to-r from-white/70 via-white to-white/70 p-2 rounded">
+            <img
+              src={RossikLogo}
+              alt="Rossik Logo"
+              className="h-12 object-contain"
+            />
+          </div> 
           <div className="flex items-center space-x-3">
             {/* <button
               onClick={() => setDarkMode(!darkMode)}
