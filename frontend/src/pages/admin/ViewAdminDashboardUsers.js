@@ -24,7 +24,7 @@ export default function ViewAdminDashboardUsers({ users, onClose }) {
 
 
         <h2 className="text-2xl font-bold mb-4 text-center text-gray-900 dark:text-white">
-          Lista Utilizatori
+          Users
         </h2>
 
         <div className="max-h-[70vh] overflow-y-auto">
@@ -32,8 +32,8 @@ export default function ViewAdminDashboardUsers({ users, onClose }) {
             <thead className="text-sm uppercase text-gray-900 dark:text-gray-300">
                 <tr>
                 <th className="p-2">Email</th>
-                <th className="p-2">Rol</th>
-                <th className="p-2">Echipă</th>
+                <th className="p-2">Role</th>
+                <th className="p-2">Team</th>
                 </tr>
             </thead>
             <tbody>

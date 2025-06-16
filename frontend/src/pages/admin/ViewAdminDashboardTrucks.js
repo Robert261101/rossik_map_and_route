@@ -16,14 +16,14 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose }) {
         </button>
 
         <h2 className="text-2xl font-bold mb-4 text-center text-gray-900 dark:text-white">
-          Lista Camioane
+          Truck List
         </h2>
         <div className="max-h-[70vh] overflow-y-auto">
             <table className="w-full text-left border-collapse">
             <thead className="text-sm uppercase text-gray-900 dark:text-gray-300">
                 <tr>
-                    <th>Număr Înmatriculare</th>
-                    <th>Echipă</th>
+                    <th>Plate Number</th>
+                    <th>Team</th>
                     {/*<th>Cotație</th>*/}
                 </tr>
             </thead>
