@@ -204,7 +204,6 @@ export default function HistoryPage({ user }) {
   console.log("Current user:", user);
   console.log("User role:", user.role);
   console.log("isLeadOrAdmin:", isLeadOrAdmin);
-  console.log('api key: ', process.env.REACT_APP_HERE_API_KEY)
 
   //TODO2: edit button on history
 
