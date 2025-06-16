@@ -4,6 +4,7 @@ import AutoCompleteInput from "../AutoCompleteInput";
 import TollCalculator from "../TollCalculator";
 import { useNavigate } from 'react-router-dom'
 import { supabase } from "../lib/supabase";
+import SearchBar from "../helpers/SearchBar";
 import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
 import RossikLogo from '../VektorLogo_Rossik_rot.gif'; 
@@ -684,6 +685,8 @@ const MainPage = ({ user })  => {
               className="h-12 object-contain"
             />
           </div>
+
+      <SearchBar />
 
 
       <div className="flex items-center space-x-3">

@@ -92,56 +92,43 @@ export default function App() {
       <Routes>
         <Route
           path="/login"
-          element={user ? <Navigate to="/" /> : <LoginPage />}
-        />
+          element={user ? <Navigate to="/" /> : <LoginPage />} />
         <Route
           path="/"
-          element={user ? <MainPage user={user} /> : <Navigate to="/login" />}
-        />
+          element={user ? <MainPage user={user} /> : <Navigate to="/login" />} />
         <Route
           path="/history"
-          element={user ? <HistoryPage user={user}/> : <Navigate to="/login" />}
-        />
+          element={user ? <HistoryPage user={user} /> : <Navigate to="/login" />} />
         <Route
           path="/admin"
-          element={user && user.role === 'admin' ? <AdminDashboard user={user} /> : <Navigate to="/" />}
-        />
+          element={user && user.role === 'admin' ? <AdminDashboard user={user} /> : <Navigate to="/" />} />
         <Route
           path="/admin/teams"
-          element={user && user.role === 'admin' ? <TeamList user={user} /> : <Navigate to="/" />}
-        />
+          element={user && user.role === 'admin' ? <TeamList user={user} /> : <Navigate to="/" />} />
         <Route
           path="/admin/user/add"
-          element={user && user.role === 'admin' ? <AddUser user={user} /> : <Navigate to="/" />}
-        />
+          element={user && user.role === 'admin' ? <AddUser user={user} /> : <Navigate to="/" />} />
         <Route
           path="/admin/user/delete"
-          element={user && user.role === 'admin' ? <DeleteUser user={user} /> : <Navigate to="/" />}
-        />
-        <Route 
-          path="/admin/user/reset" 
-          element={user && user.role === 'admin' ? <ResetPassword user={user} /> : <Navigate to="/" />} 
-        />
-        <Route 
-          path="/admin/truck/add" 
-          element={user && user.role === 'admin' ? <AddTruck user={user} /> : <Navigate to="/" />} 
-        />
-        <Route 
-          path="/admin/truck/delete" 
-          element={user && user.role === 'admin' ? <DeleteTruck user={user} /> : <Navigate to="/" />} 
-        />
-        <Route 
-          path="/add" 
-          element={<AddTeam user={user} />} 
-        />
+          element={user && user.role === 'admin' ? <DeleteUser user={user} /> : <Navigate to="/" />} />
+        <Route
+          path="/admin/user/reset"
+          element={user && user.role === 'admin' ? <ResetPassword user={user} /> : <Navigate to="/" />} />
+        <Route
+          path="/admin/truck/add"
+          element={user && user.role === 'admin' ? <AddTruck user={user} /> : <Navigate to="/" />} />
+        <Route
+          path="/admin/truck/delete"
+          element={user && user.role === 'admin' ? <DeleteTruck user={user} /> : <Navigate to="/" />} />
+        <Route
+          path="/add"
+          element={<AddTeam user={user} />} />
         <Route
           path="admin/teams/:teamId"
-          element={<TeamView />}
-        />
-        <Route 
+          element={<TeamView />} />
+        <Route
           path="/admin/teams/:teamId/add-members"
-          element={<AddTeamMembers />} 
-        />
+          element={<AddTeamMembers />} />
 
 
       </Routes>

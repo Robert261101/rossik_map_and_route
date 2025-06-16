@@ -1,7 +1,8 @@
 // src/HistoryPage.js
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import SearchBar from '../helpers/SearchBar';
 import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
 import RossikLogo from '../VektorLogo_Rossik_rot.gif'; 
@@ -14,9 +15,26 @@ export default function HistoryPage({ user }) {
   const mapRef = useRef(null);
   const mapVisible = Boolean(selectedId);
   const isLeadOrAdmin = ['team_lead','admin'].includes(user.role);
-  const rowsToShow = selectedId
-    ? savedRoutes.filter(r => r.id === selectedId)
-    : savedRoutes;
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const normalize = str => str.toLowerCase().replace(/\s+/g, '');
+  const filterQuery = params.get('filter') || '';
+  const normalizedQuery = normalize(filterQuery);
+
+  const filteredRoutes = savedRoutes.filter(route => {
+    const normalizedIdentifier = normalize(route.identifier);
+    const normalizedTruckPlate = normalize(route.truck_plate || '');
+
+    return (
+      normalizedIdentifier.includes(normalizedQuery) ||
+      normalizedTruckPlate.includes(normalizedQuery)
+    );
+  });
+
+
+  //TODO: forgot password implementation
+
+  const rowsToShow = filterQuery ? filteredRoutes : savedRoutes;
   const [darkMode, setDarkMode] = React.useState(false);
   // 1️⃣ Load your routes + truck plates + HERE 'sections'
   useEffect(() => {
@@ -187,8 +205,6 @@ export default function HistoryPage({ user }) {
   console.log("User role:", user.role);
   console.log("isLeadOrAdmin:", isLeadOrAdmin);
 
-  //TODO1: Filtered search after F, truck plate in the header admin-everything team lead, transport manager - only for team
-
   //TODO2: edit button on history
 
   //TODO3: add get list on admin panel for trucks(+Edit here) and user accounts
@@ -207,6 +223,8 @@ export default function HistoryPage({ user }) {
               className="h-12 object-contain"
             />
           </div>
+
+          <SearchBar savedRoutes={savedRoutes} />
 
           {/* RIGHT: Butoane */}
           <div className="flex items-center space-x-3">
@@ -232,6 +250,8 @@ export default function HistoryPage({ user }) {
             >
               Main Page
             </button>
+
+            
             <button
               onClick={() => navigate('/history')}
               className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
