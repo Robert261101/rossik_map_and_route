@@ -186,7 +186,6 @@ export default function HistoryPage({ user }) {
   console.log("Current user:", user);
   console.log("User role:", user.role);
   console.log("isLeadOrAdmin:", isLeadOrAdmin);
-  console.log('api key: ', process.env.REACT_APP_HERE_API_KEY)
 
   //TODO1: Filtered search after F, truck plate in the header admin-everything team lead, transport manager - only for team
 
