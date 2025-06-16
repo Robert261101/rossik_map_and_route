@@ -4,6 +4,7 @@ import AutoCompleteInput from "../AutoCompleteInput";
 import TollCalculator from "../TollCalculator";
 import { useNavigate } from 'react-router-dom'
 import { supabase } from "../lib/supabase";
+import SearchBar from "../helpers/SearchBar";
 import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
 import "./App.css";
@@ -681,6 +682,8 @@ const MainPage = ({ user })  => {
               Rossik Route Calculation
             </span>
           </div>
+
+      <SearchBar />
 
 
       <div className="flex items-center space-x-3">
