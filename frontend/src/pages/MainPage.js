@@ -750,10 +750,10 @@ const MainPage = ({ user })  => {
           {/* ROW 1: Address + Vehicle */}
           <div className="flex space-x-4">
             <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
-              <h2 className="text-lg font-semibold mb-2">Address</h2>
+              <h2 className="text-lg font-bold mb-2">Address</h2>
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 <div >
-                  <label className="block mb-1 font-medium shadow-sm text-sm text-gray-700">Enter the address:</label>
+                  <label className="block mb-1 font-medium shadow-sm text-semibold text-gray-700">Enter the address:</label>
                     <div className="w-full rounded bg-gray-1000 ring-2 ring-red-300 focus-within:ring-red-500 transition">
                       <AutoCompleteInput
                         apiKey={process.env.REACT_APP_HERE_API_KEY}
@@ -787,10 +787,10 @@ const MainPage = ({ user })  => {
               </form>
             </div>
             <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
-              <h2 className="text-lg font-semibold mb-2">Vehicle Parameters</h2>
+              <h2 className="text-lg font-bold mb-2">Vehicle Parameters</h2>
               <div className="grid grid-cols-1 gap-2">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Number of axles</label> 
+                  <label className="block text-sm font-bold mb-1">Number of axles</label> 
                   <input
                     type="number"
                     name="axles"
@@ -805,7 +805,7 @@ const MainPage = ({ user })  => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Tonnage (kg)</label>
+                  <label className="block text-sm font-bold mb-1">Tonnage (kg)</label>
                   <input
                     type="number"
                     name="weight"
@@ -820,7 +820,7 @@ const MainPage = ({ user })  => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Euro/km</label>
+                  <label className="block text-sm font-bold mb-1">Euro/km</label>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -836,6 +836,57 @@ const MainPage = ({ user })  => {
                     max="10"
                     className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
                   />
+                </div>
+                <div>
+                  {/* ROW 4: Buton salvare ruta */}
+                  {isManager && (
+                    <div className="flex gap-4 items-end">
+                      {/* Truck Plate Select */}
+                      <div className="flex-1">
+                        <label className="block text-sm font-bold mb-1">Truck Plate</label>
+                        <select
+                          className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus:ring-red-500 transition"
+                          value={plate}
+                          onChange={e => setPlate(e.target.value)}
+                          required
+                        >
+                          <option value="" class disabled>Select your truck</option>
+                          {trucks.map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.plate}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Tour Identifier */}
+                      <div className="flex-1">
+                        <label className="block text-sm font-bold mb-1">Tour Number</label>
+                        <input
+                          className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus:ring-red-500 transition"
+                          placeholder="unique ID"
+                          value={identifier}
+                          onChange={e => setIdentifier(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Save Route Button */}
+                      <div>
+                        <button
+                          onClick={handleSaveRoute}
+                          className="bg-green-600 text-white font-bold px-4 py-2 rounded shadow hover:bg-green-700 transition"
+                        >
+                          Save Route
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {isManager && saveMsg && (
+                    <p className="text-sm text-gray-700 italic mt-1">{saveMsg}</p>
+                  )}
+
                 </div>
               </div>
             </div>
@@ -942,13 +993,13 @@ const MainPage = ({ user })  => {
             </div>
           )}
         
-          {/* ROW 4: Buton salvare ruta */}
+          {/*{/* ROW 4: Buton salvare ruta 
           {routes.length > 0 && isManager && (
             <div className="mt-4 p-4 border rounded bg-red-50 shadow-sm">
               <h3 className="font-semibold mb-2">Save this route</h3>
               <div className="flex flex-row gap-4 items-end mb-4">
 
-                {/* ← Truck Plate Select */}
+                {/* ← Truck Plate Select 
                 <div className="flex-1">
                   <label className="block text-sm">Truck Plate</label>
                   <select
@@ -966,7 +1017,7 @@ const MainPage = ({ user })  => {
                   </select>
                 </div>
 
-                {/* Tour Number stays the same */}
+                {/* Tour Number stays the same 
                 <div className="flex-1">
                   <label className="block text-sm">Tour Number</label>
                   <input
@@ -987,7 +1038,7 @@ const MainPage = ({ user })  => {
               </div>
               {saveMsg && <p className="mt-2 text-sm">{saveMsg}</p>}
             </div>
-          )}   
+          )}   */}
 
         </div>
 
