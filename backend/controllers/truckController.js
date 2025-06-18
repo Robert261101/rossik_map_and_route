@@ -1,26 +1,44 @@
 // backend/controllers/truckController.js
-const TruckRoute = require('../models/TruckRoute');
 
-// Save a route for a plate
 exports.saveRoute = async (req, res) => {
   try {
     const { plate, routeData } = req.body;
-    const record = await TruckRoute.create({
-      plate,
-      routeData,
-      createdBy: req.user.id
-    });
-    res.status(201).json(record);
+
+    // Insert a new row into your Supabase `truck_routes` table,
+    // automatically scoped to the logged-in user (via RLS).
+    const { data, error } = await req.supabase
+      .from('truck_routes')
+      .insert([
+        {
+          plate,
+          route_data: routeData,       // match your column name
+          created_by: req.authUser.id, // attach the Supabase user ID
+        },
+      ])
+      .single();
+
+    if (error) throw error;         // bubble up any Supabase errors
+
+    res.status(201).json(data);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 };
 
-// Get all routes for a plate
 exports.getRoutesByPlate = async (req, res) => {
   try {
-    const routes = await TruckRoute.find({ plate: req.params.plate });
-    res.json(routes);
+    const { plate } = req.params;
+
+    // Fetch all rows for this plate—RLS will ensure the user only
+    // sees their own records if you’ve set that policy up.
+    const { data, error } = await req.supabase
+      .from('truck_routes')
+      .select('*')
+      .eq('plate', plate);
+
+    if (error) throw error;
+
+    res.json(data);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -1,36 +1,32 @@
-// middleware/getUserWithRole.js
-const { createClient } = require('@supabase/supabase-js');
+// backend/middleware/getUserWithRole.js
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const { supabaseAdmin } = require('../lib/supabase');
 
+/**
+ * After authMiddleware has verified the JWT, this middleware
+ * looks up the user’s “role” (and any other metadata) in your
+ * own users table so you can do role-based checks downstream.
+ */
 module.exports = async function getUserWithRole(req, res, next) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  // 1. authMiddleware should already have populated req.authUser
+  if (!req.authUser || !req.authUser.id) {
+    return res.status(401).json({ error: 'User not authenticated' });
   }
 
-  const token = authHeader.split(' ')[1];
-
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-
-  if (error || !user) {
-    return res.status(401).json({ error: 'Invalid token or user not found' });
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('users')
+  // 2. Pull in the user’s profile (role, team_id, etc.) with the service role key
+  const { data: profile, error } = await supabaseAdmin
+    .from('users')                 // your custom users table
     .select('id, role, team_id')
-    .eq('id', user.id)
+    .eq('id', req.authUser.id)
     .single();
 
-  if (profileError || !profile) {
-    return res.status(403).json({ error: 'User profile not found or error fetching role' });
+  if (error || !profile) {
+    return res
+      .status(403)
+      .json({ error: 'User profile not found or error fetching role' });
   }
 
-  req.user = profile;
+  // 3. Attach it and move on
+  req.user = profile;              // { id, role, team_id }
   next();
 };

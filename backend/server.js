@@ -2,385 +2,406 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
+
+// Import our centralized Supabase clients
+const { supabaseAdmin } = require('./lib/supabase');
+
+// Auth stack
+const authMiddleware    = require('./middleware/authMiddleware');
+const getUserWithRole   = require('./middleware/getUserWithRole');
+const requireRole       = require('./middleware/requireRole');
+
 const FALLBACK_TEAM_ID = 'cf70d8dc-5451-4979-a50d-c288365c77b4';
-
-
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-
-// -- Middleware Imports --
-const getUserWithRole = require('./middleware/getUserWithRole');
-const requireRole = require('./middleware/requireRole');
 
 const app = express();
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 app.use(cors());
-app.use(express.json());
 
-// -- PUBLIC: Login Endpoint --
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return res.status(401).json({ message: error.message });
-  res.json({ token: data.session.access_token, user: data.user });
-});
+// ─────────────────────────────────────────────────────
+// All /api/* routes now require a valid Supabase JWT,
+// and will have both req.authUser and req.supabase set.
+// ─────────────────────────────────────────────────────
+app.use('/api', authMiddleware, getUserWithRole);
 
-// -- PROTECTED: All /api routes after this get user+role loaded --
-app.use('/api', getUserWithRole);
-
-// -- WHO AM I --
+// WHO AM I
 app.get('/api/users/me', (req, res) => {
-  // loaded by getUserWithRole
   res.json(req.user);
 });
 
-// -- LIST ROUTES (any authenticated team member) --
-app.get('/api/routes', requireRole('dispatcher','transport_manager','team_lead','admin'), async (req, res) => {
-  let query = supabase
-    .from('routes')
-    .select('*, users:created_by(username), trucks!inner(plate), sections')
-    .order('date', { ascending: false });
+// LIST ROUTES (dispatcher, transport_manager, team_lead, admin)
+app.get(
+  '/api/routes',
+  requireRole('dispatcher','transport_manager','team_lead','admin'),
+  async (req, res) => {
+    try {
+      let query = req.supabase
+        .from('routes')
+        .select('*, users:created_by(username), trucks!inner(plate), sections')
+        .order('date', { ascending: false });
 
-  if (req.user.role !== 'admin') {
-    query = query.eq('team_id', req.user.team_id);
+      if (req.user.role !== 'admin') {
+        query = query.eq('team_id', req.user.team_id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
   }
+);
 
-  const { data, error } = await query;
-  if (error) return res.status(500).json({ message: error.message });
-  res.json(data);
-});
-
-
-// -- SAVE A NEW ROUTE (team_lead, admin only) --
+// SAVE A NEW ROUTE (dispatcher, transport_manager, team_lead, admin)
 app.post(
   '/api/routes',
-  requireRole('dispatcher','transport_manager', 'team_lead', 'admin'),
+  requireRole('dispatcher','transport_manager','team_lead','admin'),
   async (req, res) => {
-    const userId = req.user.id;
-    const teamId = req.user.team_id;
-    // accept camelCase or snake_case
-    const {
-      truck_id, identifier, addresses, sections, duration,
-      euroPerKm, distance, costPerKm, tolls, tollCost, totalCost,
-      euro_per_km, distance_km, cost_per_km, toll_cost, total_cost
-    } = req.body;
+    try {
+      const userId = req.user.id;
+      const teamId = req.user.team_id;
+      const {
+        truck_id, identifier, addresses, sections, duration,
+        euroPerKm, distance, costPerKm,
+        tollCost, totalCost,
+        euro_per_km, distance_km, cost_per_km,
+        toll_cost, total_cost
+      } = req.body;
 
-    // unify names
-    const e_km    = euroPerKm    ?? euro_per_km;
-    const d_km    = distance     ?? distance_km;
-    const c_km    = costPerKm    ?? cost_per_km;
-    const t_cost  = tollCost     ?? toll_cost;
-    const tot     = totalCost    ?? total_cost;
+      // Normalize camelCase or snake_case
+      const e_km   = euroPerKm  ?? euro_per_km;
+      const d_km   = distance    ?? distance_km;
+      const c_km   = costPerKm   ?? cost_per_km;
+      const t_cost = tollCost    ?? toll_cost;
+      const tot    = totalCost   ?? total_cost;
 
-    // basic validation
-    if (!truck_id || !identifier || !Array.isArray(addresses)
-      || e_km == null || d_km == null)
-    {
-      return res.status(400).json({
-        error: 'truck_id, identifier, addresses, euro_per_km and distance_km are required'
-      });
+      if (!truck_id || !identifier || !Array.isArray(addresses) || e_km == null || d_km == null) {
+        return res.status(400).json({
+          error: 'truck_id, identifier, addresses, euro_per_km and distance_km are required'
+        });
+      }
+
+      // Ensure the truck belongs to this team
+      const { data: truck, error: truckErr } = await req.supabase
+        .from('trucks')
+        .select('team_id')
+        .eq('id', truck_id)
+        .single();
+
+      if (truckErr || !truck || truck.team_id !== teamId) {
+        return res.status(403).json({ error: 'You cannot use that truck' });
+      }
+
+      // Insert the route
+      const { data: inserted, error: insertErr } = await req.supabase
+        .from('routes')
+        .insert({
+          team_id:      teamId,
+          created_by:   userId,
+          date:         req.body.date || new Date().toISOString(),
+          identifier,
+          truck_id,
+          euro_per_km:  e_km,
+          distance_km:  d_km,
+          cost_per_km:  c_km,
+          tolls:        req.body.tolls,
+          sections,
+          addresses,
+          toll_cost:    t_cost,
+          total_cost:   tot,
+          duration,
+          created_at:   new Date().toISOString(),
+          updated_at:   new Date().toISOString(),
+        })
+        .single();
+
+      if (insertErr) throw insertErr;
+      res.status(201).json({ success: true, route: inserted });
+    } catch (err) {
+      console.error('Error saving route:', err);
+      res.status(500).json({ error: err.message });
     }
-
-    // ensure the truck belongs to this team
-    const { data: truck, error: truckErr } = await supabase
-      .from('trucks')
-      .select('team_id')
-      .eq('id', truck_id)
-      .single();
-
-    if (truckErr || !truck || truck.team_id !== teamId) {
-      return res.status(403).json({ error: 'You cannot use that truck' });
-    }
-
-    // insert
-    const { data: inserted, error: insertErr } = await supabase
-      .from('routes')
-      .insert({
-        team_id: req.user.team_id,
-        created_by:  userId,
-        date:        req.body.date   || new Date().toISOString(),
-        identifier,
-        truck_id,
-        euro_per_km: e_km,
-        distance_km: d_km,
-        cost_per_km: c_km,
-        tolls,
-        sections,
-        addresses,
-        toll_cost:   t_cost,
-        total_cost:  tot,
-        duration,
-        created_at:  new Date().toISOString(),
-        updated_at:  new Date().toISOString()
-      })
-      .select()  // return the new row
-      .single();
-
-    if (insertErr) {
-      console.error('INSERT /api/routes failed:', insertErr);
-      return res.status(500).json({ error: insertErr.message });
-    }
-
-    res.status(201).json({ success: true, route: inserted });
   }
 );
 
-// -- DELETE A ROUTE (team_lead or admin only) --
+// DELETE A ROUTE (team_lead, admin)
 app.delete(
   '/api/routes/:id',
-  requireRole('team_lead', 'admin'),
+  requireRole('team_lead','admin'),
   async (req, res) => {
-    const routeId = req.params.id;
-    const { data: existing, error: existErr } = await supabase
-      .from('routes')
-      .select('team_id')
-      .eq('id', routeId)
-      .single();
-    if (existErr || !existing) return res.status(404).json({ error: 'Route not found' });
-    if (existing.team_id !== req.user.team_id) {
-      return res.status(403).json({ error: 'Cannot delete route outside your team' });
+    try {
+      const routeId = req.params.id;
+      const { data: existing, error: existErr } = await req.supabase
+        .from('routes')
+        .select('team_id')
+        .eq('id', routeId)
+        .single();
+
+      if (existErr || !existing) {
+        return res.status(404).json({ error: 'Route not found' });
+      }
+      if (existing.team_id !== req.user.team_id) {
+        return res.status(403).json({ error: 'Cannot delete route outside your team' });
+      }
+
+      const { error: delErr } = await req.supabase
+        .from('routes')
+        .delete()
+        .eq('id', routeId);
+
+      if (delErr) throw delErr;
+      res.json({ success: true });
+    } catch (err) {
+      console.error('Error deleting route:', err);
+      res.status(500).json({ error: err.message });
     }
-    const { error: delErr } = await supabase
-      .from('routes')
-      .delete()
-      .eq('id', routeId);
-    if (delErr) return res.status(500).json({ error: delErr.message });
-    res.json({ success: true });
   }
 );
 
-// -- Example: Admin-only truck management --
+// ----- Admin-only: Truck management -----
+
+// CREATE TRUCK
 app.post(
   '/api/trucks',
   requireRole('admin'),
   async (req, res) => {
-    const { plate, team_id } = req.body;
-    if (!plate || !team_id) return res.status(400).json({ error: 'plate and team_id are required' });
-    const { data, error } = await supabase
-      .from('trucks')
-      .insert({ plate, team_id, created_by: req.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .select();
-    if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json(data[0]);
+    try {
+      const { plate, team_id } = req.body;
+      if (!plate || !team_id) {
+        return res.status(400).json({ error: 'plate and team_id are required' });
+      }
+
+      const { data, error } = await req.supabase
+        .from('trucks')
+        .insert({
+          plate,
+          team_id,
+          created_by: req.user.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .single();
+
+      if (error) throw error;
+      res.status(201).json(data);
+    } catch (err) {
+      console.error('Error creating truck:', err);
+      res.status(500).json({ error: err.message });
+    }
   }
 );
 
-app.post('/api/admin/user/add', requireRole('admin'), async (req, res) => {
-  const { email, password, role, team_id } = req.body;
+// ----- Admin-only: User management -----
 
-  if (!email || !password || !role || !team_id) {
-    return res.status(400).json({ error: 'All fields are required' });
-  }
-
-  try {
-    const { data, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      user_metadata: { role, team_id }
-    });
-    if (createError) throw createError;
-
-    await supabase.from('users').insert({
-      id: data.user.id,
-      username: email,
-      role,
-      team_id
-    });
-
-    return res.status(200).json({ message: 'User created successfully' });
-
-  } catch (err) {
-    console.error('Eroare la crearea userului:', JSON.stringify(err, null, 2));
-    return res.status(400).json({ error: err.message || 'Eroare necunoscută' });
-  }
-});
-
-app.delete('/api/admin/user/:id', requireRole('admin'), async (req, res) => {
-  const userId = req.params.id;
-
-  try {
-    // Delete from public.users
-    await supabaseAdmin
-      .from('users')
-      .delete()
-      .eq('id', userId);
-
-    // Delete from auth.users
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    if (error) throw error;
-
-    res.status(200).json({ message: 'User deleted successfully' });
-  } catch (err) {
-    console.error('Eroare la stergerea userului:', err);
-    res.status(500).json({ error: 'Failed to delete user' });
-  }
-});
-
-app.post('/api/admin/user/:id/reset-password', requireRole('admin'), async (req, res) => {
-  const userId = req.params.id;
-  const { newPassword } = req.body;
-
-  if (!newPassword) return res.status(400).json({ error: 'Parola lipsă' });
-
-  try {
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-      password: newPassword
-    });
-    if (error) throw error;
-
-    res.status(200).json({ message: 'Parolă resetată cu succes' });
-  } catch (err) {
-    console.error('Eroare resetare parolă:', err);
-    res.status(500).json({ error: 'Resetare eșuată' });
-  }
-});
-
-// /api/admin/truck (POST)
-app.post('/api/admin/truck/add', requireRole('admin'), async (req, res) => {
-  const { plate, team_id } = req.body;
-  const created_by = req.user.id; // presupunând că req.user e injectat de `requireRole`
-
-  if (!plate || !team_id) {
-    return res.status(400).json({ error: 'Date lipsă' });
-  }
-
-  try {
-    const { error } = await supabaseAdmin.from('trucks').insert({
-      plate,
-      team_id,
-      created_by,
-    });
-
-    if (error) throw error;
-    res.status(200).json({ message: 'Camion adăugat' });
-  } catch (err) {
-    console.error('Eroare la adăugare camion:', err);
-    res.status(500).json({ error: 'Eroare la adăugare camion' });
-  }
-});
-
-// server.js (sau ce fișier folosești pt API)
-app.get('/api/admin/trucks', requireRole('admin'), async (req, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('trucks')
-      .select('*'); // sau .select('id, plate') dacă vrei doar astea
-
-    if (error) throw error;
-
-    res.status(200).json(data);
-  } catch (err) {
-    console.error('Eroare la fetch camioane:', err);
-    res.status(500).json({ error: 'Eroare la încărcarea camioanelor' });
-  }
-});
-
-
-app.delete('/api/admin/truck/:id', requireRole('admin'), async (req, res) => {
-  const truckId = req.params.id;
-
-  try {
-    const { error } = await supabaseAdmin
-      .from('trucks')
-      .delete()
-      .eq('id', truckId);
-
-    if (error) throw error;
-
-    res.status(200).json({ message: 'Camion șters cu succes' });
-  } catch (err) {
-    console.error('Eroare la ștergerea camionului:', err);
-    res.status(500).json({ error: 'Eroare la ștergerea camionului' });
-  }
-});
-
-//list team pentru delete team
-app.get('/api/admin/teams', requireRole('admin'), async (req, res) => {
-  const { data, error } = await supabase.from('teams').select('*');
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
-});
-
-
-//add a team
-app.post('/api/admin/teams/add', requireRole('admin'), async (req, res) => {
-  const { name, team_lead_user_id } = req.body;
-  if (!name || !team_lead_user_id) return res.status(400).json({ error: 'Name și team_lead_user_id sunt obligatorii' });
-
-  try {
-    // Creezi echipa
-    const { data: team, error: teamErr } = await supabase
-      .from('teams')
-      .insert({ name, team_lead_id: team_lead_user_id })
-      .select()
-      .single();
-
-    if (teamErr) throw teamErr;
-
-    // Verifici și actualizezi userul dacă nu e team_lead deja
-    const { data: user, error: userErr } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', team_lead_user_id)
-      .single();
-
-    if (userErr) throw userErr;
-
-    if (user.role !== 'team_lead') {
-      const { error: updateErr } = await supabase
-        .from('users')
-        .update({ role: 'team_lead' })
-        .eq('id', team_lead_user_id);
-
-      if (updateErr) throw updateErr;
+// ADD USER
+app.post(
+  '/api/admin/user/add',
+  requireRole('admin'),
+  async (req, res) => {
+    const { email, password, role, team_id } = req.body;
+    if (!email || !password || !role || !team_id) {
+      return res.status(400).json({ error: 'All fields are required' });
     }
 
-    res.status(201).json({ message: 'Echipă creată', team });
-  } catch (err) {
-    console.error('Eroare creare echipă:', err);
-    res.status(500).json({ error: 'Eroare la creare echipă' });
+    try {
+      // Create in auth schema
+      const { data: authData, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        user_metadata: { role, team_id },
+      });
+      if (createErr) throw createErr;
+
+      // Mirror in your public users table
+      await supabaseAdmin
+        .from('users')
+        .insert({
+          id:       authData.user.id,
+          username: email,
+          role,
+          team_id,
+        });
+
+      res.json({ message: 'User created successfully' });
+    } catch (err) {
+      console.error('Error creating user:', err);
+      res.status(400).json({ error: err.message || 'Unknown error' });
+    }
   }
-});
+);
 
-//delete a team
-app.delete('/api/admin/teams/:id', requireRole('admin'), async (req, res) => {
-  const teamId = req.params.id;
+// DELETE USER
+app.delete(
+  '/api/admin/user/:id',
+  requireRole('admin'),
+  async (req, res) => {
+    const userId = req.params.id;
+    try {
+      // Remove from your users table
+      await supabaseAdmin.from('users').delete().eq('id', userId);
+      // Remove from auth schema
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (error) throw error;
 
-  try {
-    // Reasignezi userii care raman fara echipa
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ team_id: FALLBACK_TEAM_ID })
-      .eq('team_id', teamId);
-
-    if (updateError) throw updateError;
-
-    // Ștergi echipa
-    const { error: deleteError } = await supabase
-      .from('teams')
-      .delete()
-      .eq('id', teamId);
-
-    if (deleteError) throw deleteError;
-
-
-    res.status(200).json({ message: 'Echipă ștearsă și utilizatorii reasignați' });
-  } catch (err) {
-    console.error('Eroare la ștergere echipă:', err);
-    res.status(500).json({ error: 'Eroare la ștergere echipă' });
+      res.json({ message: 'User deleted successfully' });
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      res.status(500).json({ error: err.message });
+    }
   }
-});
+);
 
+// RESET PASSWORD
+app.post(
+  '/api/admin/user/:id/reset-password',
+  requireRole('admin'),
+  async (req, res) => {
+    const userId = req.params.id;
+    const { newPassword } = req.body;
+    if (!newPassword) {
+      return res.status(400).json({ error: 'Missing newPassword' });
+    }
+
+    try {
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        password: newPassword,
+      });
+      if (error) throw error;
+
+      res.json({ message: 'Password reset successfully' });
+    } catch (err) {
+      console.error('Error resetting password:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// ----- Admin-only: Truck CRUD -----
+
+// LIST TRUCKS
+app.get(
+  '/api/admin/trucks',
+  requireRole('admin'),
+  async (req, res) => {
+    try {
+      const { data, error } = await supabaseAdmin.from('trucks').select('*');
+      if (error) throw error;
+      res.json(data);
+    } catch (err) {
+      console.error('Error fetching trucks:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// DELETE TRUCK
+app.delete(
+  '/api/admin/truck/:id',
+  requireRole('admin'),
+  async (req, res) => {
+    try {
+      const { error } = await supabaseAdmin
+        .from('trucks')
+        .delete()
+        .eq('id', req.params.id);
+      if (error) throw error;
+      res.json({ message: 'Truck deleted successfully' });
+    } catch (err) {
+      console.error('Error deleting truck:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// ----- Admin-only: Team CRUD -----
+
+// LIST TEAMS
+app.get(
+  '/api/admin/teams',
+  requireRole('admin'),
+  async (req, res) => {
+    try {
+      const { data, error } = await supabaseAdmin.from('teams').select('*');
+      if (error) throw error;
+      res.json(data);
+    } catch (err) {
+      console.error('Error fetching teams:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// ADD TEAM
+app.post(
+  '/api/admin/teams/add',
+  requireRole('admin'),
+  async (req, res) => {
+    const { name, team_lead_user_id } = req.body;
+    if (!name || !team_lead_user_id) {
+      return res.status(400).json({ error: 'Name and team_lead_user_id are required' });
+    }
+
+    try {
+      // Create the team
+      const { data: team, error: teamErr } = await supabaseAdmin
+        .from('teams')
+        .insert({ name, team_lead_id: team_lead_user_id })
+        .select()
+        .single();
+      if (teamErr) throw teamErr;
+
+      // Ensure the lead user has the 'team_lead' role
+      const { data: user, error: userErr } = await supabaseAdmin
+        .from('users')
+        .select('role')
+        .eq('id', team_lead_user_id)
+        .single();
+      if (userErr) throw userErr;
+
+      if (user.role !== 'team_lead') {
+        const { error: updateErr } = await supabaseAdmin
+          .from('users')
+          .update({ role: 'team_lead' })
+          .eq('id', team_lead_user_id);
+        if (updateErr) throw updateErr;
+      }
+
+      res.status(201).json({ message: 'Team created', team });
+    } catch (err) {
+      console.error('Error creating team:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// DELETE TEAM
+app.delete(
+  '/api/admin/teams/:id',
+  requireRole('admin'),
+  async (req, res) => {
+    try {
+      // Reassign orphaned users
+      const { error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({ team_id: FALLBACK_TEAM_ID })
+        .eq('team_id', req.params.id);
+      if (updateError) throw updateError;
+
+      // Delete the team
+      const { error: deleteError } = await supabaseAdmin
+        .from('teams')
+        .delete()
+        .eq('id', req.params.id);
+      if (deleteError) throw deleteError;
+
+      res.json({ message: 'Team deleted and users reassigned' });
+    } catch (err) {
+      console.error('Error deleting team:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🚀 Backend on http://localhost:${PORT}`));

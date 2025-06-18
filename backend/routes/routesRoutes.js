@@ -1,79 +1,35 @@
 // backend/routes/routesRoutes.js
 const express = require('express');
 const router  = express.Router();
-const { supabase } = require('../lib/supabase');
 
-// GET   /api/routes                → list all runs (optionally filter by team_id, truck_id, date)
+/**
+ * GET /api/routes
+ * List all runs, with optional filtering by team_id, truck_id, or date.
+ * Now uses req.supabase (anon key + user token), so RLS is automatically applied.
+ */
 router.get('/', async (req, res) => {
-  let q = supabase.from('routes').select('*');
+  // 1) Start from the per-request client
+  let q = req.supabase.from('routes').select('*');
+
+  // 2) Apply the same query-param filters you had before
   if (req.query.team_id)  q = q.eq('team_id', req.query.team_id);
   if (req.query.truck_id) q = q.eq('truck_id', req.query.truck_id);
   if (req.query.date)     q = q.eq('date', req.query.date);
 
+  // 3) Order exactly as before
   const { data, error } = await q.order('created_at', { ascending: false });
   if (error) return res.status(500).json({ message: error.message });
+
   res.json(data);
 });
 
-// POST  /api/routes                → save a new run
-router.post('/', async (req, res) => {
-  const {
-    team_id,
-    created_by,
-    date,
-    identifier,
-    truck_id,
-    addresses,
-    euro_per_km,
-    distance_km,
-    cost_per_km,
-    tolls,
-    toll_cost,
-    total_cost,
-    duration
-  } = req.body;
-
-  const { data, error } = await supabase
-    .from('routes')
-    .insert([{
-      team_id,
-      created_by,
-      date,
-      identifier,
-      truck_id,
-      addresses,
-      euro_per_km,
-      distance_km,
-      cost_per_km,
-      tolls,
-      toll_cost,
-      total_cost,
-      duration
-    }])
-    .single();
-
-  if (error) return res.status(400).json({ message: error.message });
-  res.status(201).json(data);
-});
-
-// PUT   /api/routes/:id            → update an existing run
-router.put('/:id', async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body; // any of the fields you want to patch
-  const { data, error } = await supabase
-    .from('routes')
-    .update(updates)
-    .eq('id', id)
-    .single();
-
-  if (error) return res.status(400).json({ message: error.message });
-  res.json(data);
-});
-
-// DELETE /api/routes/:id           → delete a run
+/**
+ * DELETE /api/routes/:id
+ * Delete a run by ID.
+ */
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
-  const { error } = await supabase
+  const { error } = await req.supabase
     .from('routes')
     .delete()
     .eq('id', id);
