@@ -1,9 +1,17 @@
-// AFTER: backend/lib/supabase.js
+// backend/lib/supabase.js
+require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
+
+// ——— Fail fast if any key is missing ———
+['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'].forEach((k) => {
+  if (!process.env[k]) {
+    throw new Error(`Missing environment variable: ${k}`);
+  }
+});
 
 /**
  * supabaseAdmin: full-privilege client (bypasses RLS).
- * Use this sparingly for things like token-validation, user management, etc.
+ * Use sparingly (token validation, user mgmt, etc).
  */
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
@@ -12,20 +20,26 @@ const supabaseAdmin = createClient(
 
 /**
  * getSupabaseForUser: per-request client that enforces RLS.
- * @param {string} token  – a valid Supabase JWT (access_token)
+ * @param {string} token – a valid Supabase JWT (access_token)
  * @returns {import('@supabase/supabase-js').SupabaseClient}
  */
 function getSupabaseForUser(token) {
-  const supabase = createClient(
+  return createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_ANON_KEY,
     {
-      // Disable built-in session handling on the server
-      auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
     }
   );
-  supabase.auth.setAuth(token);
-  return supabase;
 }
 
 module.exports = { supabaseAdmin, getSupabaseForUser };
