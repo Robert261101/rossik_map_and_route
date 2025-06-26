@@ -104,6 +104,7 @@ const MainPage = ({ user })  => {
       }
 
 
+
       const minimalSections = routes[selectedRouteIndex].sections.map(s => ({
         polyline: s.polyline,
         summary:  s.summary    // optional—only if you need summary data
