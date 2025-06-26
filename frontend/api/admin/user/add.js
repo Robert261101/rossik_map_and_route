@@ -65,7 +65,8 @@ export default async function handler(req, res) {
       await supabaseAdmin.auth.admin.createUser({
         email,
         password,
-        user_metadata: { role, team_id }
+        user_metadata: { role, team_id },
+        email_confirm: true
       })
     if (authCreateErr) throw authCreateErr
 
@@ -85,9 +86,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ message: 'User created', user: newRow })
 
   } catch (err) {
-    console.error('❌ add user error:', err)
-    // service errors often come back as non-JSON HTML—so guard
+    console.error('❌ ❌ ❌ add user error full dump:', err)
+    console.error('… err.status:', err.status, 'err.code:', err.code)
+    console.error('… err.response?.text():', await err.response.text().catch(()=>'[no text]'))
     const msg = err.message ?? 'Unexpected failure'
-    return res.status(500).json({ error: msg })
+    return res.status(err.status || 500).json({ error: msg })
   }
 }
