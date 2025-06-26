@@ -1,6 +1,6 @@
-// /frontend/api/lib/requireRole.js
+// lib/requireRole.js
 class ForbiddenError extends Error {
-  constructor(message='Forbidden', status=403) {
+  constructor(message = 'Forbidden', status = 403) {
     super(message);
     this.status = status;
   }

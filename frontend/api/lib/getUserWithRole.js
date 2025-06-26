@@ -1,6 +1,5 @@
-// /frontend/api/lib/getUserWithRole.js
+// lib/getUserWithRole.js
 const { createClient } = require('@supabase/supabase-js');
-
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -15,7 +14,7 @@ class AuthError extends Error {
 
 module.exports = async function getUserWithRole(req) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader?.startsWith('Bearer ')) {
     throw new AuthError('Missing or invalid Authorization header', 401);
   }
 
@@ -35,5 +34,5 @@ module.exports = async function getUserWithRole(req) {
     throw new AuthError('User profile not found or error fetching role', 403);
   }
 
-  return profile;  // { id, role, team_id }
+  return profile;  // Pass back the user
 };
