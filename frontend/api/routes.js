@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js'
 import getUserWithRole from '../../backend/middleware/getUserWithRole'
 import requireRole      from '../../backend/middleware/requireRole'
 
+
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -14,6 +16,8 @@ const ALLOWED = ['dispatcher','transport_manager','team_lead','admin']
 const PRIVILEGED = ['admin']  // roles that can use any truck
 
 export default async function handler(req, res) {
+    console.log('🛠️  /api/routes handler hit! method=', req.method);
+
   // —1— authenticate & load user
   const user = await getUserWithRole(req)
   await requireRole(ALLOWED, user)
