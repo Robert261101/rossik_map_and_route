@@ -39,40 +39,36 @@ export default function HistoryPage({ user }) {
   // 1️⃣ Load your routes + truck plates + HERE 'sections'
   useEffect(() => {
     (async () => {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('team_id')
-        .eq('id', user.id)
-        .single();
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      try {
+        // Get user's team_id first from 'users' table
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .select('team_id')
+          .eq('id', user.id)
+          .single();
+        if (profileError) throw profileError;
 
-      const raw = await fetch('/api/routes', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+        // Fetch routes directly from Supabase, filtering by team_id if you want
+        const { data: routes, error: routesError } = await supabase
+          .from('routes')
+          .select('*, trucks(plate), users(username)')  // join trucks and users for related fields
+          .eq('team_id', profile.team_id)
+          .order('created_at', { ascending: false });
 
-      const routes = await raw.json();
+        if (routesError) throw routesError;
 
-      console.log('Token:', localStorage.getItem('token'));
-
-      console.log('Routes response:', routes);
-
-      if (!Array.isArray(routes)) {
-        console.error('Expected an array but got:', routes);
+        setSavedRoutes(routes.map(r => ({
+          ...r,
+          truck_plate: r.trucks?.plate,
+          created_by_email: r.users?.username || 'unknown'
+        })));
+      } catch (error) {
+        console.error('Error fetching routes:', error);
         setSavedRoutes([]);
-        return;
       }
-
-
-      setSavedRoutes(routes.map(r => ({
-        ...r,
-        truck_plate: r.trucks?.plate,
-        created_by_email: r.users?.username || 'unknown'
-      })));
     })();
   }, [user]);
+
 
   // 2️⃣ One‐time HERE map init
   useEffect(() => {

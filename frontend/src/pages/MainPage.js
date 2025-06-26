@@ -75,7 +75,7 @@ const MainPage = ({ user })  => {
       // 1. re‑fetch team_id
       const { data: profile, error: pErr } = await supabase
         .from('users')
-        .select('team_id')
+        .select('team_id, role')
         .eq('id', user.id)
         .single();
       if (pErr) throw pErr;
@@ -87,9 +87,23 @@ const MainPage = ({ user })  => {
         .eq('id', plate)    // plate===truck_id
         .single();
       if (tErr) throw tErr;
-      if (truck.team_id !== profile.team_id) {
+      // after fetching profile & truck:
+      const privileged = ['admin'];
+      console.log(
+        '▶️ AUTH CHECK:',
+        'role=', profile.role,
+        'team=', profile.team_id,
+        'truckTeam=', truck.team_id
+      );
+
+      if (
+        !privileged.includes(profile.role) &&
+        String(truck.team_id) !== String(profile.team_id)
+      ) {
         throw new Error('Selected truck is not on your team');
       }
+
+
 
       const minimalSections = routes[selectedRouteIndex].sections.map(s => ({
         polyline: s.polyline,
@@ -646,23 +660,40 @@ const MainPage = ({ user })  => {
   //TODO: admin can see all trucks
   useEffect(() => {
     (async () => {
+      // 1) Fetch the user's team and admin flag:
       const { data: profile, error: pErr } = await supabase
-        .from('users')        // or 'profiles' if that’s your actual table name
-        .select('team_id')
+        .from('users')          // or 'profiles' if that’s your table
+        .select('team_id, role')  
         .eq('id', user.id)
         .single();
-      if (pErr) return console.error('Could not load profile:', pErr);
+      if (pErr) {
+        console.error('Could not load profile:', pErr);
+        return;
+      }
 
-      // 2) Now load all trucks belonging to that team:
-      const { data: truckList, error: tErr } = await supabase
+      // 2) Load trucks — but if you're an admin, skip the team filter:
+      let query = supabase
         .from('trucks')
-        .select('id,plate')
-        .eq('team_id', profile.team_id);
-      if (tErr) return console.error('Could not load trucks:', tErr);
+        .select('id, plate');
+
+      if (profile.role != 'admin') {
+        query = query.eq('team_id', profile.team_id);
+      } else {
+        console.log('Admin detected: showing all trucks 🚚✨');
+      }
+
+      const { data: truckList, error: tErr } = await query;
+      if (tErr) {
+        console.error('Could not load trucks:', tErr);
+        return;
+      }
+
+      console.log({ profile, truckList });
 
       setTrucks(truckList);
     })();
   }, [user]);
+
 
   useEffect(() => {
       if (mapRef.current && routes.length > 0) {

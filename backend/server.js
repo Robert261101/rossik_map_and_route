@@ -98,9 +98,18 @@ app.post(
       .eq('id', truck_id)
       .single();
 
-    if (truckErr || !truck || truck.team_id !== teamId) {
+    // allow admins (and any other privileged roles) to skip the team check
+    const privileged = ['admin'];
+    if (truckErr || !truck) {
       return res.status(403).json({ error: 'You cannot use that truck' });
     }
+    if (
+      !privileged.includes(req.user.role) && 
+      String(truck.team_id) !== String(teamId)
+    ) {
+      return res.status(403).json({ error: 'You cannot use that truck' });
+    }
+
 
     // insert
     const { data: inserted, error: insertErr } = await supabase
