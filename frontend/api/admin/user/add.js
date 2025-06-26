@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 // 1) client to *validate* incoming token + read your users table
 const supabaseAnon = createClient(
   process.env.SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_ANON_KEY
 )
 // 2) client with service role to do the admin work
 const supabaseAdmin = createClient(
