@@ -1,9 +1,13 @@
-// middleware/requireRole.js
-module.exports = function requireRole(...allowed) {
-  return (req, res, next) => {
-    if (!allowed.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Forbidden: insufficient permissions' });
-    }
-    next();
-  };
+// /frontend/api/lib/requireRole.js
+class ForbiddenError extends Error {
+  constructor(message='Forbidden', status=403) {
+    super(message);
+    this.status = status;
+  }
 }
+
+module.exports = function requireRole(allowedRoles, user) {
+  if (!allowedRoles.includes(user.role)) {
+    throw new ForbiddenError('Insufficient permissions', 403);
+  }
+};
