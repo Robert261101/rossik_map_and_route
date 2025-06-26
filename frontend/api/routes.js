@@ -5,11 +5,12 @@ import getUserWithRole from './lib/getUserWithRole'
 import requireRole      from './lib/requireRole'
 
 
-
+// server‐side: use the real env names
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
+
 
 // Only allow these roles to call this function
 const ALLOWED = ['dispatcher','transport_manager','team_lead','admin']
