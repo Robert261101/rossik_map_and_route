@@ -1,8 +1,8 @@
 // frontend/api/routes.js
 
 import { createClient } from '@supabase/supabase-js'
-import getUserWithRole from '../../backend/middleware/getUserWithRole'
-import requireRole      from '../../backend/middleware/requireRole'
+import getUserWithRole from './lib/getUserWithRole'
+import requireRole      from './lib/requireRole'
 
 
 
