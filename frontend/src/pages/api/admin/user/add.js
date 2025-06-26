@@ -1,4 +1,4 @@
-// pages/api/admin/user/add.js
+// api/admin/user/add.js
 import { createClient } from '@supabase/supabase-js'
 
 // 1) client to *validate* incoming token + read your users table
