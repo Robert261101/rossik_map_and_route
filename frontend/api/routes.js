@@ -30,6 +30,10 @@ export default async function handler(req, res) {
       euro_per_km, distance_km, cost_per_km, toll_cost, total_cost
     } = req.body
 
+
+    console.log('method:', req.method);
+
+
     // unify names & basic validation
     const e_km   = euroPerKm   ?? euro_per_km
     const d_km   = distance    ?? distance_km
