@@ -61,16 +61,16 @@ export default async function handler(req, res) {
 
   try {
     // — create in Auth
-    const { data: authData, error: authCreateErr } = 
+    const { data: authData, error: authCreateErr } =
       await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         user_metadata: { role, team_id },
         email_confirm: true
-      })
-    if (authCreateErr) throw authCreateErr
+      });
+    if (authCreateErr) throw authCreateErr;
 
-    // — mirror in your users table
+    // **manually mirror** in your users table:**
     const { data: newRow, error: rowErr } = await supabaseAdmin
       .from('users')
       .insert({
@@ -79,11 +79,10 @@ export default async function handler(req, res) {
         role,
         team_id
       })
-      .single()
-    if (rowErr) throw rowErr
+      .single();
+    if (rowErr) throw rowErr;
 
-    console.timeEnd('addUser')
-    return res.status(200).json({ message: 'User created', user: newRow })
+    return res.status(200).json({ message: 'User created', user: newRow });
 
    } catch (err) {
     console.error('❌ add user error:', err, {
