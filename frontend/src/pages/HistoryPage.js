@@ -110,37 +110,30 @@ export default function HistoryPage({ user }) {
       map.addObject(poly);
     });
 
-    // Fit to all segment bounds
-    const lines = map.getObjects().filter(o => o instanceof window.H.map.Polyline);
+    // manually compute the union of all polyline bounds
+    let minLat = Infinity, minLng = Infinity;
+    let maxLat = -Infinity, maxLng = -Infinity;
 
-    if (lines.length > 0) {
-      // after you clear & draw your polylines, do this:
-      let minLat= Infinity, minLng= Infinity
-      let maxLat=-Infinity, maxLng=-Infinity
-
-      savedRoutes
-        .find(r => r.id===selectedId)
-        ?.sections.forEach(section => {
-          const lineString = window.H.geo.LineString
-            .fromFlexiblePolyline(section.polyline)
-
-          // pull out the raw [lat,lng,alt,…] array
-          const arr = lineString.getLatLngAltArray()
-          for (let i = 0; i < arr.length; i += 3) {
-            const lat = arr[i], lng = arr[i+1]
-            minLat = Math.min(minLat, lat)
-            maxLat = Math.max(maxLat, lat)
-            minLng = Math.min(minLng, lng)
-            maxLng = Math.max(maxLng, lng)
-          }
-        })
+    // pull out the selected route
+    const route = savedRoutes.find(r => r.id === selectedId);
+    if (route?.sections) {
+      route.sections.forEach(section => {
+        const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
+        const coords = ls.getLatLngAltArray();
+        for (let i = 0; i < coords.length; i += 3) {
+          const lat = coords[i], lng = coords[i+1];
+          minLat = Math.min(minLat, lat);
+          maxLat = Math.max(maxLat, lat);
+          minLng = Math.min(minLng, lng);
+          maxLng = Math.max(maxLng, lng);
+        }
+      });
 
       if (minLat < Infinity) {
-        // construct a proper Rect
-        const rect = new window.H.geo.Rect(minLat, minLng, maxLat, maxLng)
-        map.getViewModel().setLookAtData({ bounds: rect })
+        // fit the map to that bounding box
+        const rect = new window.H.geo.Rect(minLat, minLng, maxLat, maxLng);
+        map.getViewModel().setLookAtData({ bounds: rect });
       }
-
     }
 
     // bump the zoom in one notch for a tighter view
