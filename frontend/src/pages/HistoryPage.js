@@ -114,29 +114,33 @@ export default function HistoryPage({ user }) {
     const lines = map.getObjects().filter(o => o instanceof window.H.map.Polyline);
 
     if (lines.length > 0) {
-      let bbox = null;
+      // after you clear & draw your polylines, do this:
+      let minLat= Infinity, minLng= Infinity
+      let maxLat=-Infinity, maxLng=-Infinity
 
-      for (const poly of lines) {
-        const polyBBox = poly.getBoundingBox();
+      savedRoutes
+        .find(r => r.id===selectedId)
+        ?.sections.forEach(section => {
+          const lineString = window.H.geo.LineString
+            .fromFlexiblePolyline(section.polyline)
 
-        if (!polyBBox) continue; // skip invalid bounding box
+          // pull out the raw [lat,lng,alt,…] array
+          const arr = lineString.getLatLngAltArray()
+          for (let i = 0; i < arr.length; i += 3) {
+            const lat = arr[i], lng = arr[i+1]
+            minLat = Math.min(minLat, lat)
+            maxLat = Math.max(maxLat, lat)
+            minLng = Math.min(minLng, lng)
+            maxLng = Math.max(maxLng, lng)
+          }
+        })
 
-        // Check if polyBBox has merge function
-        if (bbox === null) {
-          bbox = polyBBox;
-        } else if (typeof bbox.merge === 'function') {
-          console.log('Polylines bounding boxes:', lines.map(poly => poly.getBoundingBox()));
-          bbox = bbox.merge(polyBBox);
-        } else {
-          console.warn('bbox object missing merge method:', bbox);
-          // fallback: just assign polyBBox
-          bbox = polyBBox;
-        }
+      if (minLat < Infinity) {
+        // construct a proper Rect
+        const rect = new window.H.geo.Rect(minLat, minLng, maxLat, maxLng)
+        map.getViewModel().setLookAtData({ bounds: rect })
       }
 
-      if (bbox !== null) {
-        map.getViewModel().setLookAtData({ bounds: bbox });
-      }
     }
 
     // bump the zoom in one notch for a tighter view
@@ -381,7 +385,7 @@ export default function HistoryPage({ user }) {
 
                             try {
                               const res = await fetch(
-                                `http://localhost:4000/api/routes/${rt.id}`,
+                                `/api/routes/${rt.id}`,
                                 {
                                   method: 'DELETE',
                                   headers: {
