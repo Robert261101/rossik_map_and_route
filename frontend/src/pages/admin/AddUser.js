@@ -5,11 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { Sun, Moon } from 'lucide-react';
 import RossikLogo from '../../VektorLogo_Rossik_rot.gif';
 
-console.log("→ addUser ENV:", {
-  SUPABASE_URL: process.env.SUPABASE_URL?.slice(0,20)+"…",
-  ANON:         process.env.SUPABASE_ANON_KEY ? "defined" : "❌",
-  SVC:          process.env.SUPABASE_SERVICE_ROLE_KEY ? "defined" : "❌",
-});
 
 
 export default function AddUser({user, handleLogout}) {
