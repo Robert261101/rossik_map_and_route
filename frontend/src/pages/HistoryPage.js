@@ -197,9 +197,6 @@ export default function HistoryPage({ user }) {
     return () => window.removeEventListener('resize', updateTablePosition);
   }, [savedRoutes, expandedIds]); // Adăugăm expandedIds la dependencies
 
-  console.log("Current user:", user);
-  console.log("User role:", user.role);
-  console.log("isLeadOrAdmin:", isLeadOrAdmin);
 
   //TODO2: edit button on history
 

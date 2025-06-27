@@ -1,13 +1,6 @@
 // api/admin/user/add.js
 import { createClient } from '@supabase/supabase-js'
 
-// pages/api/admin/user/add.js
-console.log('🔑 ENV:', {
-  url:  process.env.SUPABASE_URL,
-  anon: process.env.SUPABASE_ANON_KEY,
-  svc:  process.env.SUPABASE_SERVICE_ROLE_KEY
-})
-
 
 // 1) client to *validate* incoming token + read your users table
 const supabaseAnon = createClient(

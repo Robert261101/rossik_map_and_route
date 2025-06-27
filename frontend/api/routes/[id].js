@@ -11,7 +11,6 @@ const supabase = createClient(
 export default async function handler(req, res) {
   const { id } = req.query
 
-  console.log('🗑  /api/routes/[id] handler:', req.method, 'id=', id)
 
   if (req.method !== 'DELETE') {
     res.setHeader('Allow', ['DELETE'])
@@ -31,11 +30,9 @@ export default async function handler(req, res) {
       .single()
 
     if (existErr || !existing) {
-      console.log('❌ route not found', existErr)
       return res.status(404).json({ error: 'Route not found' })
     }
     if (existing.team_id !== user.team_id && user.role !== 'admin') {
-      console.log('🔒 forbidden: route belongs to', existing.team_id, 'you are', user.team_id)
       return res.status(403).json({ error: 'Cannot delete route outside your team' })
     }
 
@@ -50,7 +47,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: delErr.message })
     }
 
-    console.log('✅ deleted route', id)
     return res.status(200).json({ success: true })
 
   } catch (err) {

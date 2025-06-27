@@ -52,7 +52,6 @@ export default function AdminDashboard({ user }) {
       team_name: user.teams?.name || '—',
     }));
 
-    console.log('Formatted users:', formatted);
     setUsers(formatted);
     setShowUsersModal(true);
   };

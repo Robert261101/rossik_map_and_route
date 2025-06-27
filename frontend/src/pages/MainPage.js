@@ -89,12 +89,6 @@ const MainPage = ({ user })  => {
       if (tErr) throw tErr;
       // after fetching profile & truck:
       const privileged = ['admin'];
-      console.log(
-        '▶️ AUTH CHECK:',
-        'role=', profile.role,
-        'team=', profile.team_id,
-        'truckTeam=', truck.team_id
-      );
 
       if (
         !privileged.includes(profile.role) &&
@@ -214,7 +208,6 @@ const MainPage = ({ user })  => {
 
   // Obținere rute
   const getRoute = async () => {
-    console.log(`getRoute API call #${apiCallCount}`);
 
     // if (addresses.length < 2) {
     //   alert("Please enter at least two addresses!");
@@ -250,7 +243,6 @@ const MainPage = ({ user })  => {
 
       const response = await fetch(url);
       const data = await response.json();
-      console.log("Raspuns API: ", data);
 
       if (!data.routes || data.routes.length === 0) {
         console.error("No routes found:", data);
@@ -476,7 +468,6 @@ const MainPage = ({ user })  => {
       evt.preventDefault();
       const pointer = evt.currentPointer || evt.pointer || evt;
       const coord = map.screenToGeo(pointer.viewportX, pointer.viewportY);
-      console.log("Centru cerc:", coord);
 
       // Desenăm cercul
       if (circleRef.current && map.getObjects().includes(circleRef.current)) map.removeObject(circleRef.current); circleRef.current = null;
@@ -631,11 +622,6 @@ const MainPage = ({ user })  => {
       el.style.marginLeft = `-${offsetWidth/2}px`;   // center horizontally
       el.style.marginTop  = `0px`;                   // pin the TOP edge at the geo point
 
-    
-      console.log("el: ", el);
-      console.log("offW: ", offsetWidth);
-      console.log("offH: ", offsetHeight);
-
       const domIcon = new window.H.map.DomIcon(el);
     
       const marker = new window.H.map.DomMarker(
@@ -678,8 +664,6 @@ const MainPage = ({ user })  => {
 
       if (profile.role != 'admin') {
         query = query.eq('team_id', profile.team_id);
-      } else {
-        console.log('Admin detected: showing all trucks 🚚✨');
       }
 
       const { data: truckList, error: tErr } = await query;
@@ -688,7 +672,6 @@ const MainPage = ({ user })  => {
         return;
       }
 
-      console.log({ profile, truckList });
 
       setTrucks(truckList);
     })();

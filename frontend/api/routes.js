@@ -17,7 +17,6 @@ const ALLOWED = ['dispatcher','transport_manager','team_lead','admin']
 const PRIVILEGED = ['admin']  // roles that can use any truck
 
 export default async function handler(req, res) {
-    console.log('🛠️  /api/routes handler hit! method=', req.method);
 
   // —1— authenticate & load user
   const user = await getUserWithRole(req)
@@ -30,10 +29,6 @@ export default async function handler(req, res) {
       euroPerKm, distance, costPerKm, tolls, tollCost, totalCost,
       euro_per_km, distance_km, cost_per_km, toll_cost, total_cost
     } = req.body
-
-
-    console.log('method:', req.method);
-
 
     // unify names & basic validation
     const e_km   = euroPerKm   ?? euro_per_km
