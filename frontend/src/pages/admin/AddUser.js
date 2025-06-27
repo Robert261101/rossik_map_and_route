@@ -31,7 +31,14 @@ export default function AddUser({user, handleLogout}) {
       return;
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+      error: sessionErr
+    } = await supabase.auth.getSession();
+    if (sessionErr || !session?.access_token) {
+      alert('You must be logged in to delete a route');
+      return;
+    }
     const token = session?.access_token;
 
     const res = await fetch('/api/admin/user/add', {
