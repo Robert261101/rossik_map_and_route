@@ -85,11 +85,15 @@ export default async function handler(req, res) {
     console.timeEnd('addUser')
     return res.status(200).json({ message: 'User created', user: newRow })
 
-  } catch (err) {
-    console.error('❌ ❌ ❌ add user error full dump:', err)
-    console.error('… err.status:', err.status, 'err.code:', err.code)
-    console.error('… err.response?.text():', await err.response.text().catch(()=>'[no text]'))
-    const msg = err.message ?? 'Unexpected failure'
-    return res.status(err.status || 500).json({ error: msg })
+   } catch (err) {
+    console.error('❌ add user error:', err, {
+      authError: err?.response?.data ?? null,
+      message:   err.message,
+      code:      err.code,
+      status:    err.status
+    });
+    const msg = err.message || 'Unexpected failure';
+    return res.status(500).json({ error: msg });
   }
+
 }
