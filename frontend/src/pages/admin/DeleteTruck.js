@@ -43,7 +43,7 @@ export default function DeleteTruck({ user, handleLogout }) {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
-    const res = await fetch(`/api/admin/truck/${selectedTruckId}`, {
+    const res = await fetch(`/api/admin/trucks/${selectedTruckId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`,
