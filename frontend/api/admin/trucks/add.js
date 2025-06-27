@@ -1,4 +1,4 @@
-// pages/api/admin/truck/add.js
+// pages/api/admin/trucks/add.js
 import { createClient } from '@supabase/supabase-js'
 
 // 1) read‐only client to validate the caller’s JWT
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
     return res.status(201).json({ message: 'Truck added', truck: newTruck })
 
   } catch (err) {
-    console.error('❌ /api/admin/truck/add error:', err)
+    console.error('❌ /api/admin/trucks/add error:', err)
     return res.status(500).json({ error: err.message || 'Unexpected error' })
   }
 }
