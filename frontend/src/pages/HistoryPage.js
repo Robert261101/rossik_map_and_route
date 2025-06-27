@@ -34,7 +34,10 @@ export default function HistoryPage({ user }) {
 
   //TODO: forgot password implementation
 
-  const rowsToShow = filterQuery ? filteredRoutes : savedRoutes;
+  const rowsToShow = selectedId
+    ? savedRoutes.filter(r => r.id === selectedId)
+    : (filterQuery ? filteredRoutes : savedRoutes)
+  
   const [darkMode, setDarkMode] = React.useState(false);
   // 1️⃣ Load your routes + truck plates + HERE 'sections'
   useEffect(() => {
