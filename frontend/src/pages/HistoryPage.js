@@ -373,11 +373,16 @@ export default function HistoryPage({ user }) {
                             e.stopPropagation();
                             if (!window.confirm('Delete this route?')) return;
 
-                            const token = localStorage.getItem('token');
-                            if (!token) {
-                              alert('No auth token—please log in again');
+                            // pull the real access token from the Supabase client
+                            const {
+                              data: { session },
+                              error: sessionErr
+                            } = await supabase.auth.getSession();
+                            if (sessionErr || !session?.access_token) {
+                              alert('You must be logged in to delete a route');
                               return;
                             }
+                            const token = session.access_token;
 
                             try {
                               const res = await fetch(
