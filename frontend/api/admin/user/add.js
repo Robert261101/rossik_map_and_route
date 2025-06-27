@@ -1,98 +1,94 @@
 // api/admin/user/add.js
 import { createClient } from '@supabase/supabase-js'
 
-console.log("→ addUser ENV:", {
-  SUPABASE_URL: process.env.SUPABASE_URL?.slice(0,20)+"…",
-  ANON:         process.env.SUPABASE_ANON_KEY ? "defined" : "❌",
-  SVC:          process.env.SUPABASE_SERVICE_ROLE_KEY ? "defined" : "❌",
-});
-
-
-
-// 1) client to *validate* incoming token + read your users table
+// build your two clients
 const supabaseAnon = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 )
-// 2) client with service role to do the admin work
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
 export default async function handler(req, res) {
-  console.time('addUser')
+  // early-method guard
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST'])
     return res.status(405).end(`Method ${req.method} Not Allowed`)
   }
 
-  // — auth header & token
+  // debug incoming request
+  console.log('↘️ /api/admin/user/add invoked:')
+  console.log('  headers.Authorization:', req.headers.authorization)
+  console.log('  body:', req.body)
+
+  // pull payload once
+  const { email, password, role, team_id } = req.body
+  console.log({ email, password, role, team_id })
+
+  // payload validation
+  if (!email || !password || !role || !team_id) {
+    console.log('⛔️ Missing one of the required fields')
+    return res
+      .status(400)
+      .json({ error: 'email, password, role and team_id are required' })
+  }
+
+  // auth‐header check
   const auth = req.headers.authorization
   if (!auth?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid Authorization header' })
+    return res
+      .status(401)
+      .json({ error: 'Missing or invalid Authorization header' })
   }
   const token = auth.split(' ')[1]
 
-  // — verify token & grab caller’s user
-  const { data: { user }, error: userErr } = await supabaseAnon.auth.getUser(token)
-  if (userErr || !user) {
+  // verify caller’s JWT
+  const { data: getUserData, error: getUserErr } =
+    await supabaseAnon.auth.getUser(token)
+  const user = getUserData?.user
+  if (getUserErr || !user) {
     return res.status(401).json({ error: 'Invalid token or user not found' })
   }
 
-  // — fetch caller’s profile + enforce admin
-  const { data: me, error: profErr } = await supabaseAnon
+  // ensure caller is admin
+  const { data: me, error: meErr } = await supabaseAnon
     .from('users')
     .select('role')
     .eq('id', user.id)
     .single()
-  if (profErr || !me) {
-    return res.status(403).json({ error: 'Could not load your profile' })
-  }
-  if (me.role !== 'admin') {
+  if (meErr || me.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden: admins only' })
   }
 
-  // — validate payload
-  const { email, password, role, team_id } = req.body
-  if (!email || !password || !role || !team_id) {
-    return res.status(400).json({ error: 'email, password, role and team_id are required' })
-  }
-
+  // now go create the new auth user + mirror into your users table
   try {
-    // — create in Auth
-    const { data: authData, error: authCreateErr } =
+    const { data: authData, error: createErr } =
       await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         user_metadata: { role, team_id },
         email_confirm: true
-      });
-    if (authCreateErr) throw authCreateErr;
+      })
+    if (createErr) throw createErr
 
-    // **manually mirror** in your users table:**
     const { data: newRow, error: rowErr } = await supabaseAdmin
       .from('users')
       .insert({
-        id:       authData.user.id,
+        id: authData.user.id,
         username: email,
         role,
         team_id
       })
-      .single();
-    if (rowErr) throw rowErr;
+      .single()
+    if (rowErr) throw rowErr
 
-    return res.status(200).json({ message: 'User created', user: newRow });
+    console.log('✅ Created new user row:', newRow.id)
+    return res.status(200).json({ message: 'User created', user: newRow })
 
-   } catch (err) {
-    console.error('❌ add user error:', err, {
-      authError: err?.response?.data ?? null,
-      message:   err.message,
-      code:      err.code,
-      status:    err.status
-    });
-    const msg = err.message || 'Unexpected failure';
-    return res.status(500).json({ error: msg });
+  } catch (err) {
+    console.error('❌ addUser error:', err)
+    return res.status(500).json({ error: err.message || 'Unexpected failure' })
   }
-
 }
