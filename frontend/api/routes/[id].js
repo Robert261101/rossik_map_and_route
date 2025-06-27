@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import getUserWithRole from '../../lib/getUserWithRole'
 import requireRole      from '../../lib/requireRole'
 
+// service‐role client
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -10,27 +11,38 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   const { id } = req.query
-  // only DELETE
+
   if (req.method !== 'DELETE') {
     res.setHeader('Allow', ['DELETE'])
     return res.status(405).end(`Method ${req.method} Not Allowed`)
   }
+
   // auth + role check
   const user = await getUserWithRole(req)
-  await requireRole(['team_lead','admin'], user)
+  requireRole(['team_lead','admin'], user)
 
-  // ensure the route exists & belongs to user’s team
-  const { data: route, error: e1 } = await supabase
-    .from('routes').select('team_id').eq('id', id).single()
-  if (e1 || !route) return res.status(404).json({ error: 'Route not found' })
-  if (route.team_id !== user.team_id && user.role!=='admin') {
-    return res.status(403).json({ error: 'Not your route' })
+  // make sure it exists & belongs to this team
+  const { data: existing, error: existErr } = await supabase
+    .from('routes')
+    .select('team_id')
+    .eq('id', id)
+    .single()
+  if (existErr || !existing) {
+    return res.status(404).json({ error: 'Route not found' })
+  }
+  if (existing.team_id !== user.team_id && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Cannot delete route outside your team' })
   }
 
-  // delete
-  const { error: e2 } = await supabase
-    .from('routes').delete().eq('id', id)
-  if (e2) return res.status(500).json({ error: e2.message })
+  // perform delete
+  const { error: delErr } = await supabase
+    .from('routes')
+    .delete()
+    .eq('id', id)
+  if (delErr) {
+    console.error('DELETE /api/routes/[id] failed:', delErr)
+    return res.status(500).json({ error: delErr.message })
+  }
 
-  return res.json({ success: true })
+  return res.status(200).json({ success: true })
 }
