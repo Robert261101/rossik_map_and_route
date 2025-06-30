@@ -195,7 +195,7 @@ export default function HistoryPage({ user }) {
     
     // Curăță event listener la unmount
     return () => window.removeEventListener('resize', updateTablePosition);
-  }, [savedRoutes, expandedIds]); // Adăugăm expandedIds la dependencies
+  }, [savedRoutes, expandedIds, selectedId]); // Adăugăm expandedIds la dependencies
 
 
   //TODO2: edit button on history
