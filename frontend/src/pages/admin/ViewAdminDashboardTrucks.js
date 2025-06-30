@@ -17,7 +17,7 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
     }
     const { error } = await supabase
       .from('trucks')
-      .update({ 'Euro/km': parsed })
+      .update({ euro_per_km: parsed })
       .eq('id', truck.id);
     if (error) {
       alert('Update failed: ' + error.message);
