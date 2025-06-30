@@ -197,12 +197,7 @@ export default function HistoryPage({ user }) {
     return () => window.removeEventListener('resize', updateTablePosition);
   }, [savedRoutes, expandedIds, selectedId]); // Adăugăm expandedIds la dependencies
 
-
   //TODO2: edit button on history
-
-  //TODO3: add get list on admin panel for trucks(+Edit here) and user accounts
-
-  //TODO4: add save this route parameters to vehicle parameters + fix admins can see all trucks - mainpage
 
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
