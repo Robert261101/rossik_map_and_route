@@ -14,6 +14,8 @@ import DeleteTruck from './admin/DeleteTruck'
 import AddTeam from './admin/AddTeam'
 import TeamView from './admin/TeamView'
 import AddTeamMembers from './admin/AddTeamMembers'
+import ForgotPasswordPage from './ForgotPassword'
+import ResetPasswordPage from './ResetPassword'
 import ReactDOM from 'react-dom'
 import { ThemeProvider } from '../contexts/ThemeContext'
 
@@ -93,6 +95,12 @@ export default function App() {
         <Route
           path="/login"
           element={user ? <Navigate to="/" /> : <LoginPage />} />
+        <Route 
+          path="/forgot-password" 
+          element={!user ? <ForgotPasswordPage /> : <Navigate to="/" />} />
+        <Route 
+          path="/reset-password"  
+          element={<ResetPasswordPage />} />
         <Route
           path="/"
           element={user ? <MainPage user={user} /> : <Navigate to="/login" />} />
@@ -124,12 +132,11 @@ export default function App() {
           path="/add"
           element={<AddTeam user={user} />} />
         <Route
-          path="admin/teams/:teamId"
+          path="/admin/teams/:teamId"
           element={<TeamView />} />
         <Route
           path="/admin/teams/:teamId/add-members"
           element={<AddTeamMembers />} />
-
 
       </Routes>
     </BrowserRouter>

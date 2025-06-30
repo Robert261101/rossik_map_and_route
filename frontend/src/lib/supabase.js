@@ -11,7 +11,7 @@ export const supabase = createClient(
       // auto-refresh token când expiră
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: true,
     }
   }
 )
