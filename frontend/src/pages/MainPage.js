@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import SearchBar from "../helpers/SearchBar";
 import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
+import { Link } from "react-router-dom";
 import RossikLogo from '../VektorLogo_Rossik_rot.gif'; 
 import "./App.css";
 
@@ -690,12 +691,14 @@ const MainPage = ({ user })  => {
     <header className={`top-0 z-30 ${darkMode ? 'bg-gray-900 text-white' : 'bg-white'}`}>
         <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
           {/* LEFT: Logo / Titlu */}
-          <div className="flex items-center ">
-            <img
-              src={RossikLogo}
-              alt="Rossik Logo"
-              className="h-12 object-contain"
-            />
+           <div className="flex items-center">
+            <Link to="/">
+              <img
+                src={RossikLogo}
+                alt="Rossik Logo"
+                className="h-12 object-contain cursor-pointer"
+              />
+            </Link>
           </div>
 
       {/* <SearchBar /> */}

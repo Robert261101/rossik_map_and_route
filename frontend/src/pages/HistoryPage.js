@@ -5,7 +5,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import SearchBar from '../helpers/SearchBar';
 import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
-import RossikLogo from '../VektorLogo_Rossik_rot.gif'; 
+import RossikLogo from '../VektorLogo_Rossik_rot.gif';
+import { Link } from 'react-router-dom';
 
 export default function HistoryPage({ user }) {
   const navigate = useNavigate();
@@ -201,12 +202,14 @@ export default function HistoryPage({ user }) {
       <header className="top-0 z-50">
         <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
           {/* LEFT: Logo / Titlu */}
-          <div className="flex items-center bg-gradient-to-r from-white/70 via-white to-white/70 p-2 rounded">
-            <img
-              src={RossikLogo}
-              alt="Rossik Logo"
-              className="h-12 object-contain"
-            />
+           <div className="flex items-center">
+            <Link to="/">
+              <img
+                src={RossikLogo}
+                alt="Rossik Logo"
+                className="h-12 object-contain cursor-pointer"
+              />
+            </Link>
           </div>
 
           <SearchBar savedRoutes={savedRoutes} />
