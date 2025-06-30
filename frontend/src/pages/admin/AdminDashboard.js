@@ -217,4 +217,4 @@ export default function AdminDashboard({ user }) {
   );
 }
 
-//TODO: add tarif/km for trucks
+//TODO: dont forget about promptmodal in /src/components

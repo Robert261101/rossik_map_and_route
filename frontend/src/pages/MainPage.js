@@ -645,36 +645,43 @@ const MainPage = ({ user })  => {
   
   useEffect(() => {
     (async () => {
-      // 1) Fetch the user's team and admin flag:
+      // 1️⃣ fetch the user’s team & role
       const { data: profile, error: pErr } = await supabase
-        .from('users')          // or 'profiles' if that’s your table
-        .select('team_id, role')  
+        .from('users')
+        .select('team_id, role')
         .eq('id', user.id)
-        .single();
+        .single()
       if (pErr) {
-        console.error('Could not load profile:', pErr);
-        return;
+        console.error('Could not load profile:', pErr)
+        return
       }
 
-      // 2) Load trucks — but if you're an admin, skip the team filter:
-      let query = supabase
+      // 2️⃣ fetch trucks, including euro_per_km
+      let q = supabase
         .from('trucks')
-        .select('id, plate');
+        .select('id, plate, euro_per_km')
 
-      if (profile.role != 'admin') {
-        query = query.eq('team_id', profile.team_id);
+      if (profile.role !== 'admin') {
+        q = q.eq('team_id', profile.team_id)
       }
 
-      const { data: truckList, error: tErr } = await query;
+      const { data: truckList, error: tErr } = await q
       if (tErr) {
-        console.error('Could not load trucks:', tErr);
-        return;
+        console.error('Could not load trucks:', tErr)
+        return
       }
+      setTrucks(truckList)
+    })()
+  }, [user])
 
+  useEffect(() => {
+    if (!plate) return
+    const found = trucks.find(t => t.id === plate)
+    if (found?.euro_per_km != null) {
+      setVehicleType(v => ({ ...v, EuroPerKm: found.euro_per_km }))
+    }
+  }, [plate, trucks])
 
-      setTrucks(truckList);
-    })();
-  }, [user]);
 
 
   useEffect(() => {
@@ -862,10 +869,12 @@ const MainPage = ({ user })  => {
                         <select
                           className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus:ring-red-500 transition"
                           value={plate}
-                          onChange={e => setPlate(e.target.value)}
                           required
+                          onChange={e => setPlate(e.target.value)}
                         >
-                          <option value="" class disabled>Select your truck</option>
+                          <option value="" disabled>
+                            Select your truck
+                          </option>
                           {trucks.map(t => (
                             <option key={t.id} value={t.id}>
                               {t.plate}
