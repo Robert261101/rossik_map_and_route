@@ -47,7 +47,7 @@ export default async function handler(req, res) {
   // — fetch all trucks
   const { data: trucks, error: fetchErr } = await supabaseAdmin
     .from('trucks')
-    .select('id, plate, teams(name)')
+    .select('id, plate, teams(name), euro_per_km')
     .order('plate')
 
   if (fetchErr) {

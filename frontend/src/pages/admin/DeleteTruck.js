@@ -26,24 +26,24 @@ export default function DeleteTruck({ user, handleLogout }) {
         const trucks = await res.json();
         setTrucks(trucks);
       } else {
-        console.error('Eroare la încărcarea camioanelor');
+        console.error('Trucks loading error');
       }
     })();
   }, []);
 
   const handleDelete = async () => {
     if (!selectedTruckId) {
-      alert('Selectează un camion');
+      alert('Select a truck');
       return;
     }
 
-    const confirmDelete = window.confirm('Ești sigur că vrei să ștergi camionul?');
+    const confirmDelete = window.confirm('Are you sure you want to delete this truck?');
     if (!confirmDelete) return;
 
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
-    const res = await fetch(`/api/admin/trucks/${selectedTruckId}`, {
+    const res = await fetch(`/api/admin/truck/${selectedTruckId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -52,18 +52,18 @@ export default function DeleteTruck({ user, handleLogout }) {
     });
 
     if (res.ok) {
-      alert('Camion șters cu succes');
+      alert('Truck deleted succesfully');
       setTrucks(prev => prev.filter(t => t.id !== selectedTruckId));
       setSelectedTruckId('');
     } else {
       const err = await res.json();
-      alert('Eroare la ștergere: ' + err.error);
+      alert('Delete Error: ' + err.error);
       console.error('Backend error:', err);
     }
   };
 
   const formatName = (email = "") => {
-    if (!email || !email.includes('@')) return 'Fără Nume';
+    if (!email || !email.includes('@')) return 'No name';
     const local = email.split("@")[0];
     const parts = local.split(".");
     return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
@@ -100,7 +100,7 @@ export default function DeleteTruck({ user, handleLogout }) {
       </header>
 
       <div className="p-6 max-w-xl mx-auto mt-10 bg-white/80 dark:bg-gray-800/30 backdrop-blur-md rounded-xl shadow-xl">
-        <h1 className="text-3xl font-bold mb-6 text-center">Șterge Camion</h1>
+        <h1 className="text-3xl font-bold mb-6 text-center">Delete Truck</h1>
 
         <select
           className="w-full p-3 mb-6 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
@@ -117,7 +117,7 @@ export default function DeleteTruck({ user, handleLogout }) {
           onClick={handleDelete}
           className="w-full bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 text-white py-3 rounded-full font-semibold shadow-md hover:shadow-lg transition"
         >
-          Șterge camionul
+          Delete Truck
         </button>
       </div>
     </div>

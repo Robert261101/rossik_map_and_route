@@ -1,4 +1,4 @@
-// pages/api/admin/truck/[id].js
+// pages/api/admin/trucks/[id].js
 import { createClient } from '@supabase/supabase-js'
 
 // read-only client to validate JWT
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     .eq('id', id)
 
   if (delErr) {
-    console.error('❌ /api/admin/truck/[id] DELETE error:', delErr)
+    console.error('❌ /api/admin/trucks/[id] DELETE error:', delErr)
     return res.status(500).json({ error: delErr.message })
   }
 

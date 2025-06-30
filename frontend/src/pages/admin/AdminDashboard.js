@@ -61,14 +61,14 @@ export default function AdminDashboard({ user }) {
   const fetchTrucks = async () => {
     const { data, error } = await supabase
       .from('trucks')
-      .select('id, plate, teams(name), "Euro/km"')
+      .select('id, plate, teams(name), euro_per_km')
       .order('plate');
     if (!error) {
       const formatted = data.map(truck => ({
         id: truck.id,
         plate: truck.plate,
         team_name: truck.teams?.name || null,
-        euroPerKm: truck["Euro/km"],
+        euroPerKm: truck.euro_per_km,
       }));
       setTrucks(formatted);
       setShowTrucksModal(true);
@@ -210,6 +210,7 @@ export default function AdminDashboard({ user }) {
         <ViewAdminDashboardTrucks
           trucks={trucks}
           onClose={() => setShowTrucksModal(false)}
+          onRefresh={fetchTrucks}    // <-- pass fetchTrucks so modal can refresh
         />
       )}
     </div>

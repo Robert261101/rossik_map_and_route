@@ -45,16 +45,20 @@ export default async function handler(req, res) {
   }
 
   // — validate payload
-  const { plate, team_id } = req.body
-  if (!plate || !team_id) {
-    return res.status(400).json({ error: 'plate and team_id are required' })
-  }
+  const { plate, team_id, euro_per_km } = req.body
+    if (!plate || !team_id) {
+      return res.status(400).json({ error: 'plate and team_id are required' })
+    }
+
+  const rate = typeof euro_per_km === 'number'
+    ? euro_per_km
+    : 0.1
 
   try {
     // — insert new truck
     const { data: newTruck, error: insertErr } = await supabaseAdmin
       .from('trucks')
-      .insert({ plate, team_id, created_by: user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .insert({ plate, team_id, created_by: user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), euro_per_km: rate })
       .single()
     if (insertErr) throw insertErr
 
