@@ -12,6 +12,8 @@ import RossikLogo from '../VektorLogo_Rossik_rot.gif';
 import "./App.css";
 
 const MainPage = ({ user })  => {
+  const [allIn, setAllIn] = useState(false);
+  const [fixedTotalCost, setFixedTotalCost] = useState(''); // only used when allIn===true
   const [activeTab, setActiveTab] = useState("input"); // "input" | "results"
   const [addresses, setAddresses] = useState([]);
   const [distance, setDistance] = useState(null);
@@ -809,7 +811,18 @@ const MainPage = ({ user })  => {
               </form>
             </div>
             <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
-              <h2 className="text-lg font-bold mb-2">Vehicle Parameters</h2>
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="text-lg font-bold">Vehicle Parameters</h2>
+                <label className="inline-flex items-center text-sm">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox mr-2"
+                    checked={allIn}
+                    onChange={e => setAllIn(e.target.checked)}
+                  />
+                  All in
+                </label>
+              </div>
               <div className="grid grid-cols-1 gap-2">
                 <div>
                   <label className="block text-sm font-bold mb-1">Number of axles</label> 
@@ -841,24 +854,40 @@ const MainPage = ({ user })  => {
                     className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-bold mb-1">Euro/km</label>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    name="EuroPerKm"
-                    value={vehicleType.EuroPerKm}
-                    onChange={(e) => {
-                      const raw = e.target.value.trim().replace(",", ".");
-                      const parsed = parseFloat(raw);
-                      setVehicleType((prev) => ({ ...prev, EuroPerKm: isNaN(parsed) ? prev.EuroPerKm : parsed }));
-                    }}
-                    min="0"
-                    max="10"
-                    className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
-                  />
-                </div>
+                 {!allIn ? (
+                   <div>
+                     <label className="block text-sm font-bold mb-1">Euro/km</label>
+                     <input
+                       type="number"
+                       inputMode="decimal"
+                       step="0.01"
+                       name="EuroPerKm"
+                       value={vehicleType.EuroPerKm}
+                       onChange={e => {
+                         const raw = e.target.value.trim().replace(',', '.')
+                         const parsed = parseFloat(raw)
+                         setVehicleType(v => ({
+                           ...v,
+                           EuroPerKm: isNaN(parsed) ? v.EuroPerKm : parsed
+                         }))
+                       }}
+                       min="0"
+                       max="10"
+                       className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+                     />
+                   </div>
+                 ) : (
+                   <div>
+                     <label className="block text-sm font-bold mb-1">Total Cost (EUR)</label>
+                     <input
+                       type="number"
+                       step="0.01"
+                       value={fixedTotalCost}
+                       onChange={e => setFixedTotalCost(e.target.value)}
+                       className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+                     />
+                   </div>
+                 )}
                 <div>
                   {/* ROW 4: Buton salvare ruta */}
                   {isManager && (
@@ -926,36 +955,49 @@ const MainPage = ({ user })  => {
                     <th className="px-3 py-2 border">Route</th>
                     <th className="px-3 py-2 border">Distance (km)</th>
                     <th className="px-3 py-2 border">Time</th>
-                    <th className="px-3 py-2 border">Price per Km (EUR)</th>
+                    {!allIn && (
+                      <th className="px-3 py-2 border">Price per Km (EUR)</th>
+                    )}
                     <th className="px-3 py-2 border">Tolls (EUR)</th>
                     <th className="px-3 py-2 border">Total Cost (EUR)</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {/* TODO:FIX HERE - NOT WORKING PROPERLY - ur doing the all in price check */}
                   {routes.map((rt, index) => {
-                    let altDistance = 0;
-                    let altDuration = 0;
-                    rt.sections.forEach((section) => {
-                      if (section.summary) {
-                        altDistance += section.summary.length;
-                        altDuration += section.summary.duration;
-                      }
-                    });
-                    const km = altDistance / 1000;
-                    const { costPerKm } = computeRouteMetrics(rt);
-                    const hours = Math.floor(altDuration / 3600);
-                    const minutes = Math.floor((altDuration % 3600) / 60);
-                    const displayTime = `${hours}h ${minutes}m`;
+                    // compute distance, duration, costPerKm, etc.
+                    const { km, costPerKm } = computeRouteMetrics(rt);
                     const routeTax = routeTaxCosts[index] || 0;
                     const totalCost = costPerKm + routeTax;
+
                     return (
-                      <tr key={index} className={`cursor-pointer ${selectedRouteIndex === index ? "bg-red-50" : ""} hover:bg-red-50`} onClick={() => handleRouteSelect(index)}>
-                        <td className="px-3 py-2 border text-center">Route {index + 1}</td>
-                        <td className="px-3 py-2 border text-center">{km.toFixed(2)}</td>
-                        <td className="px-3 py-2 border text-center">{displayTime}</td>
-                        <td className="px-3 py-2 border text-center">{costPerKm.toFixed(2)}</td>
-                        <td className="px-3 py-2 border text-center">{routeTax.toFixed(2)}</td>
-                        <td className="px-3 py-2 border text-center">{totalCost.toFixed(2)}</td>
+                      <tr
+                        key={index}
+                        className={`cursor-pointer ${
+                          selectedRouteIndex === index ? "bg-red-50" : ""
+                        } hover:bg-red-50`}
+                        onClick={() => handleRouteSelect(index)}
+                      >
+                        <td className="px-3 py-2 border text-center">
+                          Route {index + 1}
+                        </td>
+                        <td className="px-3 py-2 border text-center">
+                          {km.toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2 border text-center">
+                          {/** format your displayTime */}
+                        </td>
+                        {!allIn && (
+                          <td className="px-3 py-2 border text-center">
+                            {costPerKm.toFixed(2)}
+                          </td>
+                        )}
+                        <td className="px-3 py-2 border text-center">
+                          {routeTax.toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2 border text-center">
+                          {totalCost.toFixed(2)}
+                        </td>
                       </tr>
                     );
                   })}
@@ -963,6 +1005,7 @@ const MainPage = ({ user })  => {
               </table>
             </div>
           )}
+
 
           {/* ROW 3: List of aggregated costs + Route Results */}
           {routes.length > 0 && (
