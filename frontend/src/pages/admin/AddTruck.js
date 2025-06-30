@@ -44,7 +44,7 @@ export default function AddTruck({ user, handleLogout }) {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
-    const res = await fetch('/api/admin/truck/add', {
+    const res = await fetch('/api/admin/trucks/add', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
