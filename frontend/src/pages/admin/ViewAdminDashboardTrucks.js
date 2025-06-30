@@ -10,7 +10,12 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
       truck.euroPerKm != null ? truck.euroPerKm : ''
     );
     if (raw === null) return; // user cancelled
-    const parsed = parseFloat(raw.trim().replace(',', '.'));
+
+    // Convert comma to dot and trim
+    const input = raw.trim().replace(',', '.');
+    // If empty after trimming, restore default 0.1
+    const parsed = input === '' ? 0.1 : parseFloat(input);
+
     if (isNaN(parsed)) {
       alert('Invalid number, please enter a numeric value.');
       return;
@@ -42,6 +47,7 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
                 <th className="p-2 border-b">Plate Number</th>
                 <th className="p-2 border-b">Team</th>
                 <th className="p-2 border-b">Euro/km</th>
+                <th className="p-2 border-b"></th>
               </tr>
             </thead>
             <tbody>

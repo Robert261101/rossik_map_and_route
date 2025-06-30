@@ -295,7 +295,7 @@ app.get('/api/admin/trucks', requireRole('admin'), async (req, res) => {
 });
 
 
-app.delete('/api/admin/truck/:id', requireRole('admin'), async (req, res) => {
+app.delete('/api/admin/trucks/:id', requireRole('admin'), async (req, res) => {
   const truckId = req.params.id;
 
   try {
