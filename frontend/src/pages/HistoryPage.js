@@ -31,9 +31,6 @@ export default function HistoryPage({ user }) {
     );
   });
 
-
-  //TODO: forgot password implementation
-
   const rowsToShow = selectedId
     ? savedRoutes.filter(r => r.id === selectedId)
     : (filterQuery ? filteredRoutes : savedRoutes)

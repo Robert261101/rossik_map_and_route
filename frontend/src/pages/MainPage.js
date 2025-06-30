@@ -642,8 +642,6 @@ const MainPage = ({ user })  => {
     markerGroupRef.current = group;
   }, [addresses, mapRef.current]);
   
-
-  //TODO: admin can see all trucks
   useEffect(() => {
     (async () => {
       // 1) Fetch the user's team and admin flag:
