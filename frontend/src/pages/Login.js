@@ -10,6 +10,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+
+  const spriteUrl = `${process.env.PUBLIC_URL}/show-password-icon-privacy-icon-abstract-eye-black-icons-isolated-white-background_781227-401.jpg`;
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -49,14 +52,29 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Password</label>
-            <input
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-600"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-            />
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                className="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-600"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+              />
+              <span
+                role="button"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                onClick={() => setShowPassword(show => !show)}
+                className="absolute top-1/2 right-3 w-6 h-6 bg-no-repeat bg-[length:48px_24px] cursor-pointer select-none"
+                style={{
+                  backgroundImage: `url("${spriteUrl}")`,
+                  backgroundPosition: showPassword ? '-24px 0' : '0 0',
+                  transform: 'translateY(-50%)'
+                }}
+              />
+            </div>
           </div>
 
           {errorMsg && (
@@ -85,186 +103,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // src/Login.js
-// import React, { useState } from 'react';
-// import { useNavigate } from 'react-router-dom';
-// import { supabase } from '../lib/supabase';
-
-// export default function Login({ setUser }) {
-//   const [email, setEmail] = useState('');
-//   const [password, setPassword] = useState('');
-//   const [errorMsg, setErrorMsg] = useState('');
-//   const navigate = useNavigate();
-
-//   const handleLogin = async (e) => {
-//     e.preventDefault();
-//     setErrorMsg('');
-
-//     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-//     if (error) {
-//       setErrorMsg(error.message);
-//       return;
-//     }
-
-//     sessionStorage.setItem('token', data.session.access_token);
-//     setUser(data.user);
-//     navigate('/');
-
-//   };
-
-//   return (
-//     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-//       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm">
-//         <h2 className="text-2xl font-semibold text-center mb-6 text-gray-800">
-//           Login to Rossik
-//         </h2>
-//         <form onSubmit={handleLogin} className="space-y-4">
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700">Email</label>
-//             <input
-//               className="w-full border p-2 rounded focus:outline-none focus:ring focus:border-blue-500"
-//               type="email"
-//               value={email}
-//               onChange={(e) => setEmail(e.target.value)}
-//               required
-//             />
-//           </div>
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700">Password</label>
-//             <input
-//               className="w-full border p-2 rounded focus:outline-none focus:ring focus:border-blue-500"
-//               type="password"
-//               value={password}
-//               onChange={(e) => setPassword(e.target.value)}
-//               required
-//             />
-//           </div>
-//           {errorMsg && (
-//             <p className="text-red-500 text-sm text-center">{errorMsg}</p>
-//           )}
-//           <button
-//             type="submit"
-//             className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-//           >
-//             Login
-//           </button>
-//         </form>
-//       </div>
-//     </div>
-//   );
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // Login.js
-// import React, { useState } from 'react';
-// import { useNavigate } from 'react-router-dom';
-// import { supabase } from './lib/supabase';
-
-// export default function Login({ setUser }) {
-//   const [username, setUsername] = useState('');
-//   const [password, setPassword] = useState('');
-//   const [errorMsg, setErrorMsg] = useState('');
-//   const navigate = useNavigate();
-
-//   const handleLogin = async (e) => {
-//     e.preventDefault();
-//     try {
-//       const res = await fetch('http://localhost:4000/api/auth/login', {
-//         method: 'POST',
-//         headers: { 'Content-Type': 'application/json' },
-//         body: JSON.stringify({ username, password }),
-//       });
-
-//       if (!res.ok) throw new Error((await res.json()).message || 'Login failed');
-//       const data = await res.json();
-
-//       // 1. Salvează tokenul în sessionStorage
-//       sessionStorage.setItem('token', data.token);
-
-//       // 2. Decodează JWT și extrage user info
-//       const payload = JSON.parse(atob(data.token.split('.')[1]));
-//       setUser({ username: payload.username, role: payload.role });
-
-//       // 3. Redirecționează la pagina principală
-//       navigate('/');
-
-//     } catch (err) {
-//       setErrorMsg(err.message);
-//     }
-//   };
-
-//   return (
-//     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-//       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm">
-//         <h2 className="text-2xl font-semibold text-center mb-6 text-gray-800">Log in to Rossik</h2>
-//         <form onSubmit={handleLogin} className="space-y-4">
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700">Username</label>
-//             <input
-//               className="w-full border p-2 rounded focus:outline-none focus:ring focus:border-blue-500"
-//               type="text"
-//               value={username}
-//               onChange={(e) => setUsername(e.target.value)}
-//               required
-//             />
-//           </div>
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700">Password</label>
-//             <input
-//               className="w-full border p-2 rounded focus:outline-none focus:ring focus:border-blue-500"
-//               type="password"
-//               value={password}
-//               onChange={(e) => setPassword(e.target.value)}
-//               required
-//             />
-//           </div>
-//           {errorMsg && (
-//             <p className="text-red-500 text-sm text-center">{errorMsg}</p>
-//           )}
-//           <button
-//             type="submit"
-//             className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-//           >
-//             Login
-//           </button>
-//         </form>
-//       </div>
-//     </div>
-//   );
-// }

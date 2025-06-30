@@ -7,19 +7,19 @@ import RossikLogo from '../VektorLogo_Rossik_rot.gif'
 export default function ResetPasswordPage() {
   const [newPwd, setNewPwd] = useState('')
   const [confirmPwd, setConfirmPwd] = useState('')
+  const [showNew, setShowNew] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [sessionValid, setSessionValid] = useState(false)
   const navigate = useNavigate()
 
+  // sprite in /public
+  const spriteUrl = `${process.env.PUBLIC_URL}/show-password-icon-privacy-icon-abstract-eye-black-icons-isolated-white-background_781227-401.jpg`
+
   useEffect(() => {
-    // after detectSessionInUrl:true, supabase.auth.getSession()
-    // will return the session if the link was valid
     supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error || !session) {
-        setErrorMsg('Invalid or expired link.')
-      } else {
-        setSessionValid(true)
-      }
+      if (error || !session) setErrorMsg('Invalid or expired link.')
+      else setSessionValid(true)
     })
   }, [])
 
@@ -59,38 +59,68 @@ export default function ResetPasswordPage() {
 
         {sessionValid ? (
           <form onSubmit={handleSetPassword} className="space-y-5">
+            {/* New Password */}
             <div>
               <label className="block text-sm font-medium mb-1
                                 text-gray-700 dark:text-gray-300">
                 New Password
               </label>
-              <input
-                type="password"
-                required
-                value={newPwd}
-                onChange={e => setNewPwd(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300
-                           dark:border-gray-600 rounded-lg bg-white
-                           dark:bg-gray-700 text-gray-900 dark:text-white
-                           focus:outline-none focus:ring-2 focus:ring-red-600"
-              />
+              <div className="relative">
+                <input
+                  type={showNew ? 'text' : 'password'}
+                  required
+                  value={newPwd}
+                  onChange={e => setNewPwd(e.target.value)}
+                  className="w-full px-4 py-2 pr-10 border border-gray-300
+                             dark:border-gray-600 rounded-lg bg-white
+                             dark:bg-gray-700 text-gray-900 dark:text-white
+                             focus:outline-none focus:ring-2 focus:ring-red-600"
+                />
+                <span
+                  role="button"
+                  aria-label={showNew ? 'Hide new password' : 'Show new password'}
+                  onClick={() => setShowNew(s => !s)}
+                  className="absolute top-1/2 right-3 w-6 h-6 bg-no-repeat
+                             bg-[length:48px_24px] cursor-pointer select-none"
+                  style={{
+                    backgroundImage: `url("${spriteUrl}")`,
+                    backgroundPosition: showNew ? '-24px 0' : '0 0',
+                    transform: 'translateY(-50%)'
+                  }}
+                />
+              </div>
             </div>
 
+            {/* Confirm New Password */}
             <div>
               <label className="block text-sm font-medium mb-1
                                 text-gray-700 dark:text-gray-300">
                 Confirm New Password
               </label>
-              <input
-                type="password"
-                required
-                value={confirmPwd}
-                onChange={e => setConfirmPwd(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300
-                           dark:border-gray-600 rounded-lg bg-white
-                           dark:bg-gray-700 text-gray-900 dark:text-white
-                           focus:outline-none focus:ring-2 focus:ring-red-600"
-              />
+              <div className="relative">
+                <input
+                  type={showConfirm ? 'text' : 'password'}
+                  required
+                  value={confirmPwd}
+                  onChange={e => setConfirmPwd(e.target.value)}
+                  className="w-full px-4 py-2 pr-10 border border-gray-300
+                             dark:border-gray-600 rounded-lg bg-white
+                             dark:bg-gray-700 text-gray-900 dark:text-white
+                             focus:outline-none focus:ring-2 focus:ring-red-600"
+                />
+                <span
+                  role="button"
+                  aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
+                  onClick={() => setShowConfirm(s => !s)}
+                  className="absolute top-1/2 right-3 w-6 h-6 bg-no-repeat
+                             bg-[length:48px_24px] cursor-pointer select-none"
+                  style={{
+                    backgroundImage: `url("${spriteUrl}")`,
+                    backgroundPosition: showConfirm ? '-24px 0' : '0 0',
+                    transform: 'translateY(-50%)'
+                  }}
+                />
+              </div>
             </div>
 
             <button
