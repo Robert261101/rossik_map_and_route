@@ -12,7 +12,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
 
-  const spriteUrl = `${process.env.PUBLIC_URL}/show-password-icon-privacy-icon-abstract-eye-black-icons-isolated-white-background_781227-401.jpg`;
+  const spriteUrl = `${process.env.PUBLIC_URL}/show-password-icon.png`;
 
   const handleLogin = async (e) => {
     e.preventDefault();

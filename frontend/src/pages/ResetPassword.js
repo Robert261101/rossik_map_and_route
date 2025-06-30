@@ -14,7 +14,7 @@ export default function ResetPasswordPage() {
   const navigate = useNavigate()
 
   // sprite in /public
-  const spriteUrl = `${process.env.PUBLIC_URL}/show-password-icon-privacy-icon-abstract-eye-black-icons-isolated-white-background_781227-401.jpg`
+  const spriteUrl = `${process.env.PUBLIC_URL}/show-password-icon.png`
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session }, error }) => {
