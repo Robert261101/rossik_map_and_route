@@ -75,7 +75,6 @@ const MainPage = ({ user })  => {
 
     setSaveMsg('');
     try {
-      // 1. re‑fetch team_id
       const { data: profile, error: pErr } = await supabase
         .from('users')
         .select('team_id, role')
@@ -83,63 +82,50 @@ const MainPage = ({ user })  => {
         .single();
       if (pErr) throw pErr;
 
-      // 2. check truck belongs to team
       const { data: truck, error: tErr } = await supabase
         .from('trucks')
         .select('team_id')
-        .eq('id', plate)    // plate===truck_id
+        .eq('id', plate)
         .single();
       if (tErr) throw tErr;
-      // after fetching profile & truck:
-      const privileged = ['admin'];
 
-      if (
-        !privileged.includes(profile.role) &&
-        String(truck.team_id) !== String(profile.team_id)
-      ) {
+      const privileged = ['admin'];
+      if (!privileged.includes(profile.role) && String(truck.team_id) !== String(profile.team_id)) {
         throw new Error('Selected truck is not on your team');
       }
 
+      const minimalSections = routes[selectedRouteIndex].sections.map(s => ({ polyline: s.polyline, summary: s.summary }));
+      // decide cost_per_km: null if allIn, otherwise computed
+      // question: possible unwanted
+      const costPerKmValue = allIn ? 0 : costPerKmForSelected();
+      const euroPerKmValue = allIn ? 0 : vehicleType.EuroPerKm;
 
 
-      const minimalSections = routes[selectedRouteIndex].sections.map(s => ({
-        polyline: s.polyline,
-        summary:  s.summary    // optional—only if you need summary data
-      }));
-      // 3. build payload exactly matching server.js .insert keys
       const newRoute = {
-        team_id:      profile.team_id,
-        created_by:   user.id,
-        date:         new Date().toISOString(),
-        identifier,   // unique tour number
-        truck_id:     plate,
-        euro_per_km:  vehicleType.EuroPerKm,
-        distance_km:  parseFloat(distance),
-        cost_per_km:  costPerKmForSelected(),
-        tolls:        tollCosts[selectedRouteIndex].tollList,
-        //sections:     routes[selectedRouteIndex].sections,  // store full HERE polyline info
-        sections:     minimalSections,
+        team_id: profile.team_id,
+        created_by: user.id,
+        date: new Date().toISOString(),
+        identifier,
+        truck_id: plate,
+        euro_per_km: euroPerKmValue,
+        distance_km: parseFloat(distance),
+        cost_per_km: costPerKmValue,
+        tolls: tollCosts[selectedRouteIndex].tollList,
+        sections: minimalSections,
         addresses,
-        toll_cost:    tollCosts[selectedRouteIndex].totalCost,
-        total_cost:   costPerKmForSelected() + tollCosts[selectedRouteIndex].totalCost,
+        toll_cost: tollCosts[selectedRouteIndex].totalCost,
+        total_cost: (allIn ? parseFloat(fixedTotalCost || 0) : (costPerKmValue + tollCosts[selectedRouteIndex].totalCost)),
         duration,
-        created_at:   new Date().toISOString(),
-        updated_at:   new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
-      // 4. POST to /api/routes
-      // 1) Always grab the current session from Supabase
       const { data: { session }, error: sessErr } = await supabase.auth.getSession();
       if (sessErr || !session) {
         alert('Your session has expired. Please log in again.');
         return;
       }
-      const token = session.access_token;
 
-      //asta imi arata toate detele ce le salvez cand salvez ruta si mi arata si dimensiunea datelor
-      //console.log('Payload to send:', JSON.stringify(newRoute));
-
-      // 2) Now fire your POST
       const res = await fetch('/api/routes', {
         method: 'POST',
         headers: {
@@ -154,29 +140,16 @@ const MainPage = ({ user })  => {
         throw new Error(errBody.error || errBody.message || res.statusText);
       }
 
-
-      if (!res.ok) {
-        // read JSON body safely (if it isn’t JSON, it’ll skip)
-        let errBody;
-        try { errBody = await res.json(); } catch {}
-        throw new Error(errBody?.error || errBody?.message || res.statusText);
-      }
-
       setSaveMsg('Route saved ✔️');
-
-      // (optionally) re‑load your list of savedRoutes here
-      // await loadSavedRoutes();
-
     } catch (err) {
       console.error('Save failed:', err);
       setSaveMsg('Save failed: ' + err.message);
     }
   };
 
-  // Helper pentru calcule
   const computeRouteMetrics = (route) => {
     let totalDistance = 0, totalDuration = 0;
-    route.sections.forEach((section) => {
+    route.sections.forEach(section => {
       if (section.summary) {
         totalDistance += section.summary.length;
         totalDuration += section.summary.duration;
@@ -820,7 +793,7 @@ const MainPage = ({ user })  => {
                     checked={allIn}
                     onChange={e => setAllIn(e.target.checked)}
                   />
-                  All in
+                  Fixed cost
                 </label>
               </div>
               <div className="grid grid-cols-1 gap-2">
@@ -963,41 +936,23 @@ const MainPage = ({ user })  => {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* TODO:FIX HERE - NOT WORKING PROPERLY - ur doing the all in price check */}
                   {routes.map((rt, index) => {
-                    // compute distance, duration, costPerKm, etc.
-                    const { km, costPerKm } = computeRouteMetrics(rt);
-                    const routeTax = routeTaxCosts[index] || 0;
-                    const totalCost = costPerKm + routeTax;
-
+                    const { totalDuration, km, costPerKm } = computeRouteMetrics(rt);
+                    const hours = Math.floor(totalDuration/3600);
+                    const minutes = Math.floor((totalDuration%3600)/60);
+                    const displayTime = `${hours}h ${minutes}m`;
+                    const routeTax = routeTaxCosts[index]||0;
+                    const totalCost = allIn
+                      ? parseFloat(fixedTotalCost || 0)
+                      : costPerKm + routeTax;
                     return (
-                      <tr
-                        key={index}
-                        className={`cursor-pointer ${
-                          selectedRouteIndex === index ? "bg-red-50" : ""
-                        } hover:bg-red-50`}
-                        onClick={() => handleRouteSelect(index)}
-                      >
-                        <td className="px-3 py-2 border text-center">
-                          Route {index + 1}
-                        </td>
-                        <td className="px-3 py-2 border text-center">
-                          {km.toFixed(2)}
-                        </td>
-                        <td className="px-3 py-2 border text-center">
-                          {/** format your displayTime */}
-                        </td>
-                        {!allIn && (
-                          <td className="px-3 py-2 border text-center">
-                            {costPerKm.toFixed(2)}
-                          </td>
-                        )}
-                        <td className="px-3 py-2 border text-center">
-                          {routeTax.toFixed(2)}
-                        </td>
-                        <td className="px-3 py-2 border text-center">
-                          {totalCost.toFixed(2)}
-                        </td>
+                      <tr key={index} className={`cursor-pointer ${selectedRouteIndex===index?"bg-red-50":""} hover:bg-red-50`} onClick={()=>handleRouteSelect(index)}>
+                        <td className="px-3 py-2 border text-center">Route {index+1}</td>
+                        <td className="px-3 py-2 border text-center">{km.toFixed(2)}</td>
+                        <td className="px-3 py-2 border text-center">{displayTime}</td>
+                        {!allIn && <td className="px-3 py-2 border text-center">{costPerKm.toFixed(2)}</td>}
+                        <td className="px-3 py-2 border text-center">{routeTax.toFixed(2)}</td>
+                        <td className="px-3 py-2 border text-center">{totalCost.toFixed(2)}</td>
                       </tr>
                     );
                   })}
@@ -1037,20 +992,23 @@ const MainPage = ({ user })  => {
                     <p className="text-sm text-gray-700">
                       <strong>Travel time:</strong> {duration}
                     </p>
+                    {!allIn && (
                     <p className="text-sm text-gray-700">
                       <strong>Price per Km:</strong>{" "}
                       {distance && vehicleType.EuroPerKm ? (distance * vehicleType.EuroPerKm).toFixed(2) : "0.00"} EUR
                     </p>
+                    )}
                     <p className="text-sm text-gray-700">
                       <strong>Tolls:</strong> {routeTaxCosts[selectedRouteIndex] ? routeTaxCosts[selectedRouteIndex].toFixed(2) : "0.00"} EUR
                     </p>
                     <p className="text-sm text-gray-700 font-semibold">
                       <strong>Total Cost:</strong>{" "}
-                      {distance && vehicleType.EuroPerKm
-                        ? (costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0)).toFixed(2)
-                        : routeTaxCosts[selectedRouteIndex]
-                        ? routeTaxCosts[selectedRouteIndex].toFixed(2)
-                        : "0.00"} EUR
+                      {allIn
+                        ? parseFloat(fixedTotalCost || 0).toFixed(2)
+                        : distance && vehicleType.EuroPerKm
+                            ? (costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0)).toFixed(2)
+                            : (routeTaxCosts[selectedRouteIndex] || 0).toFixed(2)
+                      } EUR
                     </p>
                   </>
                 ) : (
