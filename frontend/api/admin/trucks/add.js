@@ -12,7 +12,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-export default async function handler(req, res) {
+export default async function addTruckHandler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST'])
     return res.status(405).end(`Method ${req.method} Not Allowed`)
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
     return res.status(201).json({ message: 'Truck added', truck: newTruck })
 
   } catch (err) {
-    console.error('❌ /api/admin/truck/add error:', err)
+    console.error('❌ /api/admin/trucks/add error:', err)
     return res.status(500).json({ error: err.message || 'Unexpected error' })
   }
 }

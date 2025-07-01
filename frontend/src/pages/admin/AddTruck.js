@@ -45,7 +45,7 @@ export default function AddTruck({ user, handleLogout }) {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
-    const res = await fetch('/api/admin/trucks/add', {
+    const res = await fetch('/api/admin/trucks', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -147,6 +147,9 @@ export default function AddTruck({ user, handleLogout }) {
   );
 }
 
+//aplicatie cu urm functie: marketplace-ul nostru - toate cursele care ne intra sa le postam - newsletter catre toate platformele - timocom
+//- chat
+//- newsletter (?)
 
 //price/day
 //km number + taxa drum
