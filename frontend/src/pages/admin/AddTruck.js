@@ -9,13 +9,14 @@ export default function AddTruck({ user, handleLogout }) {
   const [teams, setTeams] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState('');
   const [euroPerKm, setEuroPerKm] = useState(''); // user-entered or blank
+  const [pricePerDay, setPricePerDay] = useState('');
   const [darkMode, setDarkMode] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase.from('teams').select('id, name');
-      if (error) console.error('Eroare la încărcarea echipelor:', error);
+      if (error) console.error('Error loading teams:', error);
       else setTeams(data);
     })();
   }, []);
@@ -54,6 +55,7 @@ export default function AddTruck({ user, handleLogout }) {
         plate: cleanPlate,
         team_id: selectedTeam,
         euro_per_km: rate,
+        price_per_day: pricePerDay === '' ? null : pricePerDay
       }),
     });
 
@@ -105,11 +107,21 @@ export default function AddTruck({ user, handleLogout }) {
 
         <input
           type="number"
-          step="0.01"
+          step="0.1"
           value={euroPerKm === '' ? '' : euroPerKm}
           placeholder="Euro/km (0.10 - default)"
           onChange={e => setEuroPerKm(parseFloat(e.target.value) || '')}
           onBlur={() => euroPerKm === '' && setEuroPerKm('')}
+          className="w-full p-3 mb-4 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 placeholder-gray-400"
+        />
+
+        <input
+          type="number"
+          step="1"
+          value={pricePerDay === '' ? '' : pricePerDay}
+          placeholder="Price per Day"
+          onChange={e => setPricePerDay(parseFloat(e.target.value) || '')}
+          onBlur={() => pricePerDay === '' && setPricePerDay('')}
           className="w-full p-3 mb-4 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 placeholder-gray-400"
         />
 
@@ -134,3 +146,7 @@ export default function AddTruck({ user, handleLogout }) {
     </div>
   );
 }
+
+
+//price/day
+//km number + taxa drum

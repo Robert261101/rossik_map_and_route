@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   }
 
   // — validate payload
-  const { plate, team_id, euro_per_km } = req.body
+  const { plate, team_id, euro_per_km, price_per_day } = req.body
     if (!plate || !team_id) {
       return res.status(400).json({ error: 'plate and team_id are required' })
     }
@@ -54,18 +54,22 @@ export default async function handler(req, res) {
     ? euro_per_km
     : 0.1
 
+  const pday = typeof price_per_day === 'number'
+    ? price_per_day
+    : null
+
   try {
     // — insert new truck
     const { data: newTruck, error: insertErr } = await supabaseAdmin
       .from('trucks')
-      .insert({ plate, team_id, created_by: user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), euro_per_km: rate })
+      .insert({ plate, team_id, created_by: user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), euro_per_km: rate, price_per_day: pday })
       .single()
     if (insertErr) throw insertErr
 
     return res.status(201).json({ message: 'Truck added', truck: newTruck })
 
   } catch (err) {
-    console.error('❌ /api/admin/trucks/add error:', err)
+    console.error('❌ /api/admin/truck/add error:', err)
     return res.status(500).json({ error: err.message || 'Unexpected error' })
   }
 }

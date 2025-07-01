@@ -61,7 +61,7 @@ export default function AdminDashboard({ user }) {
   const fetchTrucks = async () => {
     const { data, error } = await supabase
       .from('trucks')
-      .select('id, plate, teams(name), euro_per_km')
+      .select('id, plate, teams(name), euro_per_km, price_per_day')
       .order('plate');
     if (!error) {
       const formatted = data.map(truck => ({
@@ -69,6 +69,7 @@ export default function AdminDashboard({ user }) {
         plate: truck.plate,
         team_name: truck.teams?.name || null,
         euroPerKm: truck.euro_per_km,
+        pricePerKm: truck.price_per_day
       }));
       setTrucks(formatted);
       setShowTrucksModal(true);

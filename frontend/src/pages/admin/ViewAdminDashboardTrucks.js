@@ -3,6 +3,8 @@ import React from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh }) {
+  const hasPricePerDay = trucks.some(t => t.pricePerDay != null);
+
   // Handler to edit Euro/km
   const handleEdit = async (truck) => {
     const raw = prompt(
@@ -47,6 +49,7 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
                 <th className="p-2 border-b">Plate Number</th>
                 <th className="p-2 border-b">Team</th>
                 <th className="p-2 border-b">Euro/km</th>
+                {hasPricePerDay && <th className="p-2 border-b">Price/Day</th>}
                 <th className="p-2 border-b"></th>
               </tr>
             </thead>
@@ -59,6 +62,11 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
                   <td className="p-2">
                     {typeof t.euroPerKm === 'number' ? t.euroPerKm.toFixed(2) : '—'}
                   </td>
+                  {hasPricePerDay && (
+                    <td className="p-2">
+                      {typeof t.pricePerDay === 'number' ? t.pricePerDay.toFixed(2) : '—'}
+                    </td>
+                  )}
                   <td className="p-2">
                     <button
                       onClick={() => handleEdit(t)}
