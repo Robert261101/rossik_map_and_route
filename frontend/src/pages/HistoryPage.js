@@ -7,6 +7,8 @@ import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
 import RossikLogo from '../VektorLogo_Rossik_rot.gif';
 import { Link } from 'react-router-dom';
+import { formatNum } from '../utils/number';
+import RouteDetailsModal from '../components/RouteDetailsModal';
 
 export default function HistoryPage({ user }) {
   const navigate = useNavigate();
@@ -21,6 +23,11 @@ export default function HistoryPage({ user }) {
   const normalize = str => str.toLowerCase().replace(/\s+/g, '');
   const filterQuery = params.get('filter') || '';
   const normalizedQuery = normalize(filterQuery);
+
+  const [modalOpenId, setModalOpenId] = useState(null);
+
+  const openModal = id => setModalOpenId(id);
+  const closeModal = () => setModalOpenId(null);
 
   const filteredRoutes = savedRoutes.filter(route => {
     const normalizedIdentifier = normalize(route.identifier);
@@ -291,13 +298,19 @@ export default function HistoryPage({ user }) {
 
             <tbody>
               {rowsToShow.map(rt => {
-                const km        = rt.distance_km.toFixed(2);
+                const km        = formatNum(rt.distance_km);
                 const dur       = rt.duration;
+                // parse "Xh Ym" → total hours
+                const [hPart, mPart] = dur.split(' ').map(s => parseInt(s));
+                const totalHours     = (hPart || 0) + ((mPart || 0) / 60);
+                const days           = Math.ceil(totalHours / 24);
                 const epkm      = rt.euro_per_km.toFixed(2);
-                const toll      = rt.toll_cost.toFixed(2);
-                const routeCost = (rt.distance_km * rt.euro_per_km).toFixed(2);
-                const extra = rt.pricePerDay != null ? rt.pricePerDay : 0;
-                const tot       = (rt.total_cost + extra).toFixed(2);
+                const toll      = formatNum(rt.toll_cost);
+                const routeCost = formatNum(rt.distance_km * rt.euro_per_km);
+                const extra = rt.pricePerDay != null
+                                ? days * rt.pricePerDay
+                                : 0;
+                const tot       = formatNum(rt.total_cost + extra);
                 const feesList  = Array.isArray(rt.tolls)
                   ? rt.tolls.map(t => `${t.name} (${t.country}): €${t.cost.toFixed(2)}`).join(', ')
                   : '';
@@ -324,10 +337,7 @@ export default function HistoryPage({ user }) {
                       <button
                       //TODO: make it look better/ possibly change functionality to previous method - see "thingy" text file in your notes
                         className="ml-2 text-s text-red-600 underline"
-                        onClick={e => {
-                          e.stopPropagation();
-                          toggleExpand(rt.id, e);
-                        }}
+                        onClick={e => { e.stopPropagation(); openModal(rt.id); }}
                       >
                         Details
                       </button>
@@ -360,7 +370,10 @@ export default function HistoryPage({ user }) {
                             <div className="mt-2">
                               <strong>Extra costs:</strong>
                               <ul className="list-disc list-inside">
-                                <li>Price / Day: €{rt.pricePerDay.toFixed(2)}</li>
+                                <li>Price / Day: €{formatNum(rt.pricePerDay)}</li>
+                              </ul>
+                              <ul className="list-disc list-inside">
+                                <li>Days: {days}</li>
                               </ul>
                             </div>
                           ) }
@@ -423,6 +436,25 @@ export default function HistoryPage({ user }) {
 
           </table>
         </div>
+
+        {/* Route details popup */}
+          {modalOpenId && (() => {
+            const rt = savedRoutes.find(r => r.id === modalOpenId);
+            if (!rt) return null;
+            const [h, m] = rt.duration.split(' ').map(s => parseInt(s));
+            const totalHours = (h||0) + ((m||0)/60);
+            const days = Math.ceil(totalHours/24);
+            const extra = rt.pricePerDay != null ? days * rt.pricePerDay : 0;
+
+            return (
+              <RouteDetailsModal
+                route={rt}
+                days={days}
+                extraCost={extra}
+                onClose={closeModal}
+              />
+            );
+          })()}
 
         {/* MAP DETAIL */}
         <div

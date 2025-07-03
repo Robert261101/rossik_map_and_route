@@ -8,7 +8,8 @@ import SearchBar from "../helpers/SearchBar";
 import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
 import { Link } from "react-router-dom";
-import RossikLogo from '../VektorLogo_Rossik_rot.gif'; 
+import RossikLogo from '../VektorLogo_Rossik_rot.gif';
+import { formatNum } from "../utils/number";
 import "./App.css";
 
 const MainPage = ({ user })  => {
@@ -46,6 +47,11 @@ const MainPage = ({ user })  => {
   const [saveMsg, setSaveMsg] = useState('');
 
   const showPricePerDay = vehicleType.pricePerDay != null;
+  const days = Math.ceil(rawDuration / 86400);
+  const dayCost = showPricePerDay
+  ? days * vehicleType.pricePerDay
+  : 0;
+
 
   const formatName = (email = "") => {
     const local = email.split("@")[0];            // "robert.balacescu"
@@ -956,18 +962,16 @@ const MainPage = ({ user })  => {
                     const routeTax = routeTaxCosts[index]||0;
                     const totalCost = allIn
                       ? parseFloat(fixedTotalCost || 0)
-                      : costPerKm 
-                        + routeTax
-                        + (showPricePerDay ? vehicleType.pricePerDay : 0);
+                      : costPerKm + routeTax + dayCost;
                     return (
                       <tr key={index} className={`cursor-pointer ${selectedRouteIndex===index?"bg-red-50":""} hover:bg-red-50`} onClick={()=>handleRouteSelect(index)}>
                         <td className="px-3 py-2 border text-center">Route {index+1}</td>
-                        <td className="px-3 py-2 border text-center">{km.toFixed(2)}</td>
+                        <td className="px-3 py-2 border text-center">{km}</td>
                         <td className="px-3 py-2 border text-center">{displayTime}</td>
-                        {!allIn && <td className="px-3 py-2 border text-center">{costPerKm.toFixed(2)}</td>}
-                        <td className="px-3 py-2 border text-center">{routeTax.toFixed(2)}</td>
-                        {showPricePerDay && (<td className="px-3 py-2 border text-center"> {vehicleType.pricePerDay.toFixed(2)}</td>)}
-                        <td className="px-3 py-2 border text-center">{totalCost.toFixed(2)}</td>
+                        {!allIn && <td className="px-3 py-2 border text-center">{formatNum(costPerKm)}</td>}
+                        <td className="px-3 py-2 border text-center">{formatNum(routeTax)}</td>
+                        {showPricePerDay && (<td className="px-3 py-2 border text-center"> {formatNum(vehicleType.pricePerDay)}</td>)}
+                        <td className="px-3 py-2 border text-center">{formatNum(totalCost)}</td>
                       </tr>
                     );
                   })}
@@ -1010,27 +1014,24 @@ const MainPage = ({ user })  => {
                     {!allIn && (
                     <p className="text-sm text-gray-700">
                       <strong>Price per Km:</strong>{" "}
-                      {distance && vehicleType.EuroPerKm ? (distance * vehicleType.EuroPerKm).toFixed(2) : "0.00"} EUR
+                      {formatNum(Number(distance) * vehicleType.EuroPerKm)} EUR
                     </p>
                     )}
                     <p className="text-sm text-gray-700">
-                      <strong>Tolls:</strong> {routeTaxCosts[selectedRouteIndex] ? routeTaxCosts[selectedRouteIndex].toFixed(2) : "0.00"} EUR
+                      <strong>Tolls:</strong> {formatNum(routeTaxCosts[selectedRouteIndex] || 0)} EUR
                     </p>
                     {showPricePerDay && (
                       <p className="text-sm text-gray-700">
-                        <strong>Price / Day:</strong> {vehicleType.pricePerDay.toFixed(2)} EUR
+                        <strong>Days × Rate:</strong> {days} d × {formatNum(vehicleType.pricePerDay)} = {formatNum(dayCost)} EUR
                       </p>
                     )}
                     <p className="text-sm text-gray-700 font-semibold">
                       <strong>Total Cost:</strong>{" "}
-                      {allIn
-                        ? parseFloat(fixedTotalCost || 0).toFixed(2)
-                        : (() => {
-                            const base = costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0);
-                            const extra = showPricePerDay ? vehicleType.pricePerDay : 0;
-                            return (base + extra).toFixed(2);
-                          })()
-                      } EUR
+                      {formatNum(
+                        allIn
+                        ? Number(fixedTotalCost || 0)
+                        : costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0) + dayCost
+                      )} EUR
                     </p>
                   </>
                 ) : (
