@@ -81,8 +81,8 @@ export default function AddTruck({ user, handleLogout }) {
     <div className={`min-h-screen transition-colors duration-500 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-900'}`}>
       <header className="top-0 z-50">
         <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
-          <Link to="/admin" className="flex items-center bg-white/70 p-2 rounded">
-            <img src={RossikLogo} alt="Rossik Logo" className="h-12 object-contain" />
+          <Link to="/admin">
+            <img src={RossikLogo} alt="Rossik Logo" className="h-12 object-contain cursor-pointer" />
           </Link>
           <div className="flex items-center space-x-3">
             <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-red-600 text-white rounded-full">Admin Panel</button>
