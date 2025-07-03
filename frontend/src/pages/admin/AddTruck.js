@@ -45,7 +45,7 @@ export default function AddTruck({ user, handleLogout }) {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
-    const res = await fetch('/api/admin/trucks', {
+    const res = await fetch('/api/admin/trucks/add', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -110,7 +110,11 @@ export default function AddTruck({ user, handleLogout }) {
           step="0.1"
           value={euroPerKm === '' ? '' : euroPerKm}
           placeholder="Euro/km (0.10 - default)"
-          onChange={e => setEuroPerKm(parseFloat(e.target.value) || '')}
+          onChange={e => {
+            const raw = e.target.value.replace(',', '.');
+            const num = parseFloat(raw);
+            setEuroPerKm(isNaN(num) ? '' : num);
+          }}
           onBlur={() => euroPerKm === '' && setEuroPerKm('')}
           className="w-full p-3 mb-4 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 placeholder-gray-400"
         />
@@ -120,7 +124,11 @@ export default function AddTruck({ user, handleLogout }) {
           step="1"
           value={pricePerDay === '' ? '' : pricePerDay}
           placeholder="Price per Day"
-          onChange={e => setPricePerDay(parseFloat(e.target.value) || '')}
+          onChange={e => {
+            const raw = e.target.value.replace(',', '.');
+            const num = parseFloat(raw);
+            setPricePerDay(isNaN(num) ? '' : num);
+          }}
           onBlur={() => pricePerDay === '' && setPricePerDay('')}
           className="w-full p-3 mb-4 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 placeholder-gray-400"
         />

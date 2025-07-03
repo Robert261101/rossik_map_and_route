@@ -255,7 +255,7 @@ app.post('/api/admin/user/:id/reset-password', requireRole('admin'), async (req,
 });
 
 // /api/admin/truck (POST)
-app.post('/api/admin/truck/add', requireRole('admin'), async (req, res) => {
+app.post('/api/admin/trucks/add', requireRole('admin'), async (req, res) => {
   const { plate, team_id } = req.body;
   const created_by = req.user.id; // presupunând că req.user e injectat de `requireRole`
 

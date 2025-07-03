@@ -69,7 +69,7 @@ export default function AdminDashboard({ user }) {
         plate: truck.plate,
         team_name: truck.teams?.name || null,
         euroPerKm: truck.euro_per_km,
-        pricePerKm: truck.price_per_day
+        pricePerDay: truck.price_per_day
       }));
       setTrucks(formatted);
       setShowTrucksModal(true);

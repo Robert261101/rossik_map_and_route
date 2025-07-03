@@ -1,4 +1,4 @@
-// pages/api/admin/trucks/add.js
+// api/admin/trucks/add.js
 import { createClient } from '@supabase/supabase-js'
 
 // 1) read‐only client to validate the caller’s JWT
@@ -13,6 +13,9 @@ const supabaseAdmin = createClient(
 )
 
 export default async function addTruckHandler(req, res) {
+  console.log('▶ payload:', req.body)
+  console.log('▶ have service-role key?', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST'])
     return res.status(405).end(`Method ${req.method} Not Allowed`)
@@ -73,3 +76,8 @@ export default async function addTruckHandler(req, res) {
     return res.status(500).json({ error: err.message || 'Unexpected error' })
   }
 }
+
+
+// microsoft azure - fara pierdere date - microsoft business acum - extins pe professional
+
+// migrare server fizic local - cloud 
