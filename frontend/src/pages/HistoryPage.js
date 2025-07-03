@@ -296,7 +296,8 @@ export default function HistoryPage({ user }) {
                 const epkm      = rt.euro_per_km.toFixed(2);
                 const toll      = rt.toll_cost.toFixed(2);
                 const routeCost = (rt.distance_km * rt.euro_per_km).toFixed(2);
-                const tot       = rt.total_cost.toFixed(2);
+                const extra = rt.pricePerDay != null ? rt.pricePerDay : 0;
+                const tot       = (rt.total_cost + extra).toFixed(2);
                 const feesList  = Array.isArray(rt.tolls)
                   ? rt.tolls.map(t => `${t.name} (${t.country}): €${t.cost.toFixed(2)}`).join(', ')
                   : '';
