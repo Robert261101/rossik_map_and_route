@@ -1121,3 +1121,12 @@ const MainPage = ({ user })  => {
 };
 
 export default MainPage;
+
+//TODO1: spotgo
+//TODO2: export from history
+
+//TODO3: integrate in translogica
+
+//TODO: duration fix - add possible stops and a 75km/hr average speed 
+
+// 4:30 - 45 min pauza x 2 + 11 ore pauza 
