@@ -52,7 +52,7 @@ export default function HistoryPage({ user }) {
         // Fetch routes directly from Supabase, filtering by team_id if you want
         const { data: routes, error: routesError } = await supabase
           .from('routes')
-          .select('*, trucks(plate), users(username)')  // join trucks and users for related fields
+          .select('*, trucks(plate,price_per_day), users(username)')  // join trucks and users for related fields
           .eq('team_id', profile.team_id)
           .order('created_at', { ascending: false });
 
@@ -61,7 +61,8 @@ export default function HistoryPage({ user }) {
         setSavedRoutes(routes.map(r => ({
           ...r,
           truck_plate: r.trucks?.plate,
-          created_by_email: r.users?.username || 'unknown'
+          created_by_email: r.users?.username || 'unknown',
+          pricePerDay:    r.trucks?.price_per_day ?? null
         })));
       } catch (error) {
         console.error('Error fetching routes:', error);
@@ -332,6 +333,7 @@ export default function HistoryPage({ user }) {
 
                       {expandedIds.includes(rt.id) && (
                         <div className="mt-1 text-sm bg-gray-50 p-2 rounded shadow space-y-2">
+                          <strong>Addresses:</strong>
                           <ul>
                             {rt.addresses.map((a, i) => (
                               <li key={i}>
@@ -353,7 +355,14 @@ export default function HistoryPage({ user }) {
                               </ul>
                             </div>
                           )}
-
+                          { rt.pricePerDay != null && (
+                            <div className="mt-2">
+                              <strong>Extra costs:</strong>
+                              <ul className="list-disc list-inside">
+                                <li>Price / Day: €{rt.pricePerDay.toFixed(2)}</li>
+                              </ul>
+                            </div>
+                          ) }
                         </div>
                       )}
                     </td>
