@@ -22,7 +22,8 @@ const MainPage = ({ user })  => {
   const [vehicleType, setVehicleType] = useState({
     axles: 5,
     weight: 40000,
-    EuroPerKm: 0.1, // exemplu
+    EuroPerKm: null, // exemplu
+    pricePerDay: null
   });
   const [routeTaxCosts, setRouteTaxCosts] = useState([]);
   const [tollCosts, setTollCosts] = useState([]);
@@ -43,6 +44,8 @@ const MainPage = ({ user })  => {
   const [plate, setPlate] = useState('');          // selected truck plate
   const [identifier, setIdentifier] = useState(''); // unique run ID
   const [saveMsg, setSaveMsg] = useState('');
+
+  const showPricePerDay = vehicleType.pricePerDay != null;
 
   const formatName = (email = "") => {
     const local = email.split("@")[0];            // "robert.balacescu"
@@ -634,7 +637,7 @@ const MainPage = ({ user })  => {
       // 2️⃣ fetch trucks, including euro_per_km
       let q = supabase
         .from('trucks')
-        .select('id, plate, euro_per_km')
+        .select('id, plate, euro_per_km, price_per_day')
 
       if (profile.role !== 'admin') {
         q = q.eq('team_id', profile.team_id)
@@ -652,8 +655,14 @@ const MainPage = ({ user })  => {
   useEffect(() => {
     if (!plate) return
     const found = trucks.find(t => t.id === plate)
-    if (found?.euro_per_km != null) {
-      setVehicleType(v => ({ ...v, EuroPerKm: found.euro_per_km }))
+    if (found) {
+      setVehicleType(prev => ({
+        ...prev,
+        EuroPerKm:   found.euro_per_km  ?? null,
+        pricePerDay:  found.price_per_day ?? null
+      }));
+    } else {
+      setVehicleType(v => ({ ...v, EuroPerKm: null, pricePerDay: null }));
     }
   }, [plate, trucks])
 
@@ -932,6 +941,9 @@ const MainPage = ({ user })  => {
                       <th className="px-3 py-2 border">Price per Km (EUR)</th>
                     )}
                     <th className="px-3 py-2 border">Tolls (EUR)</th>
+                    {showPricePerDay && (
+                      <th className="px-3 py-2 border">Price / Day</th>
+                    )}
                     <th className="px-3 py-2 border">Total Cost (EUR)</th>
                   </tr>
                 </thead>
@@ -944,7 +956,9 @@ const MainPage = ({ user })  => {
                     const routeTax = routeTaxCosts[index]||0;
                     const totalCost = allIn
                       ? parseFloat(fixedTotalCost || 0)
-                      : costPerKm + routeTax;
+                      : costPerKm 
+                        + routeTax
+                        + (showPricePerDay ? vehicleType.pricePerDay : 0);
                     return (
                       <tr key={index} className={`cursor-pointer ${selectedRouteIndex===index?"bg-red-50":""} hover:bg-red-50`} onClick={()=>handleRouteSelect(index)}>
                         <td className="px-3 py-2 border text-center">Route {index+1}</td>
@@ -952,6 +966,7 @@ const MainPage = ({ user })  => {
                         <td className="px-3 py-2 border text-center">{displayTime}</td>
                         {!allIn && <td className="px-3 py-2 border text-center">{costPerKm.toFixed(2)}</td>}
                         <td className="px-3 py-2 border text-center">{routeTax.toFixed(2)}</td>
+                        {showPricePerDay && (<td className="px-3 py-2 border text-center"> {vehicleType.pricePerDay.toFixed(2)}</td>)}
                         <td className="px-3 py-2 border text-center">{totalCost.toFixed(2)}</td>
                       </tr>
                     );
@@ -1001,13 +1016,20 @@ const MainPage = ({ user })  => {
                     <p className="text-sm text-gray-700">
                       <strong>Tolls:</strong> {routeTaxCosts[selectedRouteIndex] ? routeTaxCosts[selectedRouteIndex].toFixed(2) : "0.00"} EUR
                     </p>
+                    {showPricePerDay && (
+                      <p className="text-sm text-gray-700">
+                        <strong>Price / Day:</strong> {vehicleType.pricePerDay.toFixed(2)} EUR
+                      </p>
+                    )}
                     <p className="text-sm text-gray-700 font-semibold">
                       <strong>Total Cost:</strong>{" "}
                       {allIn
                         ? parseFloat(fixedTotalCost || 0).toFixed(2)
-                        : distance && vehicleType.EuroPerKm
-                            ? (costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0)).toFixed(2)
-                            : (routeTaxCosts[selectedRouteIndex] || 0).toFixed(2)
+                        : (() => {
+                            const base = costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0);
+                            const extra = showPricePerDay ? vehicleType.pricePerDay : 0;
+                            return (base + extra).toFixed(2);
+                          })()
                       } EUR
                     </p>
                   </>
