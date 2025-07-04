@@ -9,6 +9,7 @@ import RossikLogo from '../VektorLogo_Rossik_rot.gif';
 import { Link } from 'react-router-dom';
 import { formatNum } from '../utils/number';
 import RouteDetailsModal from '../components/RouteDetailsModal';
+import { addLegalBreaks } from '../utils/driverTime';
 
 export default function HistoryPage({ user }) {
   const navigate = useNavigate();
@@ -302,6 +303,14 @@ export default function HistoryPage({ user }) {
                 const dur       = rt.duration;
                 // parse "Xh Ym" → total hours
                 const [hPart, mPart] = dur.split(' ').map(s => parseInt(s));
+                const rawSec    = (hPart || 0) * 3600 + (mPart || 0) * 60;
+                // inject legal breaks
+                const secWithBreaks = addLegalBreaks(rawSec);
+                // format back to "Xh Ym"
+                const wbH = Math.floor(secWithBreaks / 3600);
+                const wbM = Math.floor((secWithBreaks % 3600) / 60);
+                const durWithBreaks = `${wbH}h ${wbM}m`;
+
                 const totalHours     = (hPart || 0) + ((mPart || 0) / 60);
                 const days           = Math.ceil(totalHours / 24);
                 const epkm      = rt.euro_per_km.toFixed(2);
@@ -327,7 +336,15 @@ export default function HistoryPage({ user }) {
                     <td className="px-3 py-2 border text-center">{rt.identifier}</td>
                     <td className="px-3 py-2 border text-center">{rt.truck_plate}</td>
                     <td className="px-3 py-2 border text-center">{km}</td>
-                    <td className="px-3 py-2 border text-center">{dur}</td>
+                    <td className="px-3 py-2 border text-center">
+                      {durWithBreaks}
+                      <span
+                        className="ml-1 cursor-help text-blue-500"
+                        title={`Includes ${((secWithBreaks - rawSec)/3600).toFixed(2)} hours of breaks`}
+                      >
+                        ⓘ
+                      </span>
+                    </td>
                     <td className="px-3 py-2 border text-center">{epkm}</td>
                     <td className="px-3 py-2 border text-center">{toll}</td>
                     <td className="px-3 py-2 border text-center">{routeCost}</td>

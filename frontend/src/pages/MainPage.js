@@ -10,6 +10,7 @@ import Moon from 'lucide-react/dist/esm/icons/moon';
 import { Link } from "react-router-dom";
 import RossikLogo from '../VektorLogo_Rossik_rot.gif';
 import { formatNum } from "../utils/number";
+import { addLegalBreaks } from "../utils/driverTime";
 import "./App.css";
 
 const MainPage = ({ user })  => {
@@ -45,12 +46,18 @@ const MainPage = ({ user })  => {
   const [plate, setPlate] = useState('');          // selected truck plate
   const [identifier, setIdentifier] = useState(''); // unique run ID
   const [saveMsg, setSaveMsg] = useState('');
+  const [durationWithBreaks, setDurationWithBreaks] = useState(null);
+
+  //compute total wall-clock seconds (driving + breaks) once per render
+  const secWithBreaks = rawDuration != null
+    ? addLegalBreaks(rawDuration)
+    : 0;
 
   const showPricePerDay = vehicleType.pricePerDay != null;
   const days = Math.ceil(rawDuration / 86400);
   const dayCost = showPricePerDay
-  ? days * vehicleType.pricePerDay
-  : 0;
+    ? days * vehicleType.pricePerDay
+    : 0;
 
 
   const formatName = (email = "") => {
@@ -264,6 +271,10 @@ const MainPage = ({ user })  => {
         setDistance((totalDistance / 1000).toFixed(2));
         setRawDistance(totalDistance);
         setRawDuration(totalDuration);
+        const secWithBreaks = addLegalBreaks(totalDuration);
+        const hWB = Math.floor(secWithBreaks/3600);
+        const mWB = Math.floor((secWithBreaks%3600)/60);
+        setDurationWithBreaks(`${hWB}h ${mWB}m`);
         const hours = Math.floor(totalDuration / 3600);
         const minutes = Math.floor((totalDuration % 3600) / 60);
         setDuration(`${hours}h ${minutes}m`);
@@ -315,6 +326,10 @@ const MainPage = ({ user })  => {
       setDistance((totalDistance / 1000).toFixed(2));
       setRawDistance(totalDistance);
       setRawDuration(totalDuration);
+      const secWithBreaks = addLegalBreaks(totalDuration);
+      const hWB = Math.floor(secWithBreaks/3600);
+      const mWB = Math.floor((secWithBreaks%3600)/60);
+      setDurationWithBreaks(`${hWB}h ${mWB}m`);
       const hours = Math.floor(totalDuration / 3600);
       const minutes = Math.floor((totalDuration % 3600) / 60);
       setDuration(`${hours}h ${minutes}m`);
@@ -1008,8 +1023,12 @@ const MainPage = ({ user })  => {
                     <p className="text-sm text-gray-700">
                       <strong>Distance:</strong> {distance} km
                     </p>
-                    <p className="text-sm text-gray-700">
-                      <strong>Travel time:</strong> {duration}
+                    <p className="text-sm text-gray-700 flex items-center">
+                      <strong>Total trip time:</strong>&nbsp;{durationWithBreaks}
+                      <span
+                        className="ml-1 cursor-help text-blue-500"
+                        title={`Includes ${((secWithBreaks - rawDuration)/3600).toFixed(2)} hours breaks` }
+                      >ⓘ</span>
                     </p>
                     {!allIn && (
                     <p className="text-sm text-gray-700">
@@ -1126,7 +1145,5 @@ export default MainPage;
 //TODO2: export from history
 
 //TODO3: integrate in translogica
-
-//TODO: duration fix - add possible stops and a 75km/hr average speed 
 
 // 4:30 - 45 min pauza x 2 + 11 ore pauza 
