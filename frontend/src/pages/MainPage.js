@@ -1140,3 +1140,11 @@ const MainPage = ({ user })  => {
 };
 
 export default MainPage;
+
+//TODO1: spotgo
+
+//TODO2: edit via station - not working properly
+
+//TODO3: integrate in translogica
+
+//Ticketing system:

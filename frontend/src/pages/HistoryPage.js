@@ -10,6 +10,8 @@ import { Link } from 'react-router-dom';
 import { formatNum } from '../utils/number';
 import RouteDetailsModal from '../components/RouteDetailsModal';
 import { addLegalBreaks } from '../utils/driverTime';
+import { exportRoutesExcel } from './helpers/exportRoutesExcel';
+
 
 export default function HistoryPage({ user }) {
   const navigate = useNavigate();
@@ -293,7 +295,7 @@ export default function HistoryPage({ user }) {
                 <th className="px-3 py-2 border">Total</th>
                 <th className="px-3 py-2 border">Addresses</th>
                 {/* Removed All Fees column */}
-                <th className="px-3 py-2 border"></th> {/* Actions column */}
+                <th className="px-3 py-2 border w-24"></th> {/* Actions column */}
               </tr>
             </thead>
 
@@ -398,54 +400,34 @@ export default function HistoryPage({ user }) {
                       )}
                     </td>
 
-                    <td className="px-3 py-2 border text-center flex space-x-2">
+                    <td className="px-3 py-2 border">
                       {isLeadOrAdmin && (
-                        <button
-                          onClick={async e => {
-                            e.stopPropagation();
-                            if (!window.confirm('Delete this route?')) return;
-
-                            // pull the real access token from the Supabase client
-                            const {
-                              data: { session },
-                              error: sessionErr
-                            } = await supabase.auth.getSession();
-                            if (sessionErr || !session?.access_token) {
-                              alert('You must be logged in to delete a route');
-                              return;
-                            }
-                            const token = session.access_token;
-
-                            try {
-                              const res = await fetch(
-                                `/api/routes/${rt.id}`,
-                                {
-                                  method: 'DELETE',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    Authorization: `Bearer ${token}`
-                                  }
-                                }
-                              );
-
-                              if (!res.ok) {
-                                const body = await res.json().catch(() => null);
-                                const msg = body?.error || body?.message || res.statusText;
-                                alert('Delete failed: ' + msg);
-                                return;
-                              }
-
-                              setSavedRoutes(curr => curr.filter(r => r.id !== rt.id));
-                            } catch (err) {
-                              alert('Delete failed: ' + err.message);
-                            }
-                          }}
-                          className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex items-center justify-between space-x-2">
+                          {/* Export on the left, Delete on the right */}
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              exportRoutesExcel([rt], rt.identifier);
+                            }}
+                            className="w-24 whitespace-nowrap text-center bg-blue-600 hover:bg-blue-700 text-white text-sm rounded px-2 py-1"
+                          >
+                            Export XLSX
+                          </button>
+                          <button
+                            onClick={async e => {
+                              e.stopPropagation();
+                              if (!window.confirm('Delete this route?')) return;
+                              /* …delete logic… */
+                            }}
+                            className="w-24 whitespace-nowrap text-center bg-red-600 hover:bg-red-700 text-white text-sm rounded px-2 py-1"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </td>
+
                   </tr>
                 );
               })}
