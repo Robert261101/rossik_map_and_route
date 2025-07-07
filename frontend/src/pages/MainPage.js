@@ -1141,10 +1141,12 @@ const MainPage = ({ user })  => {
 
 export default MainPage;
 
-//TODO1: spotgo
+//TODO1: expell the export all button if the filtered search only returns 1 route
 
-//TODO2: edit via station - not working properly
+//TODO2: spotgo
 
-//TODO3: integrate in translogica
+//TODO3: edit via station - not working properly
+
+//TODO4: integrate in translogica
 
 //Ticketing system:
