@@ -13,7 +13,6 @@ export default  function TeamList({ user }) {
     const navigate = useNavigate();
     const [darkMode, setDarkMode] = React.useState(false);
 
-
     // fetch necesar pentru refresh
     const fetchTeamsAndUsers = async () => {
         try {
@@ -44,8 +43,6 @@ export default  function TeamList({ user }) {
             if (!grouped[teamId]) grouped[teamId] = [];
             grouped[teamId].push(u);
         }
-
-
 
         const teamList = Object.entries(grouped).map(([teamId, members]) => {
             const teamData = teams.find(t => t.id === teamId);
@@ -122,7 +119,6 @@ export default  function TeamList({ user }) {
         }
     };
 
-
     const toggleView = (teamId) => {
         if (viewedTeamId === teamId) {
         setViewedTeamId(null); // close if same team clicked again
@@ -131,8 +127,12 @@ export default  function TeamList({ user }) {
         }
     };
 
-    
-
+    const visibleTeams =
+        user.role === 'admin'
+            ? teams
+            : user.role === 'team_lead'
+            ? teams.filter(t => t.teamId === user.team_id)
+            : [];
 
     return (
         <div className={`min-h-screen top-0 z-50 transition-colors duration-500 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
@@ -161,22 +161,21 @@ export default  function TeamList({ user }) {
 
                 {/* Show admin buttons only for admin */}
                 {user.role === 'admin' && (
-                <>
                     <button
                     onClick={() => navigate('/admin')}
                     className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
                     >
                     Admin Panel
                     </button>
-                    <button
-                    onClick={() => navigate('/admin/teams')}
-                    className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-                    >
-                    Teams
-                    </button>
-                </>
                 )}
-
+                {(user.role === 'admin' || user.role === 'team_lead') && (
+                    <button
+                        onClick={() => navigate('/admin/teams')}
+                        className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+                    >
+                        Teams
+                    </button>
+                )}
                 <button
                 onClick={() => navigate('/')}
                 className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
@@ -208,16 +207,18 @@ export default  function TeamList({ user }) {
         <div className="p-6 max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-10">
             <h1 className="text-4xl font-extrabold">Teams</h1>
-            <button
-                className="bg-gradient-to-r from-emerald-400 to-emerald-600 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
-                onClick={() => navigate('/add')}
-            >
-                Add Team
-            </button>
+            {user.role === 'admin' && (
+                <button
+                    className="bg-gradient-to-r from-emerald-400 to-emerald-600 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
+                    onClick={() => navigate('/add')}
+                >
+                    Add Team
+                </button>
+            )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-            {teams.map((team, index) => (
+            {visibleTeams.map((team, index) => (
                 <div
                 key={index}
                 className="relative border border-white/30 bg-white/80 dark:bg-gray-800/30 backdrop-blur-md rounded-lg p-6 text-center shadow-xl hover:shadow-2xl transition-transform duration-300 transform hover:scale-[1.02]"
@@ -239,7 +240,7 @@ export default  function TeamList({ user }) {
                     ))}
                     </ul>
                 </div>
-                <button
+                {/* <button
                     onClick={() => handleDelete(team.teamId)}
                     className="bg-gradient-to-r from-red-400 to-red-600 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
                 >
@@ -250,7 +251,34 @@ export default  function TeamList({ user }) {
                     className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
                 >
                     View
-                </button>
+                </button> */}
+                <div className="flex justify-center space-x-2 mt-4">
+                {user.role === 'admin' && (
+                    <>
+                    <button
+                        onClick={() => handleDelete(team.teamId)}
+                        className="bg-gradient-to-r from-red-400 to-red-600 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
+                    >
+                        Delete Team
+                    </button>
+                    <button 
+                        onClick={() => navigate(`/admin/teams/${team.teamId}`)}
+                        className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
+                    >
+                        View
+                    </button>
+                    </>
+                )}
+                {user.role === 'team_lead' && (
+                    <button 
+                        onClick={() => navigate(`/admin/teams/${team.teamId}`)}
+                        className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
+                    >
+                        View
+                    </button>
+                )}
+                </div>
+
                 </div>
             ))}
             </div>

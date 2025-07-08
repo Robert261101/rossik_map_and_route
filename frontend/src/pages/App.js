@@ -112,7 +112,7 @@ export default function App() {
           element={user && user.role === 'admin' ? <AdminDashboard user={user} /> : <Navigate to="/" />} />
         <Route
           path="/admin/teams"
-          element={user && user.role === 'admin' ? <TeamList user={user} /> : <Navigate to="/" />} />
+          element={user && (user.role === 'admin' || user.role === 'team_lead') ? <TeamList user={user} /> : <Navigate to="/" />} />
         <Route
           path="/admin/user/add"
           element={user && user.role === 'admin' ? <AddUser user={user} /> : <Navigate to="/" />} />
@@ -130,14 +130,13 @@ export default function App() {
           element={user && user.role === 'admin' ? <DeleteTruck user={user} /> : <Navigate to="/" />} />
         <Route
           path="/add"
-          element={<AddTeam user={user} />} />
+          element={user && user.role === 'admin' ? <AddTeam user={user} /> : <Navigate to="/" />} />
         <Route
           path="/admin/teams/:teamId"
           element={<TeamView />} />
         <Route
           path="/admin/teams/:teamId/add-members"
-          element={<AddTeamMembers />} />
-
+          element={user && (user.role === 'admin' || user.role === 'team_lead') ? <AddTeamMembers user={user} /> : <Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
   )

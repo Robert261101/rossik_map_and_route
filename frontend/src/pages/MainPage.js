@@ -725,21 +725,22 @@ const MainPage = ({ user })  => {
             {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
           </button> */}
           {user.role === 'admin' && (
-            <>
-              <button
-                onClick={() => navigate('/admin')}
-                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-              >
-                Admin Panel
-              </button>
-              <button
-                onClick={() => navigate('/admin/teams')}
-                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-              >
-                Teams
-              </button>
-            </>
+            <button
+              onClick={() => navigate('/admin')}
+              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+            >
+              Admin Panel
+            </button>
           )}
+          {(user.role === 'admin' || user.role === 'team_lead') && (
+            <button
+              onClick={() => navigate('/admin/teams')}
+              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+            >
+              Teams
+            </button>
+          )}
+
           <button
             onClick={() => navigate('/')}
             className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
