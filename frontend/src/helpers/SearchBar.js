@@ -104,7 +104,7 @@ export default function SearchBar({ savedRoutes }) {
         Search
       </button>
 
-      {appliedFilter && (
+      {appliedFilter && exportList.length > 1 && (
         <button
           type="button"
           className="text-base px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-medium shadow whitespace-nowrap transition"
@@ -113,6 +113,7 @@ export default function SearchBar({ savedRoutes }) {
           Export Filtered XLSX
         </button>
       )}
+
 
       {suggestions.length > 0 && (
         <ul
