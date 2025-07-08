@@ -88,7 +88,7 @@ export default function SearchBar({ savedRoutes }) {
       <input
         type="search"
         placeholder="Filter History..."
-        value={query}
+        value={query ?? ''}
         onChange={e => setQuery(e.target.value)}
         onKeyDown={onKeyDown}
         className="flex-grow px-2 py-1 border rounded text-lg"

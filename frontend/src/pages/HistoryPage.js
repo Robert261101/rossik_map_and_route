@@ -418,7 +418,38 @@ export default function HistoryPage({ user }) {
                             onClick={async e => {
                               e.stopPropagation();
                               if (!window.confirm('Delete this route?')) return;
-                              /* …delete logic… */
+
+                              // pull the real access token from Supabase
+                              const {
+                                data: { session },
+                                error: sessionErr
+                              } = await supabase.auth.getSession();
+                              if (sessionErr || !session?.access_token) {
+                                alert('You must be logged in to delete a route');
+                                return;
+                              }
+                              const token = session.access_token;
+
+                              try {
+                                const res = await fetch(`/api/routes/${rt.id}`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    Authorization: `Bearer ${token}`
+                                  }
+                                });
+
+                                if (!res.ok) {
+                                  const body = await res.json().catch(() => null);
+                                  const msg = body?.error || body?.message || res.statusText;
+                                  alert('Delete failed: ' + msg);
+                                  return;
+                                }
+
+                                setSavedRoutes(curr => curr.filter(r => r.id !== rt.id));
+                              } catch (err) {
+                                alert('Delete failed: ' + err.message);
+                              }
                             }}
                             className="w-24 whitespace-nowrap text-center bg-red-600 hover:bg-red-700 text-white text-sm rounded px-2 py-1"
                           >
