@@ -23,7 +23,7 @@ const MainPage = ({ user })  => {
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
   const [vehicleType, setVehicleType] = useState({
     axles: 5,
-    weight: 40000,
+    weight: 4000,
     EuroPerKm: null, // exemplu
     pricePerDay: null
   });
@@ -687,13 +687,34 @@ const MainPage = ({ user })  => {
     }
   }, [plate, trucks])
 
-
-
   useEffect(() => {
-      if (mapRef.current && routes.length > 0) {
-        window.dispatchEvent(new Event('resize'));
+    if (mapRef.current && routes.length > 0) {
+      window.dispatchEvent(new Event('resize'));
+    }
+  }, [routes]);
+
+  //  ▶︎ new effect: once every route has a tollCost, pick the cheapest
+  useEffect(() => {
+    if (routes.length === 0) return;
+    // make sure tollCosts has been filled for all routes:
+    if (tollCosts.length !== routes.length) return;
+
+    let cheapestIdx = 0;
+    let minCost    = tollCosts[0].totalCost ?? Infinity;
+
+    tollCosts.forEach((tc, idx) => {
+      if ((tc.totalCost ?? Infinity) < minCost) {
+        minCost    = tc.totalCost;
+        cheapestIdx = idx;
       }
-    }, [routes]);
+    });
+
+    // only switch if it’s different
+    if (cheapestIdx !== selectedRouteIndex) {
+      setSelectedRouteIndex(cheapestIdx);
+      displayRoute(routes[cheapestIdx]);
+    }
+  }, [routes, tollCosts]);
 
   return (
   <div className="App flex flex-col h-screen">
@@ -1124,6 +1145,7 @@ const MainPage = ({ user })  => {
         {routes.map((route, index) => (
           <TollCalculator
             key={index}
+            routeIndex={index}
             startCoordinates={addresses.length >= 2 ? addresses[0] : null}
             endCoordinates={addresses.length >= 2 ? addresses[addresses.length - 1] : null}
             intermediatePoints={addresses.length > 2 ? addresses.slice(1, addresses.length - 1) : []}
@@ -1142,9 +1164,9 @@ const MainPage = ({ user })  => {
 
 export default MainPage;
 
-//TODO1: expell the export all button if the filtered search only returns 1 route
+//TODO1: check toll calculation and why its different from desktop app
 
-//TODO2: spotgo
+//TODO2: spotgo - might be done - go to 3
 
 //TODO3: edit via station - not working properly
 
