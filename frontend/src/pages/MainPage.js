@@ -243,21 +243,30 @@ const MainPage = ({ user })  => {
         return;
       }
 
-      setRoutes(data.routes);
-      
-      // Initialize costs for each route
-      const initialCosts = Array.from({ length: data.routes.length }, () => 0);
-      setRouteTaxCosts(initialCosts);
 
-      // Initialize tollCosts for storing tollList
-      const initialTollLists = Array.from({ length: data.routes.length }, () => ({
+      const rawRoutes = data.routes;
+
+      const withDurations = rawRoutes.map(route => {
+        const totalDuration = route.sections
+          .reduce((sum, s) => sum + (s.summary?.duration || 0), 0);
+        return { route, duration: totalDuration };
+      });
+
+      withDurations.sort((a, b) => a.duration - b.duration);
+
+      const sortedRoutes = withDurations.map(({ route }) => route);
+
+      const initialCosts = Array(sortedRoutes.length).fill(0);
+      const initialTollLists = Array(sortedRoutes.length).fill({
         totalCost: 0,
         tollList: []
-      }));
-      setTollCosts(initialTollLists);
+      });
 
+      setRoutes(sortedRoutes);
+      setRouteTaxCosts(initialCosts);
+      setTollCosts(initialTollLists);
       setSelectedRouteIndex(0);
-      displayRoute(data.routes[0]);
+      displayRoute(sortedRoutes[0]);
 
       if (data.routes[0].sections && data.routes[0].sections.length > 0) {
         let totalDistance = 0;
@@ -693,28 +702,24 @@ const MainPage = ({ user })  => {
     }
   }, [routes]);
 
-  //  ▶︎ new effect: once every route has a tollCost, pick the cheapest
+  // ▶︎ new effect: once routes arrive, pick the fastest by total duration
   useEffect(() => {
     if (routes.length === 0) return;
-    // make sure tollCosts has been filled for all routes:
-    if (tollCosts.length !== routes.length) return;
 
-    let cheapestIdx = 0;
-    let minCost    = tollCosts[0].totalCost ?? Infinity;
+    // Calculate each route’s total travel time (in seconds)
+    const durations = routes.map(r =>
+      r.sections.reduce((sum, s) => sum + (s.summary?.duration || 0), 0)
+    );
 
-    tollCosts.forEach((tc, idx) => {
-      if ((tc.totalCost ?? Infinity) < minCost) {
-        minCost    = tc.totalCost;
-        cheapestIdx = idx;
-      }
-    });
+    // Find the index of the shortest one
+    const fastestIdx = durations.indexOf(Math.min(...durations));
 
-    // only switch if it’s different
-    if (cheapestIdx !== selectedRouteIndex) {
-      setSelectedRouteIndex(cheapestIdx);
-      displayRoute(routes[cheapestIdx]);
+    // Only switch if it’s a different route
+    if (fastestIdx !== selectedRouteIndex) {
+      setSelectedRouteIndex(fastestIdx);
+      displayRoute(routes[fastestIdx]);
     }
-  }, [routes, tollCosts]);
+  }, [routes]);  // Re-run whenever the routes array changes
 
   return (
   <div className="App flex flex-col h-screen">
