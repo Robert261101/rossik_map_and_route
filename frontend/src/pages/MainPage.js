@@ -23,7 +23,7 @@ const MainPage = ({ user })  => {
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
   const [vehicleType, setVehicleType] = useState({
     axles: 5,
-    weight: 4000,
+    weight: 40000,
     EuroPerKm: null, // exemplu
     pricePerDay: null
   });
