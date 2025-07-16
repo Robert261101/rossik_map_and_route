@@ -82,3 +82,19 @@ li:hover {
   text-shadow: 0 0 2px black;
   pointer-events: none;
 }
+
+.via-handle {
+  background: white !important;
+  border-color: black !important;
+  opacity: 0.8;
+  position: absolute;      /* ← make it participate in the DOM flow */
+  top: 0; left: 0;         /* ← will be positioned by the map’s DomIcon */
+  width: 20px;
+  height: 20px;
+  border: 2px solid #333;
+  border-radius: 50%;
+  cursor: grab;
+  z-index: 9999;                /* float above the polyline */
+  pointer-events: all;          /* absolutely catch clicks */
+}
+.via-handle:active { cursor: grabbing; }

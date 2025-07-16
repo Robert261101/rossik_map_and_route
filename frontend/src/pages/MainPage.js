@@ -11,6 +11,8 @@ import { Link } from "react-router-dom";
 import RossikLogo from '../VektorLogo_Rossik_rot.gif';
 import { formatNum } from "../utils/number";
 import { addLegalBreaks } from "../utils/driverTime";
+import { debounce } from 'lodash'
+import { calculateAndDisplayLiveRoute } from "./helpers/liveRoute";
 import "./App.css";
 
 const MainPage = ({ user })  => {
@@ -18,6 +20,7 @@ const MainPage = ({ user })  => {
   const [fixedTotalCost, setFixedTotalCost] = useState(''); // only used when allIn===true
   const [activeTab, setActiveTab] = useState("input"); // "input" | "results"
   const [addresses, setAddresses] = useState([]);
+  const [viaLocation, setViaLocation] = useState(null);
   const [distance, setDistance] = useState(null);
   const [routes, setRoutes] = useState([]); // Array cu rutele alternative
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
@@ -34,7 +37,6 @@ const MainPage = ({ user })  => {
   const [rawDuration, setRawDuration] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const mapRef = useRef(null);
-  const circleRef = useRef(null);
   const markerGroupRef = useRef(null);
   const navigate = useNavigate()
   let apiCallCount = 0;
@@ -47,6 +49,10 @@ const MainPage = ({ user })  => {
   const [identifier, setIdentifier] = useState(''); // unique run ID
   const [saveMsg, setSaveMsg] = useState('');
   const [durationWithBreaks, setDurationWithBreaks] = useState(null);
+
+  const viaRef = useRef(null);
+  const behaviorRef = useRef(null);
+  const currentLineGeom = useRef(null);
 
   //compute total wall-clock seconds (driving + breaks) once per render
   const secWithBreaks = rawDuration != null
@@ -199,18 +205,12 @@ const MainPage = ({ user })  => {
   };
 
   // Obținere rute
-  const getRoute = async () => {
-
-    // if (addresses.length < 2) {
-    //   alert("Please enter at least two addresses!");
-    //   return;
-    // }
-    
+  const getRoute = async (pts = addresses) => {    
     setIsLoading(true);
     
-    const startCoordinates = addresses[0];
-    const endCoordinates = addresses[addresses.length - 1];
-    const intermediatePoints = addresses.slice(1, addresses.length - 1);
+    const startCoordinates = pts[0];
+    const endCoordinates = pts[pts.length - 1];
+    const intermediatePoints = pts.slice(1, pts.length - 1);
     try {
       let url = `https://router.hereapi.com/v8/routes?origin=${startCoordinates.lat},${startCoordinates.lng}`;
       intermediatePoints.forEach((point) => {
@@ -299,25 +299,88 @@ const MainPage = ({ user })  => {
 
   // Afișare rută pe hartă
   const displayRoute = (route) => {
-    if (!mapRef.current) return;
-    //mapRef.current.getObjects().forEach((obj) => mapRef.current.removeObject(obj));
-    mapRef.current.getObjects().forEach((obj) => {
-      if (obj instanceof window.H.map.Polyline) {
-        mapRef.current.removeObject(obj);
-      }
+  if (!mapRef.current) return;
+  // Remove existing polylines
+  mapRef.current.getObjects().forEach(obj => {
+    if (obj instanceof window.H.map.Polyline) {
+      mapRef.current.removeObject(obj);
+    }
+  });
+
+  // Draw route polylines
+  route.sections.forEach(section => {
+    const lineString = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
+    const routeLine = new window.H.map.Polyline(lineString, { style: { strokeColor: 'blue', lineWidth: 4 } });
+    mapRef.current.addObject(routeLine);
+    const bounds = routeLine.getBoundingBox();
+    if (bounds) mapRef.current.getViewModel().setLookAtData({ bounds });
+
+    // Remove old via marker
+    if (viaRef.current) {
+      mapRef.current.removeObject(viaRef.current);
+    }
+
+    // Compute midpoint
+    const geom = routeLine.getGeometry();
+    const midIndex = Math.floor(geom.getPointCount() / 2);
+    const midPoint = geom.extractPoint(midIndex);
+
+    // Create DOM element and marker
+    const viaEl = document.createElement('div');
+    viaEl.className = 'via-handle';
+    viaEl.style.cursor = 'grab';  // show grab cursor
+    const icon = new window.H.map.DomIcon(viaEl, { volatility: true });
+    const viaMarker = new window.H.map.DomMarker(midPoint, { icon, volatility: true });
+    mapRef.current.addObject(viaMarker);
+    viaRef.current = viaMarker;
+
+    let dragging = false;
+
+    const debouncedLive = debounce((lat, lng) => {
+      calculateAndDisplayLiveRoute(
+        mapRef.current,
+        addresses[0],
+        addresses[addresses.length - 1],
+        vehicleType,
+        lat,
+        lng,
+        process.env.REACT_APP_HERE_API_KEY      // ← now the 7th and last argument
+      )
+    }, 200)
+
+    // Start drag on marker
+    viaMarker.addEventListener('pointerdown', mapsEvent => {
+      mapsEvent.stopPropagation();
+      dragging = true;
+      viaEl.style.cursor = 'grabbing';
+      behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
     });
-    route.sections.forEach((section) => {
-      const lineString = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
-      const routeLine = new window.H.map.Polyline(lineString, {
-        style: { strokeColor: "blue", lineWidth: 4 },
-      });
-      mapRef.current.addObject(routeLine);
-      const boundingBox = routeLine.getBoundingBox();
-      if (boundingBox) {
-        mapRef.current.getViewModel().setLookAtData({ bounds: boundingBox });
-      }
+
+
+    // Drag on map
+    mapRef.current.addEventListener('pointermove', mapEvt => {
+      if (!dragging) return;
+      const { viewportX, viewportY } = mapEvt.currentPointer;
+      const geo = mapRef.current.screenToGeo(viewportX, viewportY);
+      viaMarker.setGeometry(geo);
+      debouncedLive(geo.lat, geo.lng);
     });
-  };
+
+    // End drag on map
+    mapRef.current.addEventListener('pointerup', mapEvt => {
+      if (!dragging) return;
+      dragging = false;
+      viaEl.style.cursor = 'grab';
+      behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+      debouncedLive.flush();
+
+      const finalGeo = viaMarker.getGeometry();
+      setViaLocation({ lat: finalGeo.lat, lng: finalGeo.lng });
+    });
+  });
+};
+
+
 
   // Selectare rută
   const handleRouteSelect = (index) => {
@@ -351,8 +414,14 @@ const MainPage = ({ user })  => {
       alert('Trebuie să adaugi minimum două adrese înainte de calcul.');
       return;
     }
+    // If user dragged a via, insert it between start & end
+    let coords = [...addresses];
+    if (viaLocation) {
+      coords = [ coords[0], viaLocation, coords[ coords.length - 1 ] ];
+    }
     apiCallCount++;
-    await getRoute();
+    await getRoute(coords);
+    setViaLocation(null);
   };
 
   // 3) Callback - când TollCalculator calculează costul pt o rută, îl salvăm și într-un array numeric simplu routeTaxCosts, și în tollCosts (pt listă).
@@ -372,164 +441,6 @@ const MainPage = ({ user })  => {
       return newArr;
     });
   };
-
-  // 0) Funcţia de reverse‑geocoding HERE
-  const reverseGeocode = async (lat, lng) => {
-    const apiKey = process.env.REACT_APP_HERE_API_KEY;  // înlocuieşte cu cheia ta
-    const revUrl = `https://revgeocode.search.hereapi.com/v1/revgeocode` +
-                  `?at=${lat},${lng}` +
-                  `&lang=en-US` +
-                  `&limit=1` +
-                  `&apikey=${apiKey}`;
-    try {
-      const response = await fetch(revUrl);
-      const data = await response.json();
-      if (data.items && data.items.length > 0) {
-        const item = data.items[0];
-        return {
-          lat:  item.position.lat,
-          lng:  item.position.lng,
-          label: item.address.label || item.title || "Via Station",
-          isVia: true,
-          radius: 10000
-        };
-      }
-    } catch (error) {
-      console.error("Reverse geocode error:", error);
-    }
-    return null;
-  };
-
-
-  // 1) Funcție utilitară: deplasare de X kilometri pe latitudine/longitudine
-  function offsetLatLng({ lat, lng }, distanceKm, angleRad) {
-    const R = 6371; // raza Pământului în km
-    const δ = distanceKm / R; 
-    const θ = angleRad;
-    const φ1 = lat * Math.PI / 180;
-    const λ1 = lng * Math.PI / 180;
-    const φ2 = Math.asin(
-      Math.sin(φ1) * Math.cos(δ) +
-      Math.cos(φ1) * Math.sin(δ) * Math.cos(θ)
-    );
-    const λ2 = λ1 + Math.atan2(
-      Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
-      Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2)
-    );
-    return { lat: φ2 * 180/Math.PI, lng: λ2 * 180/Math.PI };
-  }
-
-  // 2) În interiorul App() — înainte de useEffect
-  const findBestViaInCircle = async (center, radiusKm) => {
-    if (!addresses.length) return null;
-    const start = addresses[0], end = addresses[addresses.length-1];
-    let best = null;
-    let bestCost = Infinity;
-
-    // Generăm 24 candidați la fiecare 30°
-    const steps = 24;
-    for (let i = 0; i < steps; i++) {
-      const angle = (2 * Math.PI / steps) * i;
-      const via = offsetLatLng(center, radiusKm, angle);
-
-      // Construim URL‐ul HERE cu acest via
-      const url = new URL("https://router.hereapi.com/v8/routes");
-      url.searchParams.set("origin", `${start.lat},${start.lng}`);
-      url.searchParams.set("via", `${via.lat},${via.lng}`);
-      url.searchParams.set("destination", `${end.lat},${end.lng}`);
-      url.searchParams.set("transportMode", "truck");
-      url.searchParams.set("return", "summary");
-      url.searchParams.set("routingMode", "fast");
-      url.searchParams.set("vehicle[height]", "400");
-      url.searchParams.set("vehicle[weightPerAxle]", "11500");
-      url.searchParams.set("vehicle[width]", "255");
-      url.searchParams.set("truck[axleCount]", `${vehicleType.axles}`);
-      url.searchParams.set("vehicle[grossWeight]", `${vehicleType.weight}`);
-      url.searchParams.set("vehicle[length]", "1875");
-      url.searchParams.set("apikey", `${process.env.REACT_APP_HERE_API_KEY}`);
-      
-
-
-      try {
-        const res = await fetch(url);
-        const json = await res.json();
-        if (json.routes?.[0]?.sections) {
-          // Suma distanțelor din summary
-          const dist = json.routes[0].sections.reduce((sum, s) => sum + (s.summary?.length||0), 0);
-          if (dist < bestCost) {
-            bestCost = dist;
-            best = { via, cost: dist };
-          }
-        }
-      } catch (e) {
-        console.warn("HERE request failed for candidate", via, e);
-      }
-    }
-    return best;
-  };
-
-  // 3) În useEffect pentru click dreapta
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-
-    const onRightClick = async (evt) => {
-      evt.preventDefault();
-      const pointer = evt.currentPointer || evt.pointer || evt;
-      const coord = map.screenToGeo(pointer.viewportX, pointer.viewportY);
-
-      // Desenăm cercul
-      if (circleRef.current && map.getObjects().includes(circleRef.current)) map.removeObject(circleRef.current); circleRef.current = null;
-
-      const circle = new window.H.map.Circle(coord, 10000, {
-        style: { fillColor: "rgba(0,0,255,0.3)", strokeColor: "blue" }
-      });
-      map.addObject(circle);
-      circleRef.current = circle;
-
-      // Calculăm cel mai bun via
-      const best = await findBestViaInCircle(coord, 10 /*km*/);
-      if (best) {
-
-        const viaStation = {
-          lat: best.via.lat,
-          lng: best.via.lng,
-          label: `Lat: ${best.via.lat.toFixed(4)}, Lng: ${best.via.lng.toFixed(4)}`,
-          isVia: true,
-          radius: 10000
-        };
-
-        // obține numele locației prin reverse geocode
-        const locationInfo = await reverseGeocode(best.via.lat, best.via.lng);
-        //const label = `Lat: ${item.position.lat}, Lng: ${item.position.lng}`;
-        const label = locationInfo?.label || "Via zone";
-
-        // Înlocuim lista de adrese cu noul via
-        setAddresses(prev => [
-          prev[0],
-          viaStation,
-          prev[prev.length-1]
-        ]);
-        // Recalculăm ruta
-        apiCallCount++;
-        await getRoute();
-      } else {
-        alert("Nu am găsit niciun drum în zona selectată.");
-      }
-
-      // Curățare cerc după 2s
-      setTimeout(() => {
-        if (circleRef.current && map.getObjects().includes(circleRef.current)) {
-          map.removeObject(circleRef.current);
-          circleRef.current = null;
-      }
-      }, 2000);
-    };
-
-    map.addEventListener("contextmenu", onRightClick);
-    return () => map.removeEventListener("contextmenu", onRightClick);
-  }, [addresses, routes, selectedRouteIndex]); // Adaugă dependințele necesare
-    
   
   useEffect(() => {
     if (mapRef.current) return; 
@@ -546,6 +457,7 @@ const MainPage = ({ user })  => {
     
     // Important: initialize behavior & UI
     const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
+    behaviorRef.current = behavior;
     const ui = window.H.ui.UI.createDefault(map, defaultLayers);
   
     // Important: asigurăm vector base layer activ
@@ -637,12 +549,7 @@ const MainPage = ({ user })  => {
         { lat: pt.lat, lng: pt.lng },
         { icon: domIcon, volatility: true }
       );
-
       marker.__domElement = el;
-    
-      //const simpleMarker = new window.H.map.Marker({lat: pt.lat, lng: pt.lng});
-      //mapRef.current.addObject(simpleMarker);
-
       group.addObject(marker);
     });
     
@@ -720,6 +627,8 @@ const MainPage = ({ user })  => {
       displayRoute(routes[fastestIdx]);
     }
   }, [routes]);  // Re-run whenever the routes array changes
+
+  
 
   return (
   <div className="App flex flex-col h-screen">
@@ -859,7 +768,7 @@ const MainPage = ({ user })  => {
                   <input
                     type="number"
                     name="axles"
-                    value={vehicleType.axles}
+                    value={vehicleType.axles ?? ""}
                     onChange={(e) => {
                       const value = parseFloat(e.target.value);
                       setVehicleType((prev) => ({ ...prev, axles: isNaN(value) ? prev.axles : value }));
@@ -874,7 +783,7 @@ const MainPage = ({ user })  => {
                   <input
                     type="number"
                     name="weight"
-                    value={vehicleType.weight}
+                    value={vehicleType.weight ?? ""}
                     onChange={(e) => {
                       const value = parseFloat(e.target.value);
                       setVehicleType((prev) => ({ ...prev, weight: isNaN(value) ? prev.weight : value }));
@@ -892,7 +801,7 @@ const MainPage = ({ user })  => {
                        inputMode="decimal"
                        step="0.01"
                        name="EuroPerKm"
-                       value={vehicleType.EuroPerKm}
+                       value={vehicleType.EuroPerKm ?? ""}
                        onChange={e => {
                          const raw = e.target.value.trim().replace(',', '.')
                          const parsed = parseFloat(raw)
@@ -912,7 +821,7 @@ const MainPage = ({ user })  => {
                      <input
                        type="number"
                        step="0.01"
-                       value={fixedTotalCost}
+                       value={fixedTotalCost ?? ""}
                        onChange={e => setFixedTotalCost(e.target.value)}
                        className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
                      />
@@ -1170,8 +1079,6 @@ const MainPage = ({ user })  => {
 export default MainPage;
 
 //TODO1: check toll calculation and why its different from desktop app
-
-//TODO2: spotgo - might be done - go to 3
 
 //TODO3: edit via station - not working properly
 

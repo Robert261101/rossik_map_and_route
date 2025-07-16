@@ -16,9 +16,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.50.2",
     "file-saver": "^2.0.5",
+    "here-maps": "^3.0.2",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
     "leaflet": "^1.9.4",
+    "lodash": "^4.17.21",
     "lucide-react": "^0.515.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
