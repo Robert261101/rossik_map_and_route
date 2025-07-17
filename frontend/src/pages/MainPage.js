@@ -299,88 +299,99 @@ const MainPage = ({ user })  => {
 
   // Afișare rută pe hartă
   const displayRoute = (route) => {
-  if (!mapRef.current) return;
-  // Remove existing polylines
-  mapRef.current.getObjects().forEach(obj => {
-    if (obj instanceof window.H.map.Polyline) {
-      mapRef.current.removeObject(obj);
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+
+    // 1) Clear old polylines & via-marker
+    map.getObjects().forEach(obj => {
+      if (obj instanceof window.H.map.Polyline) {
+        map.removeObject(obj);
+      }
+      if (obj === viaRef.current) {
+        map.removeObject(obj);
+      }
+    });
+
+    // 2) Build one continuous LineString and draw each blue segment
+    const fullLineString = new window.H.geo.LineString();
+    route.sections.forEach(section => {
+      // decode this section
+      const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
+
+      // push its points into fullLineString
+      const pts = ls.getLatLngAltArray(); // [lat, lng, alt, lat, lng, alt, ...]
+      for (let i = 0; i < pts.length; i += 3) {
+        fullLineString.pushLatLngAlt(pts[i], pts[i+1], pts[i+2]);
+      }
+
+      // draw the blue polyline
+      const poly = new window.H.map.Polyline(ls, {
+        style: { strokeColor: 'blue', lineWidth: 4 }
+      });
+      map.addObject(poly);
+    });
+
+    // 3) Center the map on the new route
+    const bounds = fullLineString.getBoundingBox();
+    if (bounds) {
+      map.getViewModel().setLookAtData({ bounds });
     }
-  });
 
-  // Draw route polylines
-  route.sections.forEach(section => {
-    const lineString = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
-    const routeLine = new window.H.map.Polyline(lineString, { style: { strokeColor: 'blue', lineWidth: 4 } });
-    mapRef.current.addObject(routeLine);
-    const bounds = routeLine.getBoundingBox();
-    if (bounds) mapRef.current.getViewModel().setLookAtData({ bounds });
+    // 4) Compute the true midpoint of all points
+    const totalPts = fullLineString.getPointCount();
+    const midGeo = fullLineString.extractPoint(Math.floor(totalPts / 2));
+    const markerGeo = viaLocation ?? midGeo;
 
-    // Remove old via marker
-    if (viaRef.current) {
-      mapRef.current.removeObject(viaRef.current);
-    }
-
-    // Compute midpoint
-    const geom = routeLine.getGeometry();
-    const midIndex = Math.floor(geom.getPointCount() / 2);
-    const midPoint = geom.extractPoint(midIndex);
-
-    // Create DOM element and marker
+    // 5) Create & place the via-handle there
     const viaEl = document.createElement('div');
     viaEl.className = 'via-handle';
-    viaEl.style.cursor = 'grab';  // show grab cursor
+    viaEl.style.cursor = 'grab';
     const icon = new window.H.map.DomIcon(viaEl, { volatility: true });
-    const viaMarker = new window.H.map.DomMarker(midPoint, { icon, volatility: true });
-    mapRef.current.addObject(viaMarker);
+    const viaMarker = new window.H.map.DomMarker(markerGeo, { icon, volatility: true });
+    map.addObject(viaMarker);
     viaRef.current = viaMarker;
 
+    // 6) Reattach your existing drag logic
     let dragging = false;
-
     const debouncedLive = debounce((lat, lng) => {
       calculateAndDisplayLiveRoute(
-        mapRef.current,
+        map,
         addresses[0],
         addresses[addresses.length - 1],
         vehicleType,
         lat,
         lng,
-        process.env.REACT_APP_HERE_API_KEY      // ← now the 7th and last argument
-      )
-    }, 200)
+        process.env.REACT_APP_HERE_API_KEY
+      );
+    }, 200);
 
-    // Start drag on marker
-    viaMarker.addEventListener('pointerdown', mapsEvent => {
-      mapsEvent.stopPropagation();
+    viaMarker.addEventListener('pointerdown', evt => {
+      evt.stopPropagation();
+      // setViaLocation(null);      // ← clear old VIA coords immediately
+
       dragging = true;
       viaEl.style.cursor = 'grabbing';
       behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
     });
 
-
-    // Drag on map
-    mapRef.current.addEventListener('pointermove', mapEvt => {
+    map.addEventListener('pointermove', evt => {
       if (!dragging) return;
-      const { viewportX, viewportY } = mapEvt.currentPointer;
-      const geo = mapRef.current.screenToGeo(viewportX, viewportY);
+      const { viewportX, viewportY } = evt.currentPointer;
+      const geo = map.screenToGeo(viewportX, viewportY);
       viaMarker.setGeometry(geo);
       debouncedLive(geo.lat, geo.lng);
     });
 
-    // End drag on map
-    mapRef.current.addEventListener('pointerup', mapEvt => {
+    map.addEventListener('pointerup', () => {
       if (!dragging) return;
       dragging = false;
       viaEl.style.cursor = 'grab';
       behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
       debouncedLive.flush();
-
       const finalGeo = viaMarker.getGeometry();
       setViaLocation({ lat: finalGeo.lat, lng: finalGeo.lng });
     });
-  });
-};
-
-
+  };
 
   // Selectare rută
   const handleRouteSelect = (index) => {
@@ -421,7 +432,7 @@ const MainPage = ({ user })  => {
     }
     apiCallCount++;
     await getRoute(coords);
-    setViaLocation(null);
+    // setViaLocation(null);
   };
 
   // 3) Callback - când TollCalculator calculează costul pt o rută, îl salvăm și într-un array numeric simplu routeTaxCosts, și în tollCosts (pt listă).
@@ -740,6 +751,13 @@ const MainPage = ({ user })  => {
                     </li>
                   ))}
                 </ul>
+                {viaLocation && (
+                  <div className="mt-2 text-sm text-gray-700">
+                    <strong>VIA:</strong>{' '}
+                    lat: {viaLocation.lat.toFixed(5)},{' '}
+                    lng: {viaLocation.lng.toFixed(5)}
+                  </div>
+                )}
                 <button
                   type="submit"
                   disabled={isLoading}

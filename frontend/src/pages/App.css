@@ -89,8 +89,8 @@ li:hover {
   opacity: 0.8;
   position: absolute;      /* ← make it participate in the DOM flow */
   top: 0; left: 0;         /* ← will be positioned by the map’s DomIcon */
-  width: 20px;
-  height: 20px;
+  width: 15px;
+  height: 15px;
   border: 2px solid #333;
   border-radius: 50%;
   cursor: grab;
