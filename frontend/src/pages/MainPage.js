@@ -365,6 +365,18 @@ const displayRoute = (route) => {
   map.addObject(viaMarker);
   viaRef.current = viaMarker;
 
+    viaEl.style.opacity = '0.2';              // hide by default
+viaEl.style.pointerEvents = 'auto';     // still catch hover
+
+viaEl.addEventListener('pointerenter', () => {
+  viaEl.style.opacity = '0.8';            // show instantly
+});
+
+viaEl.addEventListener('pointerleave', () => {
+  viaEl.style.opacity = '0.2';            // hide again
+});
+
+
   // 6) re-attach drag logic (no snapping!)
   let dragging = false;
   const debouncedLive = debounce((lat, lng) => {
@@ -776,7 +788,7 @@ const displayRoute = (route) => {
                     if(postal === ""){
                       display = `${addressOnly}, ${countryName}`;
                     } else {
-                      display = `${countryCode}-${postal} – ${addressOnly}`;
+                      display = `${countryCode}-${postal} ${addressOnly}`;
                     }
 
                     return (
@@ -1158,7 +1170,3 @@ export default MainPage;
 //TODO4: integrate in translogica
 
 //Ticketing system:
-
-// de ex: DE-cod postal-localitate-strada
-
-// via - cod postal
