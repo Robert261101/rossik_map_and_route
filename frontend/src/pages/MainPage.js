@@ -13,6 +13,7 @@ import { formatNum } from "../utils/number";
 import { addLegalBreaks } from "../utils/driverTime";
 import { debounce } from 'lodash'
 import { calculateAndDisplayLiveRoute } from "./helpers/liveRoute";
+import { fetchPostalCode } from "./helpers/reversePostal.js";
 import "./App.css";
 
 const MainPage = ({ user })  => {
@@ -21,6 +22,7 @@ const MainPage = ({ user })  => {
   const [activeTab, setActiveTab] = useState("input"); // "input" | "results"
   const [addresses, setAddresses] = useState([]);
   const [viaLocation, setViaLocation] = useState(null);
+  const [viaPostal, setViaPostal]     = useState(null);
   const [distance, setDistance] = useState(null);
   const [routes, setRoutes] = useState([]); // Array cu rutele alternative
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
@@ -183,9 +185,25 @@ const MainPage = ({ user })  => {
   };
 
   // Adaugă adrese
-  const addAddress = (coordsWithLabel) => {
-    setAddresses((prev) => [...prev, coordsWithLabel]);
-  };
+// always async, always await fetchPostalCode
+const addAddress = async (coordsWithLabel) => {
+  const code = await fetchPostalCode(coordsWithLabel.lat, coordsWithLabel.lng);
+  const countryCode = coordsWithLabel.label
+    .split(',')
+    .pop()
+    .trim()
+    .slice(0, 2)
+    .toUpperCase();
+
+  setAddresses(prev => [
+    ...prev,
+    { 
+      ...coordsWithLabel,
+      postal: code || "",      // give it something, even if lookup failed
+      country: countryCode, 
+    }
+  ]);
+};
   const moveUp = (index) => {
     if (index === 0) return;
     const newArr = [...addresses];
@@ -298,100 +316,101 @@ const MainPage = ({ user })  => {
   };
 
   // Afișare rută pe hartă
-  const displayRoute = (route) => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
+  // … inside MainPage …
+const displayRoute = (route) => {
+  if (!mapRef.current) return;
+  const map = mapRef.current;
 
-    // 1) Clear old polylines & via-marker
-    map.getObjects().forEach(obj => {
-      if (obj instanceof window.H.map.Polyline) {
-        map.removeObject(obj);
-      }
-      if (obj === viaRef.current) {
-        map.removeObject(obj);
-      }
-    });
-
-    // 2) Build one continuous LineString and draw each blue segment
-    const fullLineString = new window.H.geo.LineString();
-    route.sections.forEach(section => {
-      // decode this section
-      const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
-
-      // push its points into fullLineString
-      const pts = ls.getLatLngAltArray(); // [lat, lng, alt, lat, lng, alt, ...]
-      for (let i = 0; i < pts.length; i += 3) {
-        fullLineString.pushLatLngAlt(pts[i], pts[i+1], pts[i+2]);
-      }
-
-      // draw the blue polyline
-      const poly = new window.H.map.Polyline(ls, {
-        style: { strokeColor: 'blue', lineWidth: 4 }
-      });
-      map.addObject(poly);
-    });
-
-    // 3) Center the map on the new route
-    const bounds = fullLineString.getBoundingBox();
-    if (bounds) {
-      map.getViewModel().setLookAtData({ bounds });
+  // 1) clear old polylines & via-marker
+  map.getObjects().forEach(obj => {
+    if (obj instanceof window.H.map.Polyline) {
+      map.removeObject(obj);
     }
+    if (obj === viaRef.current) {
+      map.removeObject(obj);
+    }
+  });
 
-    // 4) Compute the true midpoint of all points
-    const totalPts = fullLineString.getPointCount();
-    const midGeo = fullLineString.extractPoint(Math.floor(totalPts / 2));
-    const markerGeo = viaLocation ?? midGeo;
+  // 2) draw the route polyline
+  const fullLineString = new window.H.geo.LineString();
+  route.sections.forEach(section => {
+    const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
+    const pts = ls.getLatLngAltArray(); 
+    for (let i = 0; i < pts.length; i += 3) {
+      fullLineString.pushLatLngAlt(pts[i], pts[i+1], pts[i+2]);
+    }
+    map.addObject(new window.H.map.Polyline(ls, {
+      style: { strokeColor: 'blue', lineWidth: 4 }
+    }));
+  });
+  currentLineGeom.current = fullLineString;
 
-    // 5) Create & place the via-handle there
-    const viaEl = document.createElement('div');
-    viaEl.className = 'via-handle';
+  // 3) re-center map
+  const bounds = fullLineString.getBoundingBox();
+  if (bounds) {
+    map.getViewModel().setLookAtData({ bounds });
+  }
+
+  // 4) choose initial marker position: use last viaLocation or midpoint
+  const totalPts = fullLineString.getPointCount();
+  const midGeo = fullLineString.extractPoint(Math.floor(totalPts / 2));
+  const markerGeo = viaLocation ?? midGeo;
+
+  // 5) create/place the via handle
+  const viaEl = document.createElement('div');
+  viaEl.className = 'via-handle';
+  viaEl.style.cursor = 'grab';
+  const icon = new window.H.map.DomIcon(viaEl, { volatility: true });
+  const viaMarker = new window.H.map.DomMarker(markerGeo, { icon, volatility: true });
+  map.addObject(viaMarker);
+  viaRef.current = viaMarker;
+
+  // 6) re-attach drag logic (no snapping!)
+  let dragging = false;
+  const debouncedLive = debounce((lat, lng) => {
+    calculateAndDisplayLiveRoute(
+      map,
+      addresses[0],
+      addresses[addresses.length - 1],
+      vehicleType,
+      lat,
+      lng,
+      process.env.REACT_APP_HERE_API_KEY
+    );
+  }, 200);
+
+  viaMarker.addEventListener('pointerdown', evt => {
+    evt.stopPropagation();
+    dragging = true;
+    viaEl.style.cursor = 'grabbing';
+    behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+  });
+
+  map.addEventListener('pointermove', evt => {
+    if (!dragging) return;
+    const { viewportX, viewportY } = evt.currentPointer;
+    const geo = map.screenToGeo(viewportX, viewportY);
+    viaMarker.setGeometry(geo);
+    debouncedLive(geo.lat, geo.lng);
+  });
+
+  map.addEventListener('pointerup', async () => {
+    if (!dragging) return;
+    dragging = false;
     viaEl.style.cursor = 'grab';
-    const icon = new window.H.map.DomIcon(viaEl, { volatility: true });
-    const viaMarker = new window.H.map.DomMarker(markerGeo, { icon, volatility: true });
-    map.addObject(viaMarker);
-    viaRef.current = viaMarker;
+    behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+    debouncedLive.flush();
 
-    // 6) Reattach your existing drag logic
-    let dragging = false;
-    const debouncedLive = debounce((lat, lng) => {
-      calculateAndDisplayLiveRoute(
-        map,
-        addresses[0],
-        addresses[addresses.length - 1],
-        vehicleType,
-        lat,
-        lng,
-        process.env.REACT_APP_HERE_API_KEY
-      );
-    }, 200);
+    // ↳ save the raw drop coords, no snapping:
+    const rawGeo = viaMarker.getGeometry();
+    setViaLocation({ lat: rawGeo.lat, lng: rawGeo.lng });
 
-    viaMarker.addEventListener('pointerdown', evt => {
-      evt.stopPropagation();
-      // setViaLocation(null);      // ← clear old VIA coords immediately
+    // ↳ lookup postal
+    const code = await fetchPostalCode(rawGeo.lat, rawGeo.lng);
+    setViaPostal(code);
+  });
+};
 
-      dragging = true;
-      viaEl.style.cursor = 'grabbing';
-      behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
-    });
-
-    map.addEventListener('pointermove', evt => {
-      if (!dragging) return;
-      const { viewportX, viewportY } = evt.currentPointer;
-      const geo = map.screenToGeo(viewportX, viewportY);
-      viaMarker.setGeometry(geo);
-      debouncedLive(geo.lat, geo.lng);
-    });
-
-    map.addEventListener('pointerup', () => {
-      if (!dragging) return;
-      dragging = false;
-      viaEl.style.cursor = 'grab';
-      behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-      debouncedLive.flush();
-      const finalGeo = viaMarker.getGeometry();
-      setViaLocation({ lat: finalGeo.lat, lng: finalGeo.lng });
-    });
-  };
 
   // Selectare rută
   const handleRouteSelect = (index) => {
@@ -737,25 +756,61 @@ const MainPage = ({ user })  => {
                     </div>
                 </div>
                 {addresses.length === 0 && <p className="text-sm text-gray-500">No address entered.</p>}
+                {/* …inside your render… */}
                 <ul className="border rounded p-2 max-h-40 overflow-y-auto space-y-1">
-                  {addresses.map((point, index) => (
-                    <li key={index} className="flex justify-between items-center">
-                      <div className="text-sm text-black-800">
-                        {point.isVia ? <em>{point.label}</em> : (point.label || `Lat: ${point.lat}, Lng: ${point.lng}`)}
-                      </div>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => moveUp(index)} className="text-xs text-red-600 hover:underline">Up</button>
-                        <button type="button" onClick={() => moveDown(index)} className="text-xs text-red-600 hover:underline">Down</button>
-                        <button type="button" onClick={() => removeAddress(index)} className="text-xs text-red-600 hover:underline">X</button>
-                      </div>
-                    </li>
-                  ))}
+                  {addresses.map((pt, index) => {
+                    // 1. Split the original label into comma-parts:
+                    const parts = pt.label.split(",").map(s => s.trim());
+                    // 2. Extract & remove the trailing country name:
+                    const countryName = parts.pop();
+                    // 3. Derive a 2-letter country code (override via pt.country if you set it):
+                    const countryCode = (pt.country || countryName.slice(0,2)).toUpperCase();
+                    // 4. Ensure we have a postal code (fallback to “—” if lookup failed):
+                    const postal = pt.postal || "";
+                    // 5. If the very first element equals that postal, drop it:
+                    if (parts[0] === postal) parts.shift();
+                    // 6. Join the rest back into the “address” chunk:
+                    const addressOnly = parts.join(", ");
+                    // 7. Compose the final display string:
+                    let display = ""
+                    if(postal === ""){
+                      display = `${addressOnly}, ${countryName}`;
+                    } else {
+                      display = `${countryCode}-${postal} – ${addressOnly}`;
+                    }
+
+                    return (
+                      <li key={index} className="flex justify-between items-center">
+                        <div className="text-sm text-black-800">{display}</div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => moveUp(index)}
+                            className="text-xs text-red-600 hover:underline"
+                          >Up</button>
+                          <button
+                            type="button"
+                            onClick={() => moveDown(index)}
+                            className="text-xs text-red-600 hover:underline"
+                          >Down</button>
+                          <button
+                            type="button"
+                            onClick={() => removeAddress(index)}
+                            className="text-xs text-red-600 hover:underline"
+                          >X</button>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
+
                 {viaLocation && (
                   <div className="mt-2 text-sm text-gray-700">
                     <strong>VIA:</strong>{' '}
-                    lat: {viaLocation.lat.toFixed(5)},{' '}
-                    lng: {viaLocation.lng.toFixed(5)}
+                    {viaPostal
+                      ? <>postal code – {viaPostal}</>
+                      : <>lat: {viaLocation.lat.toFixed(5)}, lng: {viaLocation.lng.toFixed(5)}</>
+                    }
                   </div>
                 )}
                 <button
@@ -1103,3 +1158,7 @@ export default MainPage;
 //TODO4: integrate in translogica
 
 //Ticketing system:
+
+// de ex: DE-cod postal-localitate-strada
+
+// via - cod postal
