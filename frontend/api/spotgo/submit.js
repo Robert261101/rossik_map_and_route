@@ -1,6 +1,6 @@
-// api/spotGo/submit.js
+// frontend/api/spotGo/submit.js
 
-import fetch from 'node-fetch';
+// import fetch from 'node-fetch';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

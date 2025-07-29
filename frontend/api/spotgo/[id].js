@@ -1,5 +1,5 @@
-// api/spotGo/[id].js
-import fetch from 'node-fetch';
+// frontend/api/spotGo/[id].js
+// import fetch from 'node-fetch';
 
 export default async function handler(req, res) {
   const { id } = req.query;
