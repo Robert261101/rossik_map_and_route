@@ -227,6 +227,12 @@ export default function HistoryPage({ user }) {
 
           {/* RIGHT: Butoane */}
           <div className="flex items-center space-x-3">
+            <button
+                onClick={() => navigate('/spotgo')}
+                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+              >
+                SpotGo
+            </button>
             {user.role === 'admin' && (
               <button
                 onClick={() => navigate('/admin')}

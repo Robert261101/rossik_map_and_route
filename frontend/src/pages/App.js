@@ -16,6 +16,7 @@ import TeamView from './admin/TeamView'
 import AddTeamMembers from './admin/AddTeamMembers'
 import ForgotPasswordPage from './ForgotPassword'
 import ResetPasswordPage from './ResetPassword'
+import SpotGoPage from './spotGoPage';
 import ReactDOM from 'react-dom'
 import { ThemeProvider } from '../contexts/ThemeContext'
 
@@ -104,6 +105,8 @@ export default function App() {
         <Route
           path="/"
           element={user ? <MainPage user={user} /> : <Navigate to="/login" />} />
+        <Route 
+          path="/spotgo" element={<SpotGoPage />} />
         <Route
           path="/history"
           element={user ? <HistoryPage user={user} /> : <Navigate to="/login" />} />

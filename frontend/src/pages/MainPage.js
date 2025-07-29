@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import 'leaflet/dist/leaflet.css';
 import AutoCompleteInput from "../AutoCompleteInput";
 import TollCalculator from "../TollCalculator";
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
 import SearchBar from "../helpers/SearchBar";
 import Sun from 'lucide-react/dist/esm/icons/sun';
@@ -21,6 +21,8 @@ const MainPage = ({ user })  => {
   const [distance, setDistance] = useState(null);
   const [routes, setRoutes] = useState([]); // Array cu rutele alternative
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
   const [vehicleType, setVehicleType] = useState({
     axles: 5,
     weight: 40000,
@@ -36,7 +38,7 @@ const MainPage = ({ user })  => {
   const mapRef = useRef(null);
   const circleRef = useRef(null);
   const markerGroupRef = useRef(null);
-  const navigate = useNavigate()
+  const navigate = useNavigate();
   let apiCallCount = 0;
   const isManager = ['transport_manager','team_lead','admin'].includes(user.role);
   const [darkMode, setDarkMode] = React.useState(false);
@@ -721,6 +723,25 @@ const MainPage = ({ user })  => {
     }
   }, [routes]);  // Re-run whenever the routes array changes
 
+  // close dropdown when clicking outside of the arrow button
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
   return (
   <div className="App flex flex-col h-screen">
     <div className={`flex flex-col flex-1 transition-colors duration-500 ${darkMode ? 'bg-gray-900 ' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
@@ -750,6 +771,12 @@ const MainPage = ({ user })  => {
           >
             {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
           </button> */}
+          <button
+              onClick={() => navigate('/spotgo')}
+              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+            >
+              SpotGo
+          </button>
           {user.role === 'admin' && (
             <button
               onClick={() => navigate('/admin')}
@@ -773,6 +800,7 @@ const MainPage = ({ user })  => {
           >
             Main Page
           </button>
+
           <button
             onClick={() => navigate('/history')}
             className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
