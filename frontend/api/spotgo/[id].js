@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   }
 
   const SPOTGO_URL = `https://api.spotgo.eu/api/v1/freights/${id}`;
-  const apiKey = process.env.SPOTGO_API_KEY;
+  const apiKey = "zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$";
 
   if (!apiKey) {
     return res.status(500).json({ error: "Missing SpotGo API key." });

@@ -9,8 +9,8 @@ export default async function handler(req, res) {
   }
 
   const SPOTGO_URL = 'https://api.spotgo.eu/api/v1/freights';
-  const apiKey = process.env.SPOTGO_API_KEY;
-  const ownerEmail = process.env.SPOTGO_OWNER_EMAIL;
+  const apiKey = "zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$";
+  const ownerEmail = 'spot.loads@rossik.eu';
 
   if (!apiKey || !ownerEmail) {
     return res.status(500).json({ error: "Missing API key or owner email in server config." });
