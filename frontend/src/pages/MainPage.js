@@ -254,6 +254,7 @@ const addAddress = async (coordsWithLabel) => {
       const response = await fetch(url);
       const data = await response.json();
 
+
       if (!data.routes || data.routes.length === 0) {
         console.error("No routes found:", data);
         alert("No routes found for the selected addresses. Try other locations.");
@@ -315,8 +316,57 @@ const addAddress = async (coordsWithLabel) => {
     }
   };
 
+  const createDraggableMarker = (pt, idx) => {
+  const el = document.createElement('div');
+  el.className = 'via-handle';
+  el.style.cursor = 'via-handle'
+
+  const icon = new window.H.map.DomIcon(el, { volatility: false });
+  const marker = new window.H.map.DomMarker({ lat: pt.lat, lng: pt.lng }, { icon, volatility: false });
+
+  let dragging = false;
+
+  el.addEventListener('pointerdown', (evt) => {
+    evt.stopPropagation();
+    dragging = true;
+    el.style.cursor = 'grabbing';
+    behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+  });
+
+  mapRef.current.addEventListener('pointermove', (evt) => {
+    if (!dragging) return;
+    const { viewportX, viewportY } = evt.currentPointer;
+    const geo = mapRef.current.screenToGeo(viewportX, viewportY);
+    marker.setGeometry(geo);
+  });
+
+  mapRef.current.addEventListener('pointerup', async () => {
+    if (!dragging) return;
+    dragging = false;
+    el.style.cursor = 'grab';
+    behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+
+    const newGeo = marker.getGeometry();
+    const postal = await fetchPostalCode(newGeo.lat, newGeo.lng);
+
+    // 🧠 Update this address in the list:
+    setAddresses((prev) => {
+      const updated = [...prev];
+      updated[idx] = {
+        ...updated[idx],
+        lat: newGeo.lat,
+        lng: newGeo.lng,
+        postal: postal || updated[idx].postal
+      };
+      return updated;
+    });
+  });
+
+  return marker;
+};
+
+
   // Afișare rută pe hartă
-  // … inside MainPage …
 const displayRoute = (route) => {
   if (!mapRef.current) return;
   const map = mapRef.current;
@@ -327,22 +377,128 @@ const displayRoute = (route) => {
       map.removeObject(obj);
     }
     if (obj === viaRef.current) {
-      map.removeObject(obj);
+      try {
+        map.removeObject(obj);
+      } catch (err) {
+        console.warn("Tried removing viaMarker but it was already removed:", err);
+      }
     }
   });
 
+  const spawnViaMarker = (lat, lng) => {
+  if (!mapRef.current) return;
+  const map = mapRef.current;
+
+if (viaRef.current) {
+  try {
+    map.removeObject(viaRef.current);
+  } catch (err) {
+    console.warn("Marker cleanup failed:", err);
+  }
+}
+
+  const el = document.createElement('div');
+  el.className = 'via-handle';
+
+  el.addEventListener('pointerenter', () => { el.style.opacity = '0.8'; });
+  // el.addEventListener('pointerleave', () => { el.style.opacity = '0'; });
+
+  const icon = new window.H.map.DomIcon(el, { volatility: true });
+  const viaMarker = new window.H.map.DomMarker({ lat, lng }, { icon, volatility: true });
+  map.addObject(viaMarker);
+  console.log("Spawned via-handle marker element:", el);
+
+  viaRef.current = viaMarker;
+
+  let dragging = false;
+  let activePointerId = null;
+
+
+  const debouncedLive = debounce((lat, lng) => {
+    calculateAndDisplayLiveRoute(
+      map,
+      addresses[0],
+      addresses[addresses.length - 1],
+      vehicleType,
+      lat,
+      lng,
+      process.env.REACT_APP_HERE_API_KEY
+    );
+  }, 200);
+
+requestAnimationFrame(() => {
+  viaMarker.addEventListener('pointerdown', evt => {
+    evt.stopPropagation();
+    dragging = true;
+    el.style.cursor = 'grabbing';
+
+    try {
+      if (el.setPointerCapture) {
+        el.setPointerCapture(evt.pointerId);
+      }
+    } catch (err) {
+      console.warn('Pointer capture failed:', err);
+    }
+
+    behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+  });
+});
+
+  map.addEventListener('pointermove', evt => {
+    if (!dragging) return;
+    const geo = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
+    viaMarker.setGeometry(geo);
+    debouncedLive(geo.lat, geo.lng);
+  });
+
+  map.addEventListener('pointerup', async evt => {
+    if (!dragging) return;
+    dragging = false;
+    el.style.cursor = 'grab';
+try {
+  if (el.releasePointerCapture) {
+    el.releasePointerCapture(evt.pointerId);
+  }
+} catch (err) {
+  console.warn('Pointer release failed:', err);
+}
+
+    behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+    debouncedLive.flush();
+
+    const geo = viaMarker.getGeometry();
+    setViaLocation({ lat: geo.lat, lng: geo.lng });
+
+    const code = await fetchPostalCode(geo.lat, geo.lng);
+    setViaPostal(code);
+  });
+};
+
+
   // 2) draw the route polyline
   const fullLineString = new window.H.geo.LineString();
-  route.sections.forEach(section => {
-    const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
-    const pts = ls.getLatLngAltArray(); 
-    for (let i = 0; i < pts.length; i += 3) {
-      fullLineString.pushLatLngAlt(pts[i], pts[i+1], pts[i+2]);
-    }
-    map.addObject(new window.H.map.Polyline(ls, {
-      style: { strokeColor: 'blue', lineWidth: 4 }
-    }));
+route.sections.forEach(section => {
+  const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
+  const pts = ls.getLatLngAltArray(); 
+  for (let i = 0; i < pts.length; i += 3) {
+    fullLineString.pushLatLngAlt(pts[i], pts[i+1], pts[i+2]);
+  }
+
+  const polyline = new window.H.map.Polyline(ls, {
+    style: { strokeColor: 'blue', lineWidth: 4 }
   });
+
+  // ✨ TAP TO ADD VIA POINT
+  polyline.addEventListener('tap', evt => {
+    const geo = evt.target.getGeometry().extractPoint(
+      Math.floor(evt.target.getGeometry().getPointCount() / 2)
+    );
+    const screen = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
+    spawnViaMarker(screen.lat, screen.lng); // 🔥 defined next
+  });
+
+  map.addObject(polyline);
+});
   currentLineGeom.current = fullLineString;
 
   // 3) re-center map
@@ -351,31 +507,8 @@ const displayRoute = (route) => {
     map.getViewModel().setLookAtData({ bounds });
   }
 
-  // 4) choose initial marker position: use last viaLocation or midpoint
-  const totalPts = fullLineString.getPointCount();
-  const midGeo = fullLineString.extractPoint(Math.floor(totalPts / 2));
-  const markerGeo = viaLocation ?? midGeo;
-
-  // 5) create/place the via handle
-  const viaEl = document.createElement('div');
-  viaEl.className = 'via-handle';
-  viaEl.style.cursor = 'grab';
-  const icon = new window.H.map.DomIcon(viaEl, { volatility: true });
-  const viaMarker = new window.H.map.DomMarker(markerGeo, { icon, volatility: true });
-  map.addObject(viaMarker);
-  viaRef.current = viaMarker;
-
-    viaEl.style.opacity = '0.2';              // hide by default
-viaEl.style.pointerEvents = 'auto';     // still catch hover
-
-viaEl.addEventListener('pointerenter', () => {
-  viaEl.style.opacity = '0.8';            // show instantly
-});
-
-viaEl.addEventListener('pointerleave', () => {
-  viaEl.style.opacity = '0.2';            // hide again
-});
-
+// 4) skip adding default viaMarker if user hasn't clicked the route yet
+if (!viaLocation) return;
 
   // 6) re-attach drag logic (no snapping!)
   let dragging = false;
@@ -391,37 +524,39 @@ viaEl.addEventListener('pointerleave', () => {
     );
   }, 200);
 
-  viaMarker.addEventListener('pointerdown', evt => {
-    evt.stopPropagation();
-    dragging = true;
-    viaEl.style.cursor = 'grabbing';
-    behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
-  });
+  // viaMarker.addEventListener('pointerdown', evt => {
+  //   evt.stopPropagation();
+  //   dragging = true;
+  //   viaEl.style.cursor = 'grabbing';
+  //   behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+  // });
 
-  map.addEventListener('pointermove', evt => {
-    if (!dragging) return;
-    const { viewportX, viewportY } = evt.currentPointer;
-    const geo = map.screenToGeo(viewportX, viewportY);
-    viaMarker.setGeometry(geo);
-    debouncedLive(geo.lat, geo.lng);
-  });
+  // map.addEventListener('pointermove', evt => {
+  //   if (!dragging) return;
+  //   const { viewportX, viewportY } = evt.currentPointer;
+  //   const geo = map.screenToGeo(viewportX, viewportY);
+  //   viaMarker.setGeometry(geo);
+  //   debouncedLive(geo.lat, geo.lng);
+  // });
 
-  map.addEventListener('pointerup', async () => {
-    if (!dragging) return;
-    dragging = false;
-    viaEl.style.cursor = 'grab';
-    behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-    debouncedLive.flush();
+  // map.addEventListener('pointerup', async () => {
+  //   if (!dragging) return;
+  //   dragging = false;
+  //   viaEl.style.cursor = 'grab';
+  //   behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+  //   debouncedLive.flush();
 
-    // ↳ save the raw drop coords, no snapping:
-    const rawGeo = viaMarker.getGeometry();
-    setViaLocation({ lat: rawGeo.lat, lng: rawGeo.lng });
+  //   // ↳ save the raw drop coords, no snapping:
+  //   const rawGeo = viaMarker.getGeometry();
+  //   setViaLocation({ lat: rawGeo.lat, lng: rawGeo.lng });
 
-    // ↳ lookup postal
-    const code = await fetchPostalCode(rawGeo.lat, rawGeo.lng);
-    setViaPostal(code);
-  });
+  //   // ↳ lookup postal
+  //   const code = await fetchPostalCode(rawGeo.lat, rawGeo.lng);
+  //   setViaPostal(code);
+  // });
 };
+
+
 
 
   // Selectare rută
@@ -500,6 +635,12 @@ viaEl.addEventListener('pointerleave', () => {
     // Important: initialize behavior & UI
     const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
     behaviorRef.current = behavior;
+    // 👇 Force-init mapevents by toggling behavior quickly
+setTimeout(() => {
+  behavior.disable(window.H.mapevents.Behavior.DRAGGING);
+  behavior.enable(window.H.mapevents.Behavior.DRAGGING);
+}, 50); // short delay to let HERE fully bind event listeners
+
     const ui = window.H.ui.UI.createDefault(map, defaultLayers);
   
     // Important: asigurăm vector base layer activ
@@ -517,7 +658,6 @@ viaEl.addEventListener('pointerleave', () => {
     };
   }, [tollCosts, selectedRouteIndex]);
   
-
   // cost per km pt ruta selectată
   const costPerKmForSelected = () => {
     if (selectedRouteIndex === null || routes.length === 0) return 0;
@@ -525,31 +665,35 @@ viaEl.addEventListener('pointerleave', () => {
     return costPerKm;
   };
 
-  // Zoom-scaler pentru marker-ele DOM
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
+  //TODO: VEZI DACA RAMANE COMENTAT SAU IL FOLOSESTI
 
-    const onMapViewChange = () => {
-      const zoom = map.getZoom();
-      if (markerGroupRef.current) {
-        markerGroupRef.current.getObjects().forEach(marker => {
-          const el = marker.__domElement;
-          if (el) {
-            const scale = 0.5 + zoom * 0.1;
-            el.style.transform = `translate(-50%,-110%) scale(${scale})`;
-          }
-        });
-      }
-    };
+  // // Zoom-scaler pentru marker-ele DOM
+  // useEffect(() => {
+  //   if (!mapRef.current) return;
+  //   const map = mapRef.current;
+
+  //   const onMapViewChange = () => {
+  //     const zoom = map.getZoom();
+  //     if (markerGroupRef.current) {
+  //       markerGroupRef.current.getObjects().forEach(marker => {
+  //         const el = marker.__domElement;
+  //         if (el) {
+  //           const scale = 0.5 + zoom * 0.1;
+  //           el.style.transform = `translate(-50%,-110%) scale(${scale})`;
+  //           el.style.pointerEvents = 'auto'; // force it, in case zoom janks it
+
+  //         }
+  //       });
+  //     }
+  //   };
     
 
-    map.addEventListener('mapviewchange', onMapViewChange);
+  //   map.addEventListener('mapviewchange', onMapViewChange);
 
-    return () => {
-      map.removeEventListener('mapviewchange', onMapViewChange);
-    };
-  }, []);
+  //   return () => {
+  //     map.removeEventListener('mapviewchange', onMapViewChange);
+  //   };
+  // }, []);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -589,7 +733,7 @@ viaEl.addEventListener('pointerleave', () => {
     
       const marker = new window.H.map.DomMarker(
         { lat: pt.lat, lng: pt.lng },
-        { icon: domIcon, volatility: true }
+        { icon: domIcon, volatility: false }
       );
       marker.__domElement = el;
       group.addObject(marker);
@@ -746,8 +890,6 @@ viaEl.addEventListener('pointerleave', () => {
     </div>
       
     </header>
-
-
      {/* MAIN CONTENT */}
       <div className="flex flex-row flex-1 overflow-hidden">
         {/* LEFT SIDE */}
