@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import AutoCompleteInput from "../AutoCompleteInput";
 import { useNavigate } from 'react-router-dom';
-
+import { supabase } from "../lib/supabase";
 
 const PREFIX_PASSWORD = "parola_ta_secreta";
 const DEFAULT_PREFIX = "APP-OFFER-";
@@ -224,31 +224,30 @@ export default function SpotGoPage() {
     }
 
     const address0 = {
-        label: loadingLocation.label,
-        city: "",
-        postalCode: "",
-        countryCode: "",
-        coordinates: {
-            latitude: loadingLocation.lat,
-            longitude: loadingLocation.lng
-        }
+      countryCode: loadingLocation.address.countryCode,   // e.g. "RO"
+      postalCode:  loadingLocation.address.postalCode,    // e.g. "400123"
+      city:        loadingLocation.address.city          || "",
+      coordinates: {
+        latitude:  loadingLocation.lat,
+        longitude: loadingLocation.lng
+      }
     };
 
     const address1 = {
-        label: unloadingLocation.label,
-        city: "",
-        postalCode: "",
-        countryCode: "",
-        coordinates: {
-            latitude: unloadingLocation.lat,
-            longitude: unloadingLocation.lng
-        }
+      label: unloadingLocation.label,
+      countryCode: unloadingLocation.address.countryCode,
+      postalCode:  unloadingLocation.address.postalCode,
+      city:        unloadingLocation.address.city       || "",        
+      coordinates: {
+        latitude: unloadingLocation.lat,
+        longitude: unloadingLocation.lng
+      }
     };
 
     const payload = {
         type: "Spot",
         externalNumber: prefix,
-        sources: ["1", "2", "8", "12", "14"],
+        sources: [1,2,8,12,14],
         useAlternativeLocations: hideLocations,
         locations: [
             {
@@ -288,14 +287,21 @@ export default function SpotGoPage() {
       const pay = { from: parseFloat(freightCharge) || 0 };
       if (currency) pay.currency = currency;
       if (paymentTerm) pay.term = paymentTerm;
-      payload.payment = pay;
+      payload.payment = {
+        from:    parseFloat(freightCharge) || 0,
+        term:    paymentTerm,            // days until due
+      };
+
     }
 
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    
     try {
         const res = await fetch("/api/spotgo/submit", {
             method: "POST",
             headers: {
-                'Authorization': `Bearer ${process.env.SPOTGO_API_KEY}`,
+                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)

@@ -21,6 +21,10 @@ const supabase = createClient(
 const getUserWithRole = require('./middleware/getUserWithRole');
 const requireRole = require('./middleware/requireRole');
 
+const spotgoSubmit = require('./routes/spotgo/submit');
+const spotgoDelete = require('./routes/spotgo/delete');
+
+
 const app = express();
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
@@ -389,6 +393,10 @@ app.delete('/api/admin/teams/:id', requireRole('admin'), async (req, res) => {
     res.status(500).json({ error: 'Eroare la ștergere echipă' });
   }
 });
+
+// SpotGo endpoints
+app.post(   '/api/spotgo/submit', spotgoSubmit);
+app.delete( '/api/spotgo/:id',    spotgoDelete);
 
 
 const PORT = process.env.PORT || 4000;
