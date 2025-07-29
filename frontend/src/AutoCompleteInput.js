@@ -65,7 +65,7 @@ const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
       <input
         type="text"
         ref={inputRef}
-        value={query}
+        value={selectedAddress || query}
         onKeyDown={handleKeyDown}
         onFocus={() => {
           // Permite modificarea adresei: resetează selectedAddress doar la focus
