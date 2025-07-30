@@ -205,6 +205,7 @@ const addAddress = async (coordsWithLabel) => {
       country: countryCode, 
     }
   ]);
+  console.log('picked address: ', coordsWithLabel)
 };
   const moveUp = (index) => {
     if (index === 0) return;

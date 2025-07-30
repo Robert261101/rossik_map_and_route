@@ -3,6 +3,11 @@ import React, { useEffect, useState } from "react";
 import AutoCompleteInput from "../AutoCompleteInput";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
+import countries from "i18n-iso-countries";
+import enLocale  from "i18n-iso-countries/langs/en.json";
+
+countries.registerLocale(enLocale);
+
 
 const PREFIX_PASSWORD = "parola_ta_secreta";
 const DEFAULT_PREFIX = "APP-OFFER-";
@@ -66,7 +71,15 @@ export default function SpotGoPage() {
   const [offers, setOffers] = useState([]);
   const [loadingLocation, setLoadingLocation] = useState(null);
   const [unloadingLocation, setUnloadingLocation] = useState(null);
+  const [loadingPostal, setLoadingPostal] = useState("");
+  const [unloadingPostal, setUnloadingPostal] = useState("");
+
   const navigate = useNavigate()
+
+  const HERE_API_KEY = process.env.REACT_APP_HERE_API_KEY;  // pulled at build time
+
+  const RADIUSES = [0, 100, 500, 1000, 5000];
+
 
   useEffect(() => {
     const savedPrefix = localStorage.getItem("spotgo_prefix");
@@ -131,6 +144,77 @@ export default function SpotGoPage() {
         const timeStr = end.toTimeString().slice(0, 5);
         setUnloadEndTime(unloadEndDate === todayStr ? timeStr : "15:00");
     }, [unloadEndDate]);
+/**
+ * Reverse‑geocode in expanding radii until we get a postalCode + valid 2‑letter countryCode.
+ * If that fails, fall back to a forward‑geocode on the label.
+ */
+ async function reverseWithFallback(loc, apiKey) {
+  const radii = [0, 100, 500, 1000, 5000];
+  let lastAddr = null;
+  const base   = "https://revgeocode.search.hereapi.com/v1/revgeocode";
+  // note the correct `lang=` here
+  const common = `?at=${loc.lat},${loc.lng}&lang=en-US&limit=1&apiKey=${apiKey}`;
+
+  // 1) Spiral‑out reverse‑geocoding
+  for (const r of radii) {
+    const url = r === 0
+      ? `${base}${common}`
+      : `${base}${common}&in=circle:${loc.lat},${loc.lng};r=${r}`;
+
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+
+      const { items = [] } = await resp.json();
+      const addr = items[0]?.address;
+      if (!addr) continue;
+
+      // normalize CC
+      const rawCC = addr.countryCode || "";
+      const cc2 = countries.alpha3ToAlpha2(rawCC) 
+               || (rawCC.length === 2 && rawCC)
+               || "";
+      addr.countryCode = cc2;
+
+      lastAddr = addr;
+      if (addr.postalCode && cc2.length === 2) {
+        return addr; // ✅ success
+      }
+    } catch (e) {
+      console.warn(`reverse@r=${r} failed:`, e);
+    }
+  }
+
+  // 2) Forward‑geocode fallback
+  if (!lastAddr?.postalCode) {
+  const label = lastAddr?.label || loc.label;
+  const geoUrl =
+    `https://geocode.search.hereapi.com/v1/geocode` +
+    `?q=${encodeURIComponent(label)}` +
+    `&lang=en-US&limit=1&apiKey=${apiKey}`;
+
+    try {
+      const gr = await fetch(geoUrl);
+      if (gr.ok) {
+        const { items = [] } = await gr.json();
+        const fwd = items[0]?.address;
+        if (fwd?.postalCode) {
+          lastAddr.postalCode = fwd.postalCode;
+          const rawCC2 = fwd.countryCode || "";
+          lastAddr.countryCode = 
+            countries.alpha3ToAlpha2(rawCC2) 
+            || (rawCC2.length === 2 && rawCC2) 
+            || lastAddr.countryCode;
+        }
+      }
+    } catch (e) {
+      console.warn("forward‑geocode failed:", e);
+    }
+  }
+
+  return lastAddr || {};
+}
+
 
   function handleModifyPrefix() {
     const pw = prompt("Enter password to modify prefix:");
@@ -168,6 +252,22 @@ export default function SpotGoPage() {
       return [...prev, id];
     });
   }
+
+async function buildAddress(loc) {
+const details = await reverseWithFallback(loc, HERE_API_KEY);
+if (!details.postalCode) throw new Error("Need postalCode");
+if (!details.countryCode || details.countryCode.length !== 2) throw new Error("Need countryCode");
+
+  return {
+    label:       loc.label,
+    city:        loc.city || details.city || "",
+    postalCode:  details.postalCode,
+    countryCode: details.countryCode,
+    coordinates: { latitude: loc.lat, longitude: loc.lng }
+  };
+}
+
+
 
   async function handleSubmitOffer(e) {
     e.preventDefault();
@@ -223,65 +323,63 @@ export default function SpotGoPage() {
       if (paymentTerm < 1) paymentTerm = 1;
     }
 
-    const address0 = {
-        label: loadingLocation.label,
-        city: "",
-        postalCode: "",
-        countryCode: "",
-        coordinates: {
-            latitude: loadingLocation.lat,
-            longitude: loadingLocation.lng
-        }
-    };
+    const [address0, address1] = await Promise.all([
+    buildAddress(loadingLocation),
+    buildAddress(unloadingLocation)
+  ]);
 
-    const address1 = {
-        label: unloadingLocation.label,
-        city: "",
-        postalCode: "",
-        countryCode: "",
-        coordinates: {
-            latitude: unloadingLocation.lat,
-            longitude: unloadingLocation.lng
-        }
-    };
+  // **Client‑side validation** so you never send bad data
+if (address0.countryCode.length !== 2 || address1.countryCode.length !== 2) {
+  alert("Couldn’t resolve a valid 2‑letter country code for one of your locations.");
+  return;
+}
+if (!address0.postalCode || !address1.postalCode) {
+  alert("Postal code is missing for one of your locations. Please refine your pick or enter it manually.");
+  return;
+}
 
-    const payload = {
-        type: "Spot",
-        externalNumber: prefix,
-        sources: ["1", "2", "8", "12", "14"],
-        useAlternativeLocations: hideLocations,
-        locations: [
-            {
-            sequence: 1,
-            type: "Loading",
-            address: address0,
-            period: {
-                startDate: `${loadStartDate}T${loadStartTime}:00Z`,
-                endDate: `${loadEndDate}T${loadEndTime}:00Z`
-            }
-            },
-            {
-            sequence: 2,
-            type: "Unloading",
-            address: address1,
-            period: {
-                startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
-                endDate: `${unloadEndDate}T${unloadEndTime}:00Z`
-            }
-            }
-        ],
-        requirements: {
-            capacity: weightVal,
-            ldm: lengthVal,
-            pallets: 33,
-            loadingSide: "All",
-            palletsExchange,
-            vehicleTypes: selectedVehicles,
-            trailerTypes: selectedBodies,
-            ftl: lengthVal >= 13.6
+console.log(">>> final payload.locations:", [address0, address1]);
+
+
+const payload = {
+      type: "Spot",
+      externalNumber: prefix,
+      sources: ["1","2","8","12","14"],
+      useAlternativeLocations: hideLocations,
+      locations: [
+        {
+          sequence: 1,
+          type: "Loading",
+          address: address0,
+          period: {
+            startDate: `${loadStartDate}T${loadStartTime}:00Z`,
+            endDate:   `${loadEndDate}T${loadEndTime}:00Z`
+          }
         },
-        comments: externalComment || undefined,
-        internalNote: hideLocations ? "Locations hidden." : "Load/Unload points visible."
+        {
+          sequence: 2,
+          type: "Unloading",
+          address: address1,
+          period: {
+            startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
+            endDate:   `${unloadEndDate}T${unloadEndTime}:00Z`
+          }
+        }
+      ],
+      requirements: {
+        capacity:       parseFloat(weightT),
+        ldm:            parseFloat(lengthM),
+        pallets:        33,
+        loadingSide:    "All",
+        palletsExchange,
+        vehicleTypes:   selectedVehicles,
+        trailerTypes:   selectedBodies,
+        ftl:            parseFloat(lengthM) >= 13.6
+      },
+      comments: externalComment || undefined,
+      internalComments: hideLocations
+        ? "Locations hidden."
+        : "Load/Unload points visible."
     };
 
     if (freightCharge) {
@@ -293,6 +391,8 @@ export default function SpotGoPage() {
 
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
+
+
     
     try {
         const res = await fetch("/api/spotgo/submit", {

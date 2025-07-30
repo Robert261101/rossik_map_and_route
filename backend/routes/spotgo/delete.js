@@ -1,5 +1,5 @@
 // backend/routes/spotgo/delete.js
-// const fetch = require('node-fetch');
+const fetch = require('node-fetch');
 
 module.exports = async function deleteHandler(req, res) {
   const { id } = req.params;
