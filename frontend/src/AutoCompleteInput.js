@@ -1,3 +1,4 @@
+// Enhanced AutoCompleteInput with full geocoding fallback
 import React, { useState, useEffect, useRef } from 'react';
 
 const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
@@ -7,18 +8,17 @@ const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
 
-  // handler care face fetch doar când apeși Enter
   const handleKeyDown = async (e) => {
     if (e.key !== 'Enter') return;
-    e.preventDefault();              // nu lasă form-ul să trimită
+    e.preventDefault();
     if (!apiKey || query.length < 3) return;
     setLoading(true);
     try {
-      const url = `https://autocomplete.search.hereapi.com/v1/autocomplete`
-        + `?q=${encodeURIComponent(query)}&apiKey=${apiKey}`;
+      const url = `https://autocomplete.search.hereapi.com/v1/autocomplete?q=${encodeURIComponent(query)}&apiKey=${apiKey}`;
       const res = await fetch(url);
       const data = await res.json();
-      setSuggestions(data.items || []);
+      const itemsWithPostal = data.items?.filter(it => it.address && it.address.label);
+      setSuggestions(itemsWithPostal || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -26,38 +26,86 @@ const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
     }
   };
 
-  const fetchCoordinates = async (address) => {
-    const url = `https://geocode.search.hereapi.com/v1/geocode?q=${encodeURIComponent(address)}&apiKey=${apiKey}`;
+  const fetchFullAddressFromLabel = async (label) => {
+    const url = `https://geocode.search.hereapi.com/v1/geocode?q=${encodeURIComponent(label)}&apiKey=${apiKey}`;
     try {
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data.items && data.items.length > 0) return data.items[0].position;
-    } catch (error) {
-      console.error('Eroare:', error);
+      const res = await fetch(url);
+      const data = await res.json();
+      return data.items?.[0]?.address || null;
+    } catch (err) {
+      console.error('Geocoding failed:', err);
+      return null;
+    }
+  };
+
+  const fetchRandomPostalFromCity = async (city, countryCode) => {
+    const url = `https://geocode.search.hereapi.com/v1/geocode?q=${encodeURIComponent(city + ', ' + countryCode)}&apiKey=${apiKey}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      const candidates = data.items?.filter(i => i.address?.postalCode);
+      if (candidates?.length > 0) {
+        const randIndex = Math.floor(Math.random() * candidates.length);
+        return candidates[randIndex].address.postalCode;
+      }
+    } catch (err) {
+      console.error("Fallback postal fetch failed:", err);
     }
     return null;
   };
 
   const handleSelect = async (suggestion) => {
     if (!suggestion || !suggestion.address) return;
+    let address = suggestion.address;
+    let lat = suggestion.position?.lat;
+    let lng = suggestion.position?.lng;
 
-    let lat = suggestion.position ? suggestion.position.lat : null;
-    let lng = suggestion.position ? suggestion.position.lng : null;
-    if (lat === null || lng === null) {
-      const position = await fetchCoordinates(suggestion.address.label);
-      if (position) {
-        lat = position.lat;
-        lng = position.lng;
-      } else return;
+    if (!address.postalCode || !address.countryCode || address.countryCode.length !== 2) {
+      const fullAddr = await fetchFullAddressFromLabel(address.label);
+      if (fullAddr) {
+        address = { ...address, ...fullAddr };
+      }
     }
 
-    setSelectedAddress(suggestion.address.label); // Salvează adresa selectată
+    // 🔁 Fallback to random postal code if still missing
+    if (!address.postalCode && address.city && address.countryCode?.length === 2) {
+      const fallbackPostal = await fetchRandomPostalFromCity(address.city, address.countryCode);
+      if (fallbackPostal) address.postalCode = fallbackPostal;
+    }
+
+    if (!lat || !lng) {
+      const coords = suggestion.position || (await fetchCoordinates(address.label));
+      lat = coords?.lat;
+      lng = coords?.lng;
+    }
+
+    if (!lat || !lng) return;
+
+    setSelectedAddress(address.label);
     setQuery('');
     setSuggestions([]);
-    if (inputRef.current) {
-      inputRef.current.blur();
+    if (inputRef.current) inputRef.current.blur();
+
+    onSelect({
+      label: address.label,
+      city: address.city || '',
+      postalCode: address.postalCode || '',
+      countryCode: address.countryCode || '',
+      lat,
+      lng
+    });
+  };
+
+  const fetchCoordinates = async (address) => {
+    const url = `https://geocode.search.hereapi.com/v1/geocode?q=${encodeURIComponent(address)}&apiKey=${apiKey}`;
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+      return data.items?.[0]?.position || null;
+    } catch (error) {
+      console.error('Coordinate fetch error:', error);
+      return null;
     }
-    onSelect({ lat, lng, label: suggestion.address.label });
   };
 
   return (
@@ -67,25 +115,15 @@ const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
         ref={inputRef}
         value={selectedAddress || query}
         onKeyDown={handleKeyDown}
-        onFocus={() => {
-          // Permite modificarea adresei: resetează selectedAddress doar la focus
-          if (selectedAddress) {
-            setSelectedAddress(null);
-          }
-        }}
-        onChange={(e) => {
-          setQuery(e.target.value);
-        }}
+        onFocus={() => selectedAddress && setSelectedAddress(null)}
+        onChange={(e) => setQuery(e.target.value)}
         placeholder="Enter address or postal code"
         className="w-full border-2 border-indigo-300 rounded p-2 shadow-sm transition focus-within:ring-2 focus-within:ring-indigo-300 focus:outline-none border-none"
       />
-      {loading ? (
-        <div style={{ position: 'absolute', top: '100%', left: 0 }}>
-          Loading...
-        </div>
-      ) : null}
-
-      {suggestions.length > 0 && !selectedAddress ? (
+      {loading && (
+        <div style={{ position: 'absolute', top: '100%', left: 0 }}>Loading...</div>
+      )}
+      {suggestions.length > 0 && !selectedAddress && (
         <ul
           style={{
             position: 'absolute',
@@ -110,7 +148,7 @@ const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
             </li>
           ))}
         </ul>
-      ) : null}
+      )}
     </div>
   );
 };

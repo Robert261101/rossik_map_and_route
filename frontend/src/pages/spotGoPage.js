@@ -80,34 +80,84 @@ export default function SpotGoPage() {
 
   const RADIUSES = [0, 100, 500, 1000, 5000];
 
+    const handleLoadingSelect = async (loc) => {
+        const enriched = await reverseWithFallback(loc, HERE_API_KEY);
+        setLoadingLocation({ ...loc, ...enriched });
+    };
 
-  useEffect(() => {
-    const savedPrefix = localStorage.getItem("spotgo_prefix");
-    if (savedPrefix) setPrefix(savedPrefix);
-    const savedOffers = localStorage.getItem("spotgo_offers");
-    if (savedOffers) setOffers(JSON.parse(savedOffers));
-    initializeDefaultTimes();
-  }, []);
+    const handleUnloadingSelect = async (loc) => {
+        const enriched = await reverseWithFallback(loc, HERE_API_KEY);
+        setUnloadingLocation({ ...loc, ...enriched });
+    };
 
-  useEffect(() => {
-    localStorage.setItem("spotgo_offers", JSON.stringify(offers));
-  }, [offers]);
+    useEffect(() => {
+        const savedPrefix = localStorage.getItem("spotgo_prefix");
+        if (savedPrefix) setPrefix(savedPrefix);
+        initializeDefaultTimes();
+    }, []);
 
-  function initializeDefaultTimes() {
-    const now = new Date();
-    const nextHour = new Date(now);
-    nextHour.setMinutes(0, 0, 0);
-    nextHour.setHours(now.getHours() + 1);
-    const timeStr = (dateObj) => dateObj.toTimeString().slice(0,5);
-    setLoadStartTime(loadStartDate === todayStr ? timeStr(nextHour) : "08:00");
-    const loadEnd = new Date(nextHour);
-    loadEnd.setHours(loadEnd.getHours() + 1);
-    setLoadEndTime(loadEndDate === todayStr ? timeStr(loadEnd) : "15:00");
-    setUnloadStartTime(unloadStartDate === todayStr ? timeStr(nextHour) : "08:00");
-    const unloadEnd = new Date(nextHour);
-    unloadEnd.setHours(unloadEnd.getHours() + 1);
-    setUnloadEndTime(unloadEndDate === todayStr ? timeStr(unloadEnd) : "15:00");
-  }
+    async function refreshSubmittedOffers() {
+        const { data, error } = await supabase
+            .from('submitted_offers')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Failed to fetch submitted offers:", error);
+        } else {
+            const formatted = data.map(o => ({
+                id: o.offer_id,
+                externalNumber: `${prefix}-${o.offer_id}`, // now just use offer_id for frontend display
+                _loading: o.loading_address,
+                _unloading: o.unloading_address
+            }));
+            setOffers(formatted);
+        }
+    }
+
+
+    useEffect(() => {
+        async function fetchSubmittedOffers() {
+            const { data, error } = await supabase
+            .from('submitted_offers')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+            if (error) {
+            console.error("Failed to fetch submitted offers:", error);
+            } else {
+            const formatted = data.map(o => ({
+                id: o.offer_id,
+                externalNumber: `${prefix}-${o.offer_id}`,
+                _loading: o.loading_address,
+                _unloading: o.unloading_address
+            }));
+            setOffers(formatted);
+            }
+        }
+
+        fetchSubmittedOffers();
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem("spotgo_offers", JSON.stringify(offers));
+    }, [offers]);
+
+    function initializeDefaultTimes() {
+        const now = new Date();
+        const nextHour = new Date(now);
+        nextHour.setMinutes(0, 0, 0);
+        nextHour.setHours(now.getHours() + 1);
+        const timeStr = (dateObj) => dateObj.toTimeString().slice(0,5);
+        setLoadStartTime(loadStartDate === todayStr ? timeStr(nextHour) : "08:00");
+        const loadEnd = new Date(nextHour);
+        loadEnd.setHours(loadEnd.getHours() + 1);
+        setLoadEndTime(loadEndDate === todayStr ? timeStr(loadEnd) : "15:00");
+        setUnloadStartTime(unloadStartDate === todayStr ? timeStr(nextHour) : "08:00");
+        const unloadEnd = new Date(nextHour);
+        unloadEnd.setHours(unloadEnd.getHours() + 1);
+        setUnloadEndTime(unloadEndDate === todayStr ? timeStr(unloadEnd) : "15:00");
+    }
 
     useEffect(() => {
         const now = new Date();
@@ -158,8 +208,8 @@ export default function SpotGoPage() {
   // 1) Spiral‑out reverse‑geocoding
   for (const r of radii) {
     const url = r === 0
-      ? `${base}${common}`
-      : `${base}${common}&in=circle:${loc.lat},${loc.lng};r=${r}`;
+        ? `${base}?at=${loc.lat},${loc.lng}&lang=en-US&limit=1&apiKey=${apiKey}`
+        : `${base}?in=circle:${loc.lat},${loc.lng};r=${r}&lang=en-US&limit=1&apiKey=${apiKey}`;
 
     try {
       const resp = await fetch(url);
@@ -171,9 +221,7 @@ export default function SpotGoPage() {
 
       // normalize CC
       const rawCC = addr.countryCode || "";
-      const cc2 = countries.alpha3ToAlpha2(rawCC) 
-               || (rawCC.length === 2 && rawCC)
-               || "";
+      const cc2 = countries.alpha3ToAlpha2(rawCC) || (rawCC.length === 2 && rawCC) || "";
       addr.countryCode = cc2;
 
       lastAddr = addr;
@@ -187,33 +235,33 @@ export default function SpotGoPage() {
 
   // 2) Forward‑geocode fallback
   if (!lastAddr?.postalCode) {
-  const label = lastAddr?.label || loc.label;
-  const geoUrl =
-    `https://geocode.search.hereapi.com/v1/geocode` +
-    `?q=${encodeURIComponent(label)}` +
-    `&lang=en-US&limit=1&apiKey=${apiKey}`;
+    const label = lastAddr?.label || loc.label;
+    const geoUrl =
+        `https://geocode.search.hereapi.com/v1/geocode` +
+        `?q=${encodeURIComponent(label)}` +
+        `&lang=en-US&limit=1&apiKey=${apiKey}`;
 
-    try {
-      const gr = await fetch(geoUrl);
-      if (gr.ok) {
-        const { items = [] } = await gr.json();
-        const fwd = items[0]?.address;
-        if (fwd?.postalCode) {
-          lastAddr.postalCode = fwd.postalCode;
-          const rawCC2 = fwd.countryCode || "";
-          lastAddr.countryCode = 
-            countries.alpha3ToAlpha2(rawCC2) 
-            || (rawCC2.length === 2 && rawCC2) 
-            || lastAddr.countryCode;
+        try {
+        const gr = await fetch(geoUrl);
+        if (gr.ok) {
+            const { items = [] } = await gr.json();
+            const fwd = items[0]?.address;
+            if (fwd?.postalCode) {
+            lastAddr.postalCode = fwd.postalCode;
+            const rawCC2 = fwd.countryCode || "";
+            lastAddr.countryCode = 
+                countries.alpha3ToAlpha2(rawCC2) 
+                || (rawCC2.length === 2 && rawCC2) 
+                || lastAddr.countryCode;
+            }
         }
-      }
-    } catch (e) {
-      console.warn("forward‑geocode failed:", e);
+        } catch (e) {
+        console.warn("forward‑geocode failed:", e);
+        }
     }
-  }
 
-  return lastAddr || {};
-}
+    return lastAddr || {};
+    }
 
 
   function handleModifyPrefix() {
@@ -253,193 +301,210 @@ export default function SpotGoPage() {
     });
   }
 
-async function buildAddress(loc) {
-const details = await reverseWithFallback(loc, HERE_API_KEY);
-if (!details.postalCode) throw new Error("Need postalCode");
-if (!details.countryCode || details.countryCode.length !== 2) throw new Error("Need countryCode");
+    const address0 = loadingLocation;
+    const address1 = unloadingLocation;
 
-  return {
-    label:       loc.label,
-    city:        loc.city || details.city || "",
-    postalCode:  details.postalCode,
-    countryCode: details.countryCode,
-    coordinates: { latitude: loc.lat, longitude: loc.lng }
-  };
-}
-
-
-
-  async function handleSubmitOffer(e) {
-    e.preventDefault();
-    if (!loadingLocation || !unloadingLocation) {
-      alert("Please select both loading and unloading addresses from the suggestions.");
-      return;
-    }
-    if (selectedVehicles.length === 0) {
-      alert("Please select at least one vehicle type.");
-      return;
-    }
-    if (selectedBodies.length === 0) {
-      alert("Please select at least one body type.");
-      return;
-    }
-
-    const lengthVal = parseFloat(lengthM);
-    const weightVal = parseFloat(weightT);
-    if (isNaN(lengthVal) || lengthVal <= 0) {
-      alert("Invalid length value.");
-      return;
-    }
-    if (isNaN(weightVal) || weightVal <= 0) {
-      alert("Invalid weight value.");
-      return;
-    }
-
-    const loadStart = new Date(`${loadStartDate}T${loadStartTime}:00`);
-    const loadEnd = new Date(`${loadEndDate}T${loadEndTime}:00`);
-    const unloadStart = new Date(`${unloadStartDate}T${unloadStartTime}:00`);
-    const unloadEnd = new Date(`${unloadEndDate}T${unloadEndTime}:00`);
-    if (!(loadStart < loadEnd)) {
-      alert("Loading start time must be before loading end time.");
-      return;
-    }
-    if (!(unloadStart < unloadEnd)) {
-      alert("Unloading start time must be before unloading end time.");
-      return;
-    }
-
-    let paymentTerm;
-    if (paymentDue) {
-      const dueDateObj = new Date(paymentDue);
-      const today = new Date();
-      dueDateObj.setHours(0,0,0,0);
-      today.setHours(0,0,0,0);
-      if (dueDateObj <= today) {
-        alert("Payment due date must be in the future.");
-        return;
-      }
-      const diffMs = dueDateObj - today;
-      paymentTerm = Math.round(diffMs / (1000 * 60 * 60 * 24));
-      if (paymentTerm < 1) paymentTerm = 1;
-    }
-
-    const [address0, address1] = await Promise.all([
-    buildAddress(loadingLocation),
-    buildAddress(unloadingLocation)
-  ]);
-
-  // **Client‑side validation** so you never send bad data
-if (address0.countryCode.length !== 2 || address1.countryCode.length !== 2) {
-  alert("Couldn’t resolve a valid 2‑letter country code for one of your locations.");
-  return;
-}
-if (!address0.postalCode || !address1.postalCode) {
-  alert("Postal code is missing for one of your locations. Please refine your pick or enter it manually.");
-  return;
-}
-
-console.log(">>> final payload.locations:", [address0, address1]);
-
-
-const payload = {
-      type: "Spot",
-      externalNumber: prefix,
-      sources: ["1","2","8","12","14"],
-      useAlternativeLocations: hideLocations,
-      locations: [
-        {
-          sequence: 1,
-          type: "Loading",
-          address: address0,
-          period: {
-            startDate: `${loadStartDate}T${loadStartTime}:00Z`,
-            endDate:   `${loadEndDate}T${loadEndTime}:00Z`
-          }
-        },
-        {
-          sequence: 2,
-          type: "Unloading",
-          address: address1,
-          period: {
-            startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
-            endDate:   `${unloadEndDate}T${unloadEndTime}:00Z`
-          }
+    async function handleSubmitOffer(e) {
+        e.preventDefault();
+        if (!loadingLocation || !unloadingLocation) {
+            alert("Please select both loading and unloading addresses from the suggestions.");
+            return;
         }
-      ],
-      requirements: {
-        capacity:       parseFloat(weightT),
-        ldm:            parseFloat(lengthM),
-        pallets:        33,
-        loadingSide:    "All",
-        palletsExchange,
-        vehicleTypes:   selectedVehicles,
-        trailerTypes:   selectedBodies,
-        ftl:            parseFloat(lengthM) >= 13.6
-      },
-      comments: externalComment || undefined,
-      internalComments: hideLocations
-        ? "Locations hidden."
-        : "Load/Unload points visible."
-    };
+        if (selectedVehicles.length === 0) {
+            alert("Please select at least one vehicle type.");
+            return;
+        }
+        if (selectedBodies.length === 0) {
+            alert("Please select at least one body type.");
+            return;
+        }
 
-    if (freightCharge) {
-      const pay = { from: parseFloat(freightCharge) || 0 };
-      if (currency) pay.currency = currency;
-      if (paymentTerm) pay.term = paymentTerm;
-      payload.payment = pay;
-    }
+        const lengthVal = parseFloat(lengthM);
+        const weightVal = parseFloat(weightT);
+        if (isNaN(lengthVal) || lengthVal <= 0) {
+            alert("Invalid length value.");
+            return;
+        }
+        if (isNaN(weightVal) || weightVal <= 0) {
+            alert("Invalid weight value.");
+            return;
+        }
 
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
+        const loadStart = new Date(`${loadStartDate}T${loadStartTime}:00`);
+        const loadEnd = new Date(`${loadEndDate}T${loadEndTime}:00`);
+        const unloadStart = new Date(`${unloadStartDate}T${unloadStartTime}:00`);
+        const unloadEnd = new Date(`${unloadEndDate}T${unloadEndTime}:00`);
+        if (!(loadStart < loadEnd)) {
+            alert("Loading start time must be before loading end time.");
+            return;
+        }
+        if (!(unloadStart < unloadEnd)) {
+            alert("Unloading start time must be before unloading end time.");
+            return;
+        }
 
+        let paymentTerm;
+        if (paymentDue) {
+        const dueDateObj = new Date(paymentDue);
+        const today = new Date();
+        dueDateObj.setHours(0,0,0,0);
+        today.setHours(0,0,0,0);
+        if (dueDateObj <= today) {
+            alert("Payment due date must be in the future.");
+            return;
+        }
+        const diffMs = dueDateObj - today;
+        paymentTerm = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        if (paymentTerm < 1) paymentTerm = 1;
+        }
 
-    
-    try {
+        if (address0.countryCode.length !== 2 || address1.countryCode.length !== 2) {
+            alert("Couldn’t resolve a valid 2‑letter country code for one of your locations.");
+            return;
+        }
+        if (!address0.postalCode || !address1.postalCode) {
+            alert("Postal code is missing for one of your locations. Please refine your pick or enter it manually.");
+            return;
+        }
+
+        console.log(">>> final payload.locations:", [address0, address1]);
+
+        const payload = {
+        type: "Spot",
+        externalNumber: prefix,
+        sources: ["1","2","8","12","14"],
+        useAlternativeLocations: hideLocations,
+        locations: [
+            {
+            sequence: 1,
+            type: "Loading",
+            address: address0,
+            period: {
+                startDate: `${loadStartDate}T${loadStartTime}:00Z`,
+                endDate:   `${loadEndDate}T${loadEndTime}:00Z`
+            }
+            },
+            {
+            sequence: 2,
+            type: "Unloading",
+            address: address1,
+            period: {
+                startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
+                endDate:   `${unloadEndDate}T${unloadEndTime}:00Z`
+            }
+            }
+        ],
+        requirements: {
+            capacity:       parseFloat(weightT),
+            ldm:            parseFloat(lengthM),
+            pallets:        33,
+            loadingSide:    "All",
+            palletsExchange,
+            vehicleTypes:   selectedVehicles,
+            trailerTypes:   selectedBodies,
+            ftl:            parseFloat(lengthM) >= 13.6
+        },
+        comments: externalComment || undefined,
+        internalComments: hideLocations
+            ? "Locations hidden."
+            : "Load/Unload points visible."
+        };
+
+        if (freightCharge) {
+        const pay = { from: parseFloat(freightCharge) || 0 };
+        if (currency) pay.currency = currency;
+        if (paymentTerm) pay.term = paymentTerm;
+        payload.payment = pay;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        try {
         const res = await fetch("/api/spotgo/submit", {
             method: "POST",
             headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
         });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        alert(`Failed to submit offer: ${errText}`);
-        return;
-      }
-      const result = await res.json();
-      const newOffer = {
-        id: result.id,
-        externalNumber: prefix,
-        _loading: address0.label,
-        _unloading: address1.label
-      };
-      setOffers(prev => [...prev, newOffer]);
-      alert("Freight offer submitted successfully.");
-    } catch (error) {
-      console.error("Submit offer error:", error);
-      alert("An unexpected error occurred during submission.");
-    }
-  }
+        if (!res.ok) {
+            const errText = await res.text();
+            alert(`Failed to submit offer: ${errText}`);
+            return;
+        }
 
-  async function handleDeleteOffer(offerId) {
-    if (!window.confirm("Are you sure you want to delete this offer?")) return;
-    try {
-      const res = await fetch(`/api/spotgo/${offerId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const errText = await res.text();
-        alert(`Failed to delete offer: ${errText}`);
-        return;
-      }
-      setOffers(prev => prev.filter(o => o.id !== offerId));
-      alert(`Freight ${offerId} deleted successfully.`);
-    } catch (error) {
-      console.error("Delete offer error:", error);
-      alert("An error occurred while deleting the offer.");
+        const result = await res.json();
+
+        try {
+            const { error } = await supabase
+                .from('submitted_offers')
+                .insert([
+                {
+                    offer_id: result.id,
+                    loading_address: address0.label,
+                    unloading_address: address1.label,
+                    created_at: new Date().toISOString()
+                }
+                ]);
+
+            if (error) {
+                console.error("Failed to insert into Supabase:", error.message);
+            }
+        } catch (e) {
+        console.error("Supabase insert error:", e.message);
+        }
+
+        // Refresh the table view
+        await refreshSubmittedOffers();
+
+        alert("Freight offer submitted successfully.");
+        } catch (error) {
+            console.error("Submit offer error:", error);
+            alert("An unexpected error occurred during submission.");
+        }
     }
-  }
+
+    async function handleDeleteOffer(offerId) {
+        if (!window.confirm("Are you sure you want to delete this offer?")) return;
+
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        try {
+            // Delete from SpotGo
+            const res = await fetch(`/api/spotgo/${offerId}`, {
+                method: "DELETE",
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                alert(`Failed to delete offer: ${errText}`);
+            return;
+            }
+
+            // Delete from Supabase
+            const { error: supabaseError } = await supabase
+                .from('submitted_offers')
+                .delete()
+                .eq('offer_id', offerId);
+
+            if (supabaseError) {
+                console.error("Supabase delete error:", supabaseError.message);
+            }
+
+            // ✅ Update local table only (no refresh)
+            setOffers(prev => prev.filter(o => o.id !== offerId));
+
+            alert(`Freight ${offerId} deleted successfully.`);
+        } catch (error) {
+            console.error("Delete offer error:", error);
+            alert("An error occurred while deleting the offer.");
+        }
+    }
 
     // Shared input style
     const baseInputStyle = {
@@ -501,58 +566,53 @@ const payload = {
 
     <div style={{ display: 'flex', alignItems: 'flex-start' }}>
       {/* Left Form */}
-      <form onSubmit={handleSubmitOffer} style={{ 
-        flex: '1', 
-        marginRight: '30px', 
-        background: '#ffffff', 
-        padding: '20px', 
-        borderRadius: '8px', 
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' 
-      }}>
+      <form onSubmit={handleSubmitOffer} style={{ flex: '1', marginRight: '30px', background: '#ffffff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}>
         <h3 style={{ color: '#1e4a7b', marginBottom: '15px' }}>Addresses</h3>
 
         {/* Address Fields */}
-        <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px dashed #09111aff'}}>
-            <div style={{ marginBottom: '10px' }}>
+        <div style={{display: 'flex',gap: '30px',alignItems: 'flex-start',marginBottom: '20px',paddingBottom: '15px',borderBottom: '1px dashed #09111aff',flexWrap: 'wrap'}} >
+        <div style={{flex: 1,minWidth: '300px',border: '1px solid #ccc',padding: '15px',borderRadius: '8px', backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Loading Address:</label><br />
-            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} onSelect={setLoadingLocation} />
-            </div>
-            <div style={{ marginBottom: '10px' }}>
+            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} onSelect={handleLoadingSelect} />
+        </div>
+
+        <div style={{flex: 1, minWidth: '300px',border: '1px solid #ccc',padding: '15px', borderRadius: '8px',backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
-            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} onSelect={setUnloadingLocation} />
-            </div>
+            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} onSelect={handleUnloadingSelect} />
+        </div>
         </div>
 
         {/* Date & Time Inputs */}
-        <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px dashed #09111aff'}}>
-            <fieldset style={{ border: 'none', marginBottom: '15px' }}>
+        <div style={{marginBottom: '20px',paddingBottom: '15px',borderBottom: '1px dashed #09111aff',display: 'flex',gap: '30px',flexWrap: 'wrap'}}>
+            <fieldset style={{flex: 1,minWidth: '300px',border: '1px solid #ddd',padding: '15px',borderRadius: '8px'}}>
                 <legend style={{ fontWeight: 'bold', color: '#1e4a7b' }}>Loading Time</legend>
-                <label>Start: </label>
-                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                        <input type="date" value={loadStartDate} onChange={e => setLoadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                        <input type="time" value={loadStartTime} onChange={e => setLoadStartTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }}/>
-                    </div>
-                <label>End: </label>
-                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                        <input type="date" value={loadEndDate} onChange={e => setLoadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }}/>
-                        <input type="time" value={loadEndTime} onChange={e => setLoadEndTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }}/>
-                    </div>
+                <label>Start:</label>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                    <input type="date" value={loadStartDate} onChange={e => setLoadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                    <input type="time" value={loadStartTime} onChange={e => setLoadStartTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                </div>
+                <label>End:</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <input type="date" value={loadEndDate} onChange={e => setLoadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                    <input type="time" value={loadEndTime} onChange={e => setLoadEndTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                </div>
             </fieldset>
 
-            <fieldset style={{ border: 'none', marginBottom: '15px' }}>
+            <fieldset style={{flex: 1,minWidth: '300px',border: '1px solid #ddd',padding: '15px',borderRadius: '8px'}}>
                 <legend style={{ fontWeight: 'bold', color: '#1e4a7b' }}>Unloading Time</legend>
-                <label>Start: </label>
-                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                        <input type="date" value={unloadStartDate} onChange={e => setUnloadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }}/>
-                        <input type="time" value={unloadStartTime} onChange={e => setUnloadStartTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                    </div>
-                <label>End: </label>
-                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                        <input type="date" value={unloadEndDate} onChange={e => setUnloadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }}/>
-                        <input type="time" value={unloadEndTime} onChange={e => setUnloadEndTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }}/>
-                    </div>
+                <label>Start:</label>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                    <input type="date" value={unloadStartDate} onChange={e => setUnloadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                    <input type="time" value={unloadStartTime} onChange={e => setUnloadStartTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                </div>
+                <label>End:</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <input type="date" value={unloadEndDate} onChange={e => setUnloadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                    <input type="time" value={unloadEndTime} onChange={e => setUnloadEndTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                </div>
             </fieldset>
         </div>
+
 
         {/* Measurements */}
         <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px dashed #09111aff'}}>
@@ -637,7 +697,7 @@ const payload = {
             <tbody>
               {offers.map((offer, idx) => (
                 <tr key={offer.id} style={{ background: idx % 2 === 0 ? '#f2f8fc' : '#ffffff' }}>
-                  <td style={{ padding: '8px' }}>{offer.externalNumber || offer.id}</td>
+                  <td style={{ padding: '8px' }}>{offer.id}</td>
                   <td style={{ padding: '8px' }}>{offer._loading}</td>
                   <td style={{ padding: '8px' }}>{offer._unloading}</td>
                   <td style={{ textAlign: 'center' }}>
