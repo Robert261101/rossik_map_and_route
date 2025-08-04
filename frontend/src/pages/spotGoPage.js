@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import countries from "i18n-iso-countries";
 import enLocale  from "i18n-iso-countries/langs/en.json";
 
+
 countries.registerLocale(enLocale);
 
 
@@ -97,23 +98,55 @@ export default function SpotGoPage() {
     }, []);
 
     async function refreshSubmittedOffers() {
-        const { data, error } = await supabase
-            .from('submitted_offers')
-            .select('*')
-            .order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('submitted_offers')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-        if (error) {
-            console.error("Failed to fetch submitted offers:", error);
-        } else {
-            const formatted = data.map(o => ({
-                id: o.offer_id,
-                externalNumber: `${prefix}-${o.offer_id}`, // now just use offer_id for frontend display
-                _loading: o.loading_address,
-                _unloading: o.unloading_address
-            }));
-            setOffers(formatted);
-        }
-    }
+  if (error) {
+    console.error("Failed to fetch submitted offers:", error);
+  } else {
+    const formatted = data.map(o => {
+      const idShort = o.offer_id?.replace(/-/g, '').slice(0, 10) || 'N/A';
+
+      // Format Loading Address
+      let formattedLoading = o.loading_address || "";
+      if (formattedLoading) {
+        const postalMatch = formattedLoading.match(/\d{4,}/)?.[0] || "";
+        const addressOnly = formattedLoading.replace(/.*?(?=\d{4,})\d{4,}\s*/, "").replace(/,?\s*[^,]+$/, "").trim();
+        const countryMatch = formattedLoading.match(/([A-Za-z ]+),?\s*$/);
+        const country = countryMatch ? countryMatch[1].trim() : "";
+        const cc = countries.getAlpha2Code(country, "en") || "";
+
+        formattedLoading = postalMatch
+          ? `${cc}-${postalMatch} ${addressOnly}`
+          : `${addressOnly}, ${country}`;
+      }
+
+      // Format Unloading Address
+      let formattedUnloading = o.unloading_address || "";
+      if (formattedUnloading) {
+        const postalMatch = formattedUnloading.match(/\d{4,}/)?.[0] || "";
+        const addressOnly = formattedUnloading.replace(/.*?(?=\d{4,})\d{4,}\s*/, "").replace(/,?\s*[^,]+$/, "").trim();
+        const countryMatch = formattedUnloading.match(/([A-Za-z ]+),?\s*$/);
+        const country = countryMatch ? countryMatch[1].trim() : "";
+        const cc = countries.getAlpha2Code(country, "en") || "";
+
+        formattedUnloading = postalMatch
+          ? `${cc}-${postalMatch} ${addressOnly}`
+          : `${addressOnly}, ${country}`;
+      }
+
+      return {
+        id: o.offer_id,
+        externalNumber: `${prefix}${idShort}`,
+        _loading: formattedLoading,
+        _unloading: formattedUnloading
+      };
+    });
+    setOffers(formatted);
+  }
+}
 
 
     useEffect(() => {
@@ -372,7 +405,7 @@ export default function SpotGoPage() {
         const payload = {
         type: "Spot",
         externalNumber: prefix,
-        sources: ["1","2","8","12","14"],
+        sources: ["1","2","3","4","8","9","12","14","16"],
         useAlternativeLocations: hideLocations,
         locations: [
             {
@@ -444,6 +477,7 @@ export default function SpotGoPage() {
                 .insert([
                 {
                     offer_id: result.id,
+                    external_number: `${prefix}${result.id.replace(/-/g, '').slice(0, 10)}`,
                     loading_address: address0.label,
                     unloading_address: address1.label,
                     created_at: new Date().toISOString()
@@ -697,7 +731,7 @@ export default function SpotGoPage() {
             <tbody>
               {offers.map((offer, idx) => (
                 <tr key={offer.id} style={{ background: idx % 2 === 0 ? '#f2f8fc' : '#ffffff' }}>
-                  <td style={{ padding: '8px' }}>{offer.id}</td>
+                  <td style={{ padding: '8px' }}>{offer.externalNumber}</td>
                   <td style={{ padding: '8px' }}>{offer._loading}</td>
                   <td style={{ padding: '8px' }}>{offer._unloading}</td>
                   <td style={{ textAlign: 'center' }}>
