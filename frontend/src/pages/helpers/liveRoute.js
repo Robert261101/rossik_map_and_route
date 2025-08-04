@@ -1,68 +1,3 @@
-// // src/pages/helpers/liveRoute.js
-
-// /**
-//  * Requests a fully‐constrained truck route leg, returning both polyline AND summary/toll info.
-//  */
-// async function drawLeg(o, d, vehicleType, apiKey) {
-//   const params = new URLSearchParams({
-//     origin:      `${o.lat},${o.lng}`,
-//     destination: `${d.lat},${d.lng}`,
-//     transportMode:   "truck",
-//     "truck[axleCount]":   vehicleType.axles,
-//     "vehicle[grossWeight]": vehicleType.weight,
-//     "vehicle[height]":     400,
-//     "vehicle[width]":      255,
-//     "vehicle[length]":     1875,
-//     "tolls[emissionType]": "euro6",
-//     alternatives: "1",
-//     return:       "polyline,summary,actions,instructions,tolls",
-//     apikey:       apiKey,
-//   });
-
-//   const res = await fetch(
-//     `https://router.hereapi.com/v8/routes?${params.toString()}`
-//   );
-//   if (!res.ok) throw new Error(`HERE API error ${res.status}`);
-//   const { routes } = await res.json();
-//   return routes?.[0]?.sections.map(s => s.polyline).join("") || null;
-// }
-
-
-// export async function calculateAndDisplayLiveRoute(
-//   map, start, end, vehicleType,
-//   viaLat, viaLng,
-//   apiKey
-// ) {
-//   if (!map) return;
-
-//   const snappedVia = { lat: viaLat, lng: viaLng };
-
-//   // build leg1 and leg2 in parallel
-//   const [leg1, leg2] = await Promise.all([
-//     drawLeg(start,      snappedVia,   vehicleType, apiKey),
-//     drawLeg(snappedVia, end,          vehicleType, apiKey)
-//   ]);
-
-//   // clear old live-route
-//   map.getObjects().forEach(o => {
-//     if (o instanceof window.H.map.Polyline && o.getData()==="live") {
-//       map.removeObject(o);
-//     }
-//   });
-
-//   // render each leg as its own orange polyline
-//   for (let pl of [leg1, leg2]) {
-//     if (!pl) continue;
-//     const ls = window.H.geo.LineString.fromFlexiblePolyline(pl);
-//     const poly = new window.H.map.Polyline(ls, {
-//       style: { strokeColor: "orange", lineWidth: 4 }
-//     });
-//     poly.setData("live");
-//     map.addObject(poly);
-//   }
-// }
-
-
 // src/pages/helpers/liveRoute.js
 
 /**
@@ -76,20 +11,20 @@ import React from 'react';
  */
 export async function calculateAndDisplayLiveRoute(
   map,
-  start,
-  end,
+  startStop,
+  viaPoint,
+  endStop,
   vehicleType,
-  viaLat,
-  viaLng,
-  apiKey
+  apiKey,
+  legIdx
 ) {
   if (!map) return;
 
   // Build one global‑opt route request with origin → via → destination
   const params = new URLSearchParams({
-    origin:                 `${start.lat},${start.lng}`,
-    via:                    `${viaLat},${viaLng}`,
-    destination:            `${end.lat},${end.lng}`,
+    origin:                 `${startStop.lat},${startStop.lng}`,
+    via:                    `${viaPoint.lat},${viaPoint.lng}`,
+    destination:            `${endStop.lat},${endStop.lng}`,
     transportMode:          'truck',
     'truck[axleCount]':     vehicleType.axles,
     'vehicle[grossWeight]': vehicleType.weight,
@@ -123,10 +58,15 @@ export async function calculateAndDisplayLiveRoute(
 
   // Clear previous live‑preview polylines
   map.getObjects().forEach(o => {
-    if (o instanceof window.H.map.Polyline && o.getData() === 'live') {
+    if (
+      o instanceof window.H.map.Polyline &&
+      o.getData() === `live-${legIdx}`
+    ) {
       map.removeObject(o);
     }
   });
+
+
 
   // Draw each section of the fastest route as an orange polyline
   fastestRoute.forEach(section => {
@@ -134,7 +74,7 @@ export async function calculateAndDisplayLiveRoute(
     const poly = new window.H.map.Polyline(ls, {
       style: { strokeColor: 'orange', lineWidth: 4 }
     });
-    poly.setData('live');
+    poly.setData(`live-${legIdx}`);
     map.addObject(poly);
   });
 }

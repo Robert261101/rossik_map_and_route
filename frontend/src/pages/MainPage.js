@@ -4,7 +4,6 @@ import AutoCompleteInput from "../AutoCompleteInput";
 import TollCalculator from "../TollCalculator";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
-import SearchBar from "../helpers/SearchBar";
 import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
 import { Link } from "react-router-dom";
@@ -57,6 +56,26 @@ const MainPage = ({ user })  => {
   const viaRef = useRef(null);
   const behaviorRef = useRef(null);
   const currentLineGeom = useRef(null);
+  const [viaSegmentIndex, setViaSegmentIndex] = useState(null);
+  const [viaLegIndex, setViaLegIndex] = useState(null);
+
+    // ─── debounced live‐preview reroute helper ────────────────────────────────
+  const debouncedLive = debounce((lat, lng) => {
+    if (viaLegIndex == null) return;
+    calculateAndDisplayLiveRoute(
+      mapRef.current,
+      addresses[viaLegIndex],
+      { lat, lng },
+      addresses[viaLegIndex + 1],
+      vehicleType,
+      process.env.REACT_APP_HERE_API_KEY,
+      viaLegIndex
+    );
+  }, 200);
+  // ──────────────────────────────────────────────────────────────────────────
+
+
+
 
   //compute total wall-clock seconds (driving + breaks) once per render
   const secWithBreaks = rawDuration != null
@@ -226,98 +245,99 @@ const addAddress = async (coordsWithLabel) => {
   };
 
   // Obținere rute
-  const getRoute = async (pts = addresses) => {    
-    setIsLoading(true);
-    
-    const startCoordinates = pts[0];
-    const endCoordinates = pts[pts.length - 1];
-    const intermediatePoints = pts.slice(1, pts.length - 1);
-    try {
-      let url = `https://router.hereapi.com/v8/routes?origin=${startCoordinates.lat},${startCoordinates.lng}`;
-      intermediatePoints.forEach((point) => {
-        const viaParam = point.radius ? 
-          `${point.lat},${point.lng};r=${point.radius}` : 
-          `${point.lat},${point.lng}`;
-        url += `&via=${point.lat},${point.lng}`;
-      });
-      url += `&destination=${endCoordinates.lat},${endCoordinates.lng}`;
-      url += `&return=polyline,summary,actions,instructions,tolls`;
-      url += `&alternatives=3`; // max 3 rute alternative  
-      url += `&vehicle[weightPerAxle]=11500`;
-      url += `&transportMode=truck`;
-      url += `&vehicle[height]=400`;
-      url += `&vehicle[width]=255`;
-      url += `&vehicle[length]=1875`;
-      url += `&truck[axleCount]=${vehicleType.axles}`;
-      url += `&vehicle[grossWeight]=${vehicleType.weight}`;
-      url += `&truck[limitedWeight]=7500`;
-      url += `&tolls[emissionType]=euro6`;
-      url += `&apikey=${process.env.REACT_APP_HERE_API_KEY}`;
+const getRoute = async (pts = addresses) => {
+  setIsLoading(true);
 
-      const response = await fetch(url);
-      const data = await response.json();
+  try {
+    // 1️⃣ Build our HERE URL with origin, all vias, and destination
+    const origin = pts[0];
+    const destination = pts[pts.length - 1];
 
+    let url = `https://router.hereapi.com/v8/routes?apikey=${process.env.REACT_APP_HERE_API_KEY}`;
+    // fixed start
+    url += `&origin=${origin.lat},${origin.lng}`;
+    // any number of middle points (including your via)
+    pts.slice(1, -1).forEach(pt => {
+      url += `&via=${pt.lat},${pt.lng}`;
+    });
+    // fixed end
+    url += `&destination=${destination.lat},${destination.lng}`;
 
-      if (!data.routes || data.routes.length === 0) {
-        console.error("No routes found:", data);
-        alert("No routes found for the selected addresses. Try other locations.");
-        setIsLoading(false);
-        return;
-      }
+    // return what we need
+    url += `&return=polyline,summary,actions,instructions,tolls`;
+    url += `&alternatives=3`;
 
+    // truck profile
+    url += `&transportMode=truck`;
+    url += `&vehicle[weightPerAxle]=11500`;
+    url += `&vehicle[height]=400`;
+    url += `&vehicle[width]=255`;
+    url += `&vehicle[length]=1875`;
+    url += `&truck[axleCount]=${vehicleType.axles}`;
+    url += `&vehicle[grossWeight]=${vehicleType.weight}`;
+    url += `&truck[limitedWeight]=7500`;
+    url += `&tolls[emissionType]=euro6`;
 
-      const rawRoutes = data.routes;
+    // 2️⃣ Fetch & parse
+    const response = await fetch(url);
+    const data = await response.json();
 
-      const withDurations = rawRoutes.map(route => {
-        const totalDuration = route.sections
-          .reduce((sum, s) => sum + (s.summary?.duration || 0), 0);
-        return { route, duration: totalDuration };
-      });
-
-      withDurations.sort((a, b) => a.duration - b.duration);
-
-      const sortedRoutes = withDurations.map(({ route }) => route);
-
-      const initialCosts = Array(sortedRoutes.length).fill(0);
-      const initialTollLists = Array(sortedRoutes.length).fill({
-        totalCost: 0,
-        tollList: []
-      });
-
-      setRoutes(sortedRoutes);
-      setRouteTaxCosts(initialCosts);
-      setTollCosts(initialTollLists);
-      setSelectedRouteIndex(0);
-      displayRoute(sortedRoutes[0]);
-
-      if (data.routes[0].sections && data.routes[0].sections.length > 0) {
-        let totalDistance = 0;
-        let totalDuration = 0;
-        data.routes[0].sections.forEach((section) => {
-          if (section.summary) {
-            totalDistance += section.summary.length;
-            totalDuration += section.summary.duration;
-          }
-        });
-        setDistance((totalDistance / 1000).toFixed(2));
-        setRawDistance(totalDistance);
-        setRawDuration(totalDuration);
-        const secWithBreaks = addLegalBreaks(totalDuration);
-        const hWB = Math.floor(secWithBreaks/3600);
-        const mWB = Math.floor((secWithBreaks%3600)/60);
-        setDurationWithBreaks(`${hWB}h ${mWB}m`);
-        const hours = Math.floor(totalDuration / 3600);
-        const minutes = Math.floor((totalDuration % 3600) / 60);
-        setDuration(`${hours}h ${minutes}m`);
-      }
-      setActiveTab("results");
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Error fetching route:", error);
-      alert("An error occurred while calculating the route. Please try again.");
-      setIsLoading(false);
+    if (!data.routes || data.routes.length === 0) {
+      console.error("No routes found:", data);
+      alert("No routes found. Try different points.");
+      return;
     }
-  };
+
+    // 3️⃣ Sort by raw duration
+    const sorted = data.routes
+      .map(route => ({
+        route,
+        duration: route.sections.reduce((sum, s) => sum + (s.summary?.duration || 0), 0)
+      }))
+      .sort((a, b) => a.duration - b.duration)
+      .map(item => item.route);
+
+    // 4️⃣ Initialize state
+    setRoutes(sorted);
+    setRouteTaxCosts(Array(sorted.length).fill(0));
+    setTollCosts(Array(sorted.length).fill({ totalCost: 0, tollList: [] }));
+    setSelectedRouteIndex(0);
+
+    // 5️⃣ Render the fastest one on the map
+    displayRoute(sorted[0]);
+
+    // 6️⃣ Extract summary for the first route
+    const first = sorted[0];
+    let totalDist = 0;
+    let totalDur = 0;
+    first.sections.forEach(sec => {
+      if (sec.summary) {
+        totalDist += sec.summary.length;
+        totalDur  += sec.summary.duration;
+      }
+    });
+    setDistance((totalDist / 1000).toFixed(2));
+    setRawDistance(totalDist);
+    setRawDuration(totalDur);
+
+    const breaks = addLegalBreaks(totalDur);
+    const h = Math.floor(breaks / 3600);
+    const m = Math.floor((breaks % 3600) / 60);
+    setDurationWithBreaks(`${h}h ${m}m`);
+
+    const hh = Math.floor(totalDur / 3600);
+    const mm = Math.floor((totalDur % 3600) / 60);
+    setDuration(`${hh}h ${mm}m`);
+
+    setActiveTab("results");
+
+  } catch (err) {
+    console.error("Error fetching route:", err);
+    alert("Error calculating route. Please try again.");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const createDraggableMarker = (pt, idx) => {
   const el = document.createElement('div');
@@ -368,6 +388,22 @@ const addAddress = async (coordsWithLabel) => {
   return marker;
 };
 
+  // Split the full route.sections into N−1 “legs” (one per interval between stops)
+  const buildLegs = (routeSections) => {
+    const stops = addresses.length;
+    const total = routeSections.length;
+    const per = Math.floor(total / (stops - 1));
+    const legs = [];
+    for (let i = 0; i < stops - 1; i++) {
+      const start = i * per;
+      // last leg takes any remainder
+      const end = (i === stops - 2) ? total : (i + 1) * per;
+      legs.push(routeSections.slice(start, end));
+    }
+    return legs;
+  };
+
+
 
   // Afișare rută pe hartă
 const displayRoute = (route) => {
@@ -417,17 +453,8 @@ if (viaRef.current) {
   let activePointerId = null;
 
 
-  const debouncedLive = debounce((lat, lng) => {
-    calculateAndDisplayLiveRoute(
-      map,
-      addresses[0],
-      addresses[addresses.length - 1],
-      vehicleType,
-      lat,
-      lng,
-      process.env.REACT_APP_HERE_API_KEY
-    );
-  }, 200);
+// fire one preview immediately at spawn:
+    debouncedLive(lat, lng);
 
 requestAnimationFrame(() => {
   viaMarker.addEventListener('pointerdown', evt => {
@@ -480,28 +507,33 @@ try {
 
   // 2) draw the route polyline
   const fullLineString = new window.H.geo.LineString();
-route.sections.forEach(section => {
-  const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
-  const pts = ls.getLatLngAltArray(); 
-  for (let i = 0; i < pts.length; i += 3) {
-    fullLineString.pushLatLngAlt(pts[i], pts[i+1], pts[i+2]);
-  }
 
-  const polyline = new window.H.map.Polyline(ls, {
-    style: { strokeColor: 'blue', lineWidth: 4 }
+  const legs = buildLegs(route.sections);
+  legs.forEach((legSections, legIdx) => {
+    // stitch together this leg’s sections into one LineString
+    const ls = new window.H.geo.LineString();
+    legSections.forEach(sec => {
+      const part = window.H.geo.LineString.fromFlexiblePolyline(sec.polyline);
+      const arr = part.getLatLngAltArray();
+      for (let i = 0; i < arr.length; i += 3) {
+        ls.pushLatLngAlt(arr[i], arr[i+1], arr[i+2]);
+      }
+    });
+
+    // draw the leg
+    const legPolyline = new window.H.map.Polyline(ls, {
+      style: { strokeColor: 'blue', lineWidth: 4 }
+    });
+    // tapping any leg sets viaLegIndex and drops a via-marker
+    legPolyline.addEventListener('tap', evt => {
+      const { viewportX, viewportY } = evt.currentPointer;
+      const { lat, lng } = map.screenToGeo(viewportX, viewportY);
+      setViaLegIndex(legIdx);
+      spawnViaMarker(lat, lng);
+    });
+    map.addObject(legPolyline);
   });
 
-  // ✨ TAP TO ADD VIA POINT
-  polyline.addEventListener('tap', evt => {
-    const geo = evt.target.getGeometry().extractPoint(
-      Math.floor(evt.target.getGeometry().getPointCount() / 2)
-    );
-    const screen = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
-    spawnViaMarker(screen.lat, screen.lng); // 🔥 defined next
-  });
-
-  map.addObject(polyline);
-});
   currentLineGeom.current = fullLineString;
 
   // 3) re-center map
@@ -515,48 +547,17 @@ if (!viaLocation) return;
 
   // 6) re-attach drag logic (no snapping!)
   let dragging = false;
-  const debouncedLive = debounce((lat, lng) => {
+  debouncedLive((lat, lng) => {
+    if (viaLegIndex == null) return;
     calculateAndDisplayLiveRoute(
-      map,
-      addresses[0],
-      addresses[addresses.length - 1],
+      mapRef.current,
+      addresses[viaLegIndex],
+      { lat, lng },
+      addresses[viaLegIndex + 1],
       vehicleType,
-      lat,
-      lng,
       process.env.REACT_APP_HERE_API_KEY
     );
-  }, 200);
-
-  // viaMarker.addEventListener('pointerdown', evt => {
-  //   evt.stopPropagation();
-  //   dragging = true;
-  //   viaEl.style.cursor = 'grabbing';
-  //   behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
-  // });
-
-  // map.addEventListener('pointermove', evt => {
-  //   if (!dragging) return;
-  //   const { viewportX, viewportY } = evt.currentPointer;
-  //   const geo = map.screenToGeo(viewportX, viewportY);
-  //   viaMarker.setGeometry(geo);
-  //   debouncedLive(geo.lat, geo.lng);
-  // });
-
-  // map.addEventListener('pointerup', async () => {
-  //   if (!dragging) return;
-  //   dragging = false;
-  //   viaEl.style.cursor = 'grab';
-  //   behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-  //   debouncedLive.flush();
-
-  //   // ↳ save the raw drop coords, no snapping:
-  //   const rawGeo = viaMarker.getGeometry();
-  //   setViaLocation({ lat: rawGeo.lat, lng: rawGeo.lng });
-
-  //   // ↳ lookup postal
-  //   const code = await fetchPostalCode(rawGeo.lat, rawGeo.lng);
-  //   setViaPostal(code);
-  // });
+  });
 };
 
 
@@ -588,21 +589,26 @@ if (!viaLocation) return;
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (addresses.length < 2) {
-      alert('Trebuie să adaugi minimum două adrese înainte de calcul.');
-      return;
-    }
-    // If user dragged a via, insert it between start & end
-    let coords = [...addresses];
-    if (viaLocation) {
-      coords = [ coords[0], viaLocation, coords[ coords.length - 1 ] ];
-    }
-    apiCallCount++;
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (addresses.length < 2) {
+    alert('At least two addresses required!');
+    return;
+  }
+
+  // 🚀 Only the addresses array defines your waypoints
+  const coords = [...addresses];
+
+  setIsLoading(true);
+  apiCallCount++;
+  try {
     await getRoute(coords);
-    // setViaLocation(null);
-  };
+  } finally {
+    setIsLoading(false);
+    // viaLocation/viaSegmentIndex are still tracked by your drag logic,
+    // but won’t be spliced in until you choose to re-enable that block.
+  }
+};
 
   // 3) Callback - când TollCalculator calculează costul pt o rută, îl salvăm și într-un array numeric simplu routeTaxCosts, și în tollCosts (pt listă).
   const updateTollCostForRoute = (index, tollData) => {

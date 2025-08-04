@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { exportRoutesExcel } from '../pages/helpers/exportRoutesExcel';
+import { exportRoutesExcel } from './exportRoutesExcel';
 
 export default function SearchBar({ savedRoutes }) {
   const navigate = useNavigate();

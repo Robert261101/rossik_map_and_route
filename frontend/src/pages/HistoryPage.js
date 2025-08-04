@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
-import SearchBar from '../helpers/SearchBar';
+import SearchBar from './helpers/SearchBar';
 import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
 import RossikLogo from '../VektorLogo_Rossik_rot.gif';
