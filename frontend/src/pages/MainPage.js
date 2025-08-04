@@ -20,8 +20,6 @@ const MainPage = ({ user })  => {
   const [fixedTotalCost, setFixedTotalCost] = useState(''); // only used when allIn===true
   const [activeTab, setActiveTab] = useState("input"); // "input" | "results"
   const [addresses, setAddresses] = useState([]);
-  const [viaLocation, setViaLocation] = useState(null);
-  const [viaPostal, setViaPostal]     = useState(null);
   const [distance, setDistance] = useState(null);
   const [routes, setRoutes] = useState([]); // Array cu rutele alternative
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
@@ -52,12 +50,12 @@ const MainPage = ({ user })  => {
   const [identifier, setIdentifier] = useState(''); // unique run ID
   const [saveMsg, setSaveMsg] = useState('');
   const [durationWithBreaks, setDurationWithBreaks] = useState(null);
+  const [viaPoints, setViaPoints] = useState([]); // [{lat, lng, postal, legIndex}, ...]
 
-  const viaRef = useRef(null);
+
+  const viaMarkersRef = useRef([]);            // H.map.DomMarker refs per point
   const behaviorRef = useRef(null);
   const currentLineGeom = useRef(null);
-  const [viaSegmentIndex, setViaSegmentIndex] = useState(null);
-  const [viaLegIndex, setViaLegIndex] = useState(null);
 
   const debouncedLive = debounce((lat, lng, legIdx) => {
     calculateAndDisplayLiveRoute(
@@ -242,17 +240,15 @@ const getRoute = async (pts = addresses) => {
   setIsLoading(true);
 
   try {
-
-    
-// ① Make a fresh copy
-    const waypoints = [...pts];
-
-    // ② If the user placed a via, inject it at the right index
-    if (viaLocation != null && viaLegIndex != null) {
-      // Insert AFTER the start of that leg:
-      waypoints.splice(viaLegIndex + 1, 0, viaLocation);
-    }
-
+    // Build waypoints and insert all viaPoints per leg
+    const combined = [];
+    pts.forEach((addr, idx) => {
+      combined.push(addr);
+      viaPoints
+        .filter(p => p.legIndex === idx)
+        .forEach(p => combined.push({ lat: p.lat, lng: p.lng }));
+    });
+    const waypoints = combined;
     // ③ Now waypoints = [start, …vias…, end]
     const origin      = waypoints[0];
     const destination = waypoints[waypoints.length - 1];
@@ -364,97 +360,89 @@ const displayRoute = (route) => {
   if (!mapRef.current) return;
   const map = mapRef.current;
 
-  // 1) clear old polylines & via-marker
+  // 1) clear old polylines & via-markers
   map.getObjects().forEach(obj => {
     if (obj instanceof window.H.map.Polyline) {
       map.removeObject(obj);
     }
-    if (obj === viaRef.current) {
-      try {
-        map.removeObject(obj);
-      } catch (err) {
-        console.warn("Tried removing viaMarker but it was already removed:", err);
-      }
-    }
   });
+
+  viaMarkersRef.current.forEach(m => map.removeObject(m));
+  viaMarkersRef.current = [];
 
   const spawnViaMarker = (lat, lng, legIdx) => {
   if (!mapRef.current) return;
   const map = mapRef.current;
 
-if (viaRef.current) {
-  try {
-    map.removeObject(viaRef.current);
-  } catch (err) {
-    console.warn("Marker cleanup failed:", err);
-  }
-}
-
+  // 1) Create the DOM handle
   const el = document.createElement('div');
   el.className = 'via-handle';
+  el.style.cursor = 'grab';
+  el.style.touchAction = 'none'; // ensure pointer events fire
 
-  el.addEventListener('pointerenter', () => { el.style.opacity = '0.8'; });
-
+  // 2) Wrap in a HERE DomIcon & DomMarker
   const icon = new window.H.map.DomIcon(el, { volatility: true });
-  const viaMarker = new window.H.map.DomMarker({ lat, lng }, { icon, volatility: true });
-  map.addObject(viaMarker);
-  console.log("Spawned via-handle marker element:", el);
+  const marker = new window.H.map.DomMarker({ lat, lng }, { icon, volatility: true });
+  map.addObject(marker);
 
-  viaRef.current = viaMarker;
+  // 3) Track it so we can clear later
+  viaMarkersRef.current.push(marker);
 
   let dragging = false;
 
+  // // 4) Immediate preview
+  // debouncedLive(lat, lng, legIdx);
 
-// fire one preview immediately at spawn:
-  debouncedLive(lat, lng, legIdx);
-
-requestAnimationFrame(() => {
-  viaMarker.addEventListener('pointerdown', evt => {
-    evt.stopPropagation();
-    dragging = true;
-    el.style.cursor = 'grabbing';
-
-    try {
-      if (el.setPointerCapture) {
+  // 5) pointerdown on the marker → start drag
+  //    (we attach via the marker so the SDK correctly routes events)
+  requestAnimationFrame(() => {
+    marker.addEventListener('pointerdown', evt => {
+      evt.stopPropagation();
+      dragging = true;
+      el.style.cursor = 'grabbing';
+      behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+      try {
         el.setPointerCapture(evt.pointerId);
+      } catch (e) {
+        console.warn('Pointer capture failed:', e);
       }
-    } catch (err) {
-      console.warn('Pointer capture failed:', err);
-    }
-
-    behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+    });
   });
-});
 
-  map.addEventListener('pointermove', evt => {
+  // 6) pointermove on the map → move marker + live preview
+  const onMove = evt => {
     if (!dragging) return;
     const geo = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
-    viaMarker.setGeometry(geo);
+    marker.setGeometry(geo);
     debouncedLive(geo.lat, geo.lng, legIdx);
-  });
+  };
+  map.addEventListener('pointermove', onMove);
 
-  map.addEventListener('pointerup', async evt => {
+  // 7) pointerup on the map → finish drag, save point
+  const onUp = async evt => {
     if (!dragging) return;
     dragging = false;
     el.style.cursor = 'grab';
-try {
-  if (el.releasePointerCapture) {
-    el.releasePointerCapture(evt.pointerId);
-  }
-} catch (err) {
-  console.warn('Pointer release failed:', err);
-}
-
     behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+    try {
+      el.releasePointerCapture(evt.pointerId);
+    } catch (e) {
+      console.warn('Pointer release failed:', e);
+    }
     debouncedLive.flush();
 
-    const geo = viaMarker.getGeometry();
-    setViaLocation({ lat: geo.lat, lng: geo.lng });
+    const { lat: finalLat, lng: finalLng } = marker.getGeometry();
+    const postal = await fetchPostalCode(finalLat, finalLng);
 
-    const code = await fetchPostalCode(geo.lat, geo.lng);
-    setViaPostal(code);
-  });
+    setViaPoints(points => {
+      const others = points.filter(p => p.legIndex !== legIdx);
+      return [...others, { lat: finalLat, lng: finalLng, postal, legIndex: legIdx }];
+    });
+  };
+  map.addEventListener('pointerup', onUp);
 };
+
+
 
 
   // 2) draw the route polyline
@@ -478,9 +466,7 @@ try {
     });
     // tapping any leg sets viaLegIndex and drops a via-marker
     legPolyline.addEventListener('tap', evt => {
-      const { viewportX, viewportY } = evt.currentPointer;
-      const { lat, lng } = map.screenToGeo(viewportX, viewportY);
-      setViaLegIndex(legIdx);
+      const { lat, lng } = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
       spawnViaMarker(lat, lng, legIdx);
     });
     map.addObject(legPolyline);
@@ -493,10 +479,6 @@ try {
   if (bounds) {
     map.getViewModel().setLookAtData({ bounds });
   }
-
-// 4) skip adding default viaMarker if user hasn't clicked the route yet
-if (!viaLocation) return;
-
 };
 
   // Selectare rută
@@ -895,15 +877,6 @@ setTimeout(() => {
                   })}
                 </ul>
 
-                {viaLocation && (
-                  <div className="mt-2 text-sm text-gray-700">
-                    <strong>VIA:</strong>{' '}
-                    {viaPostal
-                      ? <>postal code – {viaPostal}</>
-                      : <>lat: {viaLocation.lat.toFixed(5)}, lng: {viaLocation.lng.toFixed(5)}</>
-                    }
-                  </div>
-                )}
                 <button
                   type="submit"
                   disabled={isLoading}
