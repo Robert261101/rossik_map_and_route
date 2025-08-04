@@ -24,6 +24,7 @@ export default async function handler(req, res) {
     const response = await fetch(SPOTGO_URL, {
       method: 'DELETE',
       headers: {
+        'Content-Type': 'application/json',
         'x-api-version': '1.0',
         'X-Api-Key': apiKey
       }

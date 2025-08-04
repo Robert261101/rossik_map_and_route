@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.50.2",
     "file-saver": "^2.0.5",
     "here-maps": "^3.0.2",
+    "i18n-iso-countries": "^7.14.0",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
     "leaflet": "^1.9.4",
