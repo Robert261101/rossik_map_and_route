@@ -477,6 +477,7 @@ export default function SpotGoPage() {
                 .insert([
                 {
                     offer_id: result.id,
+                    external_number: `${prefix}${result.id.replace(/-/g, '').slice(0, 10)}`,
                     loading_address: address0.label,
                     unloading_address: address1.label,
                     created_at: new Date().toISOString()

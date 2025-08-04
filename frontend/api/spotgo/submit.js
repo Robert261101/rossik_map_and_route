@@ -47,12 +47,12 @@ export default async function handler(req, res) {
 
     try {
         const shortId = json.id?.replace(/-/g, '').slice(0, 10);
-        const readableExternal = `${freightData.externalNumber}/${shortId}`;
-
+        freightData.externalNumber = `${freightData.externalNumber}/${shortId}`;
+        
         const { error } = await supabaseAdmin.from('submitted_offers').insert([
             {
             offer_id: json.id || null, // stays as full UUID
-            external_number: readableExternal, // prefix + shortId goes here
+            external_number: freightData.externalNumber, // prefix + shortId goes here
             loading_address: freightData.locations?.[0]?.address?.label || '',
             unloading_address: freightData.locations?.[1]?.address?.label || '',
             submitted_at: new Date().toISOString()
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
             console.error("Failed to save to Supabase:", error);
         }
     } catch (e) {
-        nsole.error("Supabase insert exception:", e);
+        console.error("Supabase insert exception:", e);
     }
 
 
