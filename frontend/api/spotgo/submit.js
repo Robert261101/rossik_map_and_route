@@ -1,7 +1,5 @@
 // frontend/api/spotGo/submit.js
-
-// import fetch from 'node-fetch';
-import supabaseAdmin from '@/lib/supabaseAdmin';
+import { supabaseAdmin } from '../../src/lib/supabaseAdmin'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
