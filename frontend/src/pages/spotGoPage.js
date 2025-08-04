@@ -469,26 +469,26 @@ export default function SpotGoPage() {
             return;
         }
 
-        // const result = await res.json();
+        const result = await res.json();
 
-        // try {
-        //     const { error } = await supabase
-        //         .from('submitted_offers')
-        //         .insert([
-        //         {
-        //             offer_id: result.id,
-        //             loading_address: address0.label,
-        //             unloading_address: address1.label,
-        //             created_at: new Date().toISOString()
-        //         }
-        //         ]);
+        try {
+            const { error } = await supabase
+                .from('submitted_offers')
+                .insert([
+                {
+                    offer_id: result.id,
+                    loading_address: address0.label,
+                    unloading_address: address1.label,
+                    created_at: new Date().toISOString()
+                }
+                ]);
 
-        //     if (error) {
-        //         console.error("Failed to insert into Supabase:", error.message);
-        //     }
-        // } catch (e) {
-        // console.error("Supabase insert error:", e.message);
-        // }
+            if (error) {
+                console.error("Failed to insert into Supabase:", error.message);
+            }
+        } catch (e) {
+        console.error("Supabase insert error:", e.message);
+        }
 
         // Refresh the table view
         await refreshSubmittedOffers();
