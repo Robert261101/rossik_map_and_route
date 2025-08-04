@@ -60,18 +60,17 @@ const MainPage = ({ user })  => {
   const [viaLegIndex, setViaLegIndex] = useState(null);
 
     // ─── debounced live‐preview reroute helper ────────────────────────────────
-  const debouncedLive = debounce((lat, lng) => {
-    if (viaLegIndex == null) return;
+  const debouncedLive = debounce((lat, lng, legIdx) => {
     calculateAndDisplayLiveRoute(
       mapRef.current,
-      addresses[viaLegIndex],
+      addresses[legIdx],
       { lat, lng },
-      addresses[viaLegIndex + 1],
+      addresses[legIdx + 1],
       vehicleType,
       process.env.REACT_APP_HERE_API_KEY,
-      viaLegIndex
+      legIdx
     );
-  }, 200);
+  }, 50);
   // ──────────────────────────────────────────────────────────────────────────
 
 
@@ -249,20 +248,30 @@ const getRoute = async (pts = addresses) => {
   setIsLoading(true);
 
   try {
-    // 1️⃣ Build our HERE URL with origin, all vias, and destination
-    const origin = pts[0];
-    const destination = pts[pts.length - 1];
+
+    
+// ① Make a fresh copy
+    const waypoints = [...pts];
+
+    // ② If the user placed a via, inject it at the right index
+    if (viaLocation != null && viaLegIndex != null) {
+      // Insert AFTER the start of that leg:
+      waypoints.splice(viaLegIndex + 1, 0, viaLocation);
+    }
+
+    // ③ Now waypoints = [start, …vias…, end]
+    const origin      = waypoints[0];
+    const destination = waypoints[waypoints.length - 1];
 
     let url = `https://router.hereapi.com/v8/routes?apikey=${process.env.REACT_APP_HERE_API_KEY}`;
-    // fixed start
     url += `&origin=${origin.lat},${origin.lng}`;
-    // any number of middle points (including your via)
-    pts.slice(1, -1).forEach(pt => {
+
+    // ④ Add each “via” (everything except first & last)
+    waypoints.slice(1, -1).forEach(pt => {
       url += `&via=${pt.lat},${pt.lng}`;
     });
-    // fixed end
-    url += `&destination=${destination.lat},${destination.lng}`;
 
+    url += `&destination=${destination.lat},${destination.lng}`;
     // return what we need
     url += `&return=polyline,summary,actions,instructions,tolls`;
     url += `&alternatives=3`;
@@ -277,6 +286,8 @@ const getRoute = async (pts = addresses) => {
     url += `&vehicle[grossWeight]=${vehicleType.weight}`;
     url += `&truck[limitedWeight]=7500`;
     url += `&tolls[emissionType]=euro6`;
+
+    
 
     // 2️⃣ Fetch & parse
     const response = await fetch(url);
@@ -403,8 +414,6 @@ const getRoute = async (pts = addresses) => {
     return legs;
   };
 
-
-
   // Afișare rută pe hartă
 const displayRoute = (route) => {
   if (!mapRef.current) return;
@@ -424,7 +433,7 @@ const displayRoute = (route) => {
     }
   });
 
-  const spawnViaMarker = (lat, lng) => {
+  const spawnViaMarker = (lat, lng, legIdx) => {
   if (!mapRef.current) return;
   const map = mapRef.current;
 
@@ -450,11 +459,10 @@ if (viaRef.current) {
   viaRef.current = viaMarker;
 
   let dragging = false;
-  let activePointerId = null;
 
 
 // fire one preview immediately at spawn:
-    debouncedLive(lat, lng);
+    debouncedLive(lat, lng, legIdx);
 
 requestAnimationFrame(() => {
   viaMarker.addEventListener('pointerdown', evt => {
@@ -478,7 +486,7 @@ requestAnimationFrame(() => {
     if (!dragging) return;
     const geo = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
     viaMarker.setGeometry(geo);
-    debouncedLive(geo.lat, geo.lng);
+    debouncedLive(geo.lat, geo.lng, legIdx);
   });
 
   map.addEventListener('pointerup', async evt => {
@@ -529,7 +537,7 @@ try {
       const { viewportX, viewportY } = evt.currentPointer;
       const { lat, lng } = map.screenToGeo(viewportX, viewportY);
       setViaLegIndex(legIdx);
-      spawnViaMarker(lat, lng);
+      spawnViaMarker(lat, lng, legIdx);
     });
     map.addObject(legPolyline);
   });
@@ -546,18 +554,18 @@ try {
 if (!viaLocation) return;
 
   // 6) re-attach drag logic (no snapping!)
-  let dragging = false;
-  debouncedLive((lat, lng) => {
-    if (viaLegIndex == null) return;
-    calculateAndDisplayLiveRoute(
-      mapRef.current,
-      addresses[viaLegIndex],
-      { lat, lng },
-      addresses[viaLegIndex + 1],
-      vehicleType,
-      process.env.REACT_APP_HERE_API_KEY
-    );
-  });
+  // let dragging = false;
+  // debouncedLive((lat, lng) => {
+  //   if (viaLegIndex == null) return;
+  //   calculateAndDisplayLiveRoute(
+  //     mapRef.current,
+  //     addresses[viaLegIndex],
+  //     { lat, lng },
+  //     addresses[viaLegIndex + 1],
+  //     vehicleType,
+  //     process.env.REACT_APP_HERE_API_KEY
+  //   );
+  // });
 };
 
 
