@@ -59,7 +59,6 @@ const MainPage = ({ user })  => {
   const [viaSegmentIndex, setViaSegmentIndex] = useState(null);
   const [viaLegIndex, setViaLegIndex] = useState(null);
 
-    // ─── debounced live‐preview reroute helper ────────────────────────────────
   const debouncedLive = debounce((lat, lng, legIdx) => {
     calculateAndDisplayLiveRoute(
       mapRef.current,
@@ -71,10 +70,6 @@ const MainPage = ({ user })  => {
       legIdx
     );
   }, 50);
-  // ──────────────────────────────────────────────────────────────────────────
-
-
-
 
   //compute total wall-clock seconds (driving + breaks) once per render
   const secWithBreaks = rawDuration != null
@@ -205,7 +200,6 @@ const MainPage = ({ user })  => {
   };
 
   // Adaugă adrese
-// always async, always await fetchPostalCode
 const addAddress = async (coordsWithLabel) => {
   const code = await fetchPostalCode(coordsWithLabel.lat, coordsWithLabel.lng);
   const countryCode = coordsWithLabel.label
@@ -219,7 +213,7 @@ const addAddress = async (coordsWithLabel) => {
     ...prev,
     { 
       ...coordsWithLabel,
-      postal: code || "",      // give it something, even if lookup failed
+      postal: code || "",
       country: countryCode, 
     }
   ]);
@@ -350,55 +344,6 @@ const getRoute = async (pts = addresses) => {
   }
 };
 
-  const createDraggableMarker = (pt, idx) => {
-  const el = document.createElement('div');
-  el.className = 'via-handle';
-  el.style.cursor = 'via-handle'
-
-  const icon = new window.H.map.DomIcon(el, { volatility: false });
-  const marker = new window.H.map.DomMarker({ lat: pt.lat, lng: pt.lng }, { icon, volatility: false });
-
-  let dragging = false;
-
-  el.addEventListener('pointerdown', (evt) => {
-    evt.stopPropagation();
-    dragging = true;
-    el.style.cursor = 'grabbing';
-    behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
-  });
-
-  mapRef.current.addEventListener('pointermove', (evt) => {
-    if (!dragging) return;
-    const { viewportX, viewportY } = evt.currentPointer;
-    const geo = mapRef.current.screenToGeo(viewportX, viewportY);
-    marker.setGeometry(geo);
-  });
-
-  mapRef.current.addEventListener('pointerup', async () => {
-    if (!dragging) return;
-    dragging = false;
-    el.style.cursor = 'grab';
-    behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-
-    const newGeo = marker.getGeometry();
-    const postal = await fetchPostalCode(newGeo.lat, newGeo.lng);
-
-    // 🧠 Update this address in the list:
-    setAddresses((prev) => {
-      const updated = [...prev];
-      updated[idx] = {
-        ...updated[idx],
-        lat: newGeo.lat,
-        lng: newGeo.lng,
-        postal: postal || updated[idx].postal
-      };
-      return updated;
-    });
-  });
-
-  return marker;
-};
-
   // Split the full route.sections into N−1 “legs” (one per interval between stops)
   const buildLegs = (routeSections) => {
     const stops = addresses.length;
@@ -449,7 +394,6 @@ if (viaRef.current) {
   el.className = 'via-handle';
 
   el.addEventListener('pointerenter', () => { el.style.opacity = '0.8'; });
-  // el.addEventListener('pointerleave', () => { el.style.opacity = '0'; });
 
   const icon = new window.H.map.DomIcon(el, { volatility: true });
   const viaMarker = new window.H.map.DomMarker({ lat, lng }, { icon, volatility: true });
@@ -462,7 +406,7 @@ if (viaRef.current) {
 
 
 // fire one preview immediately at spawn:
-    debouncedLive(lat, lng, legIdx);
+  debouncedLive(lat, lng, legIdx);
 
 requestAnimationFrame(() => {
   viaMarker.addEventListener('pointerdown', evt => {
@@ -553,23 +497,7 @@ try {
 // 4) skip adding default viaMarker if user hasn't clicked the route yet
 if (!viaLocation) return;
 
-  // 6) re-attach drag logic (no snapping!)
-  // let dragging = false;
-  // debouncedLive((lat, lng) => {
-  //   if (viaLegIndex == null) return;
-  //   calculateAndDisplayLiveRoute(
-  //     mapRef.current,
-  //     addresses[viaLegIndex],
-  //     { lat, lng },
-  //     addresses[viaLegIndex + 1],
-  //     vehicleType,
-  //     process.env.REACT_APP_HERE_API_KEY
-  //   );
-  // });
 };
-
-
-
 
   // Selectare rută
   const handleRouteSelect = (index) => {
@@ -613,8 +541,6 @@ const handleSubmit = async (e) => {
     await getRoute(coords);
   } finally {
     setIsLoading(false);
-    // viaLocation/viaSegmentIndex are still tracked by your drag logic,
-    // but won’t be spliced in until you choose to re-enable that block.
   }
 };
 
@@ -681,36 +607,6 @@ setTimeout(() => {
     const { costPerKm } = computeRouteMetrics(routes[selectedRouteIndex]);
     return costPerKm;
   };
-
-  //TODO: VEZI DACA RAMANE COMENTAT SAU IL FOLOSESTI
-
-  // // Zoom-scaler pentru marker-ele DOM
-  // useEffect(() => {
-  //   if (!mapRef.current) return;
-  //   const map = mapRef.current;
-
-  //   const onMapViewChange = () => {
-  //     const zoom = map.getZoom();
-  //     if (markerGroupRef.current) {
-  //       markerGroupRef.current.getObjects().forEach(marker => {
-  //         const el = marker.__domElement;
-  //         if (el) {
-  //           const scale = 0.5 + zoom * 0.1;
-  //           el.style.transform = `translate(-50%,-110%) scale(${scale})`;
-  //           el.style.pointerEvents = 'auto'; // force it, in case zoom janks it
-
-  //         }
-  //       });
-  //     }
-  //   };
-    
-
-  //   map.addEventListener('mapviewchange', onMapViewChange);
-
-  //   return () => {
-  //     map.removeEventListener('mapviewchange', onMapViewChange);
-  //   };
-  // }, []);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -1263,54 +1159,6 @@ setTimeout(() => {
               </div>
             </div>
           )}
-        
-          {/*{/* ROW 4: Buton salvare ruta 
-          {routes.length > 0 && isManager && (
-            <div className="mt-4 p-4 border rounded bg-red-50 shadow-sm">
-              <h3 className="font-semibold mb-2">Save this route</h3>
-              <div className="flex flex-row gap-4 items-end mb-4">
-
-                {/* ← Truck Plate Select 
-                <div className="flex-1">
-                  <label className="block text-sm">Truck Plate</label>
-                  <select
-                    className="border p-1 w-full"
-                    value={plate}
-                    onChange={e => setPlate(e.target.value)}
-                    required
-                  >
-                    <option value="" disabled>Select your truck</option>
-                    {trucks.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.plate}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Tour Number stays the same 
-                <div className="flex-1">
-                  <label className="block text-sm">Tour Number</label>
-                  <input
-                    className="border p-1 w-full"
-                    placeholder="unique ID"
-                    value={identifier}
-                    onChange={e => setIdentifier(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <button
-                  onClick={handleSaveRoute}
-                  className="bg-green-600 text-white px-4 py-2"
-                >
-                  Save Route
-                </button>
-              </div>
-              {saveMsg && <p className="mt-2 text-sm">{saveMsg}</p>}
-            </div>
-          )}   */}
-
         </div>
 
         {/* RIGHT SIDE - MAP */}
