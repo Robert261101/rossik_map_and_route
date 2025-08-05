@@ -1094,7 +1094,7 @@ export default MainPage;
 
 //TODO: id in team view
 
-//TODO: button called tools that has a dropdown and includes map and guide - which is Main Page and history AND one for spotgo
+//TODO: add a new landing page called Rossik Tools - model - admin dashboard, but instead of the gets you have Map and Guide and SpotGo
 
 //TODO: map after you hit calculate route doesnt show up.
 

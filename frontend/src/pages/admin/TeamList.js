@@ -168,11 +168,23 @@ export default  function TeamList({ user }) {
                 <div className="text-left mb-4">
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Members:</h3>
                     <ul className="text-sm text-gray-800 dark:text-gray-100 list-disc list-inside space-y-1">
-                    {team.members.map((member) => (
-                        <li key={member.id}>
-                        {formatName(member.username)} ({member.role})
-                        </li>
-                    ))}
+                        {[
+                            // copy & sort so team_lead is first
+                            ...team.members
+                        ]
+                            .sort((a, b) =>
+                            a.role === 'team_lead'
+                                ? -1
+                                : b.role === 'team_lead'
+                                ?  1
+                                :  0
+                            )
+                            .map((member) => (
+                            <li key={member.id}>
+                                {formatName(member.username)} ({member.role})
+                            </li>
+                            ))
+                        }
                     </ul>
                 </div>
                 {/* <button
