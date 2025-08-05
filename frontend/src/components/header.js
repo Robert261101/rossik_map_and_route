@@ -82,6 +82,10 @@ export default function Header({ user }) {
               >
                 History
               </button>
+              {/* Username formatted */}
+              <div className="text-xl font-semibold ml-3">
+                {formatName(user?.email)}
+              </div>
             </>
           ) : (
             <>
