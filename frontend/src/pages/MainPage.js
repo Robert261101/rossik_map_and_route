@@ -1167,10 +1167,20 @@ setTimeout(() => {
 
 export default MainPage;
 
-//TODO1: check toll calculation and why its different from desktop app
+//TODO: edit teams + when user is moved to another team change role
 
-//TODO3: edit via station - not working properly
+//TODO: button called tools that has a dropdown and includes map and guide - which is Main Page and history AND one for spotgo
 
-//TODO4: integrate in translogica
+//TODO: map after you hit calculate route doesnt show up.
 
-//Ticketing system:
+//TODO: loading and unloading can accept multiple addresses - spotgo
+
+//TODO: prefix de la email - spotgo
+
+//TODO: adaugare header in spotgo
+
+//TODO: diferentiere intre cursele tale si restul - spotgo
+
+//TODO: edit, copy ????????????? - spotgo
+
+//TODO FOR THE FUTURE: map and guide post directly to spotgo, or have a button that copies the inputs and adds them in the spotgo form
