@@ -11,6 +11,7 @@ import { formatNum } from '../utils/number';
 import RouteDetailsModal from '../components/RouteDetailsModal';
 import { addLegalBreaks } from '../utils/driverTime';
 import { exportRoutesExcel } from './helpers/exportRoutesExcel';
+import Header from '../components/header';
 
 
 export default function HistoryPage({ user }) {
@@ -210,78 +211,7 @@ export default function HistoryPage({ user }) {
 
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
-      <header className="top-0 z-50">
-        <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
-          {/* LEFT: Logo / Titlu */}
-           <div className="flex items-center">
-            <Link to="/">
-              <img
-                src={RossikLogo}
-                alt="Rossik Logo"
-                className="h-12 object-contain cursor-pointer"
-              />
-            </Link>
-          </div>
-
-          <SearchBar savedRoutes={savedRoutes} />
-
-          {/* RIGHT: Butoane */}
-          <div className="flex items-center space-x-3">
-            <button
-                onClick={() => navigate('/spotgo')}
-                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-              >
-                SpotGo
-            </button>
-            {user.role === 'admin' && (
-              <button
-                onClick={() => navigate('/admin')}
-                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-              >
-                Admin Panel
-              </button>
-            )}
-            {(user.role === 'admin' || user.role === 'team_lead') && (
-              <button
-                onClick={() => navigate('/admin/teams')}
-                className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-              >
-                Teams
-              </button>
-            )}
-            <button
-              onClick={() => navigate('/')}
-              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-            >
-              Main Page
-            </button>
-
-            
-            <button
-              onClick={() => navigate('/history')}
-              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-            >
-              History
-            </button>
-            
-            <button
-              onClick={handleLogout}
-              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-            >
-              Logout
-            </button>
-
-            {/* Numele user-ului */}
-            <div className="text-xl font-semibold ml-3">
-              {user.email
-                .split('@')[0]
-                .replace('.', ' ')
-                .replace(/\b\w/g, c => c.toUpperCase())}
-            </div>
-          </div>
-        </div>
-      </header>
-
+      <Header user = {user} />
       {/* CONTENT */}
       <div className="flex flex-col flex-1 overflow-hidden relative">
         {/* TABLE */}
