@@ -1167,7 +1167,7 @@ setTimeout(() => {
 
 export default MainPage;
 
-//TODO: edit teams + when user is moved to another team change role
+//TODO: id in team view
 
 //TODO: button called tools that has a dropdown and includes map and guide - which is Main Page and history AND one for spotgo
 
