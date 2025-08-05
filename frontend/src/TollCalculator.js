@@ -15,8 +15,8 @@ const fetchRovinietaPrices = async () => {
   }
 };
 
-//cel mai ieftin pret/timp de ex: 3 de o zi < una de 7
-//vinieta expira la 12 noaptea, este / zi calendaristica
+//TODO: cel mai ieftin pret/timp de ex: 3 de o zi < una de 7
+//TODO: vinieta expira la 12 noaptea, este / zi calendaristica
 
 const countryCalculators = {
   ROU: async (tollData, _duration, vehicleAxles) => {
