@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import RossikLogo from '../../VektorLogo_Rossik_rot.gif';
+import Header from '../../components/header';
 
 export default function AddTruck({ user, handleLogout }) {
   const [plate, setPlate] = useState('');
@@ -79,20 +80,7 @@ export default function AddTruck({ user, handleLogout }) {
 
   return (
     <div className={`min-h-screen transition-colors duration-500 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-900'}`}>
-      <header className="top-0 z-50">
-        <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
-          <Link to="/admin">
-            <img src={RossikLogo} alt="Rossik Logo" className="h-12 object-contain cursor-pointer" />
-          </Link>
-          <div className="flex items-center space-x-3">
-            <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-red-600 text-white rounded-full">Admin Panel</button>
-            <button onClick={() => navigate('/')} className="px-4 py-2 bg-red-600 text-white rounded-full">Main Page</button>
-            <button onClick={() => navigate('/history')} className="px-4 py-2 bg-red-600 text-white rounded-full">History</button>
-            <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-full">Logout</button>
-            <div className="ml-3 font-semibold">{formatName(user?.email)}</div>
-          </div>
-        </div>
-      </header>
+      <Header user = {user} />
 
       <div className="p-6 max-w-xl mx-auto mt-10 bg-white/80 dark:bg-gray-800/30 backdrop-blur-md rounded-xl shadow-xl">
         <h1 className="text-3xl font-bold mb-6 text-center">Add Truck</h1>

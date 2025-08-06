@@ -2,7 +2,7 @@ import { supabase } from "../../lib/supabase";
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
-export default function TeamView({}) {
+export default function TeamView() {
   const { teamId } = useParams();
   const [teamName, setTeamName] = useState('');
   const [users, setUsers] = useState([]);
@@ -21,7 +21,6 @@ export default function TeamView({}) {
         console.error('Error fetching team: ', teamError);
         return;
       }
-
       setTeamName(teamData?.name);
 
       const { data: usersData, error: usersError } = await supabase
@@ -33,7 +32,6 @@ export default function TeamView({}) {
         console.error('Error fetching users:', usersError);
         return;
       }
-
       setUsers(usersData);
     };
 
@@ -42,15 +40,16 @@ export default function TeamView({}) {
 
   const formatName = (username = '') => {
     const local = username.split('@')[0];
-    const parts = local.split('.');
-    return parts.map(p => p[0]?.toUpperCase() + p.slice(1)).join(' ');
+    return local
+      .split('.')
+      .map(p => p[0]?.toUpperCase() + p.slice(1))
+      .join(' ');
   };
 
   const handleRemoveMember = async (userId) => {
     if (!window.confirm('Are you sure you want to remove this member from the team?')) {
       return;
     }
-
     try {
       const { error } = await supabase
         .from('users')
@@ -62,7 +61,7 @@ export default function TeamView({}) {
         return;
       }
 
-      // Refresh user list after update
+      // refresh
       const { data: updatedUsers, error: fetchError } = await supabase
         .from('users')
         .select('id, username, role')
@@ -72,11 +71,31 @@ export default function TeamView({}) {
         console.error('Error fetching updated users:', fetchError);
         return;
       }
-
       setUsers(updatedUsers);
+
     } catch (err) {
       console.error('Error removing member:', err);
       alert('Error removing member');
+    }
+  };
+
+  const handleChangeName = async () => {
+    const newName = window.prompt('Enter the new team name:', teamName);
+    if (!newName || newName === teamName) return;
+
+    try {
+      const { error } = await supabase
+        .from('teams')
+        .update({ name: newName })
+        .eq('id', teamId);
+
+      if (error) throw error;
+
+      setTeamName(newName);
+      alert(`Team renamed to “${newName}” 🎉`);
+    } catch (err) {
+      console.error('Error updating team name:', err);
+      alert('❌ Failed to update team name: ' + err.message);
     }
   };
 
@@ -104,12 +123,20 @@ export default function TeamView({}) {
             >
               Back
             </button>
-            <button
-              className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700"
-              onClick={() => navigate(`/admin/teams/${teamId}/add-members`)}
-            >
-              Add Member
-            </button>
+            <div className="flex space-x-2">
+              <button
+                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700"
+                onClick={() => navigate(`/admin/teams/${teamId}/add-members`)}
+              >
+                Add Member
+              </button>
+              <button
+                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700"
+                onClick={handleChangeName}
+              >
+                Edit Team Name
+              </button>
+            </div>
           </div>
 
           <h1 className="text-4xl font-bold text-gray-800 border-b pb-5 tracking-tight">

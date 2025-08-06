@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, useParams } from 'react-router-dom';
+import { roleForTeam } from '../../lib/roles';
 
 export default function AddTeamMembers() {
   const { teamId } = useParams();
@@ -56,7 +57,7 @@ export default function AddTeamMembers() {
 
     const { error } = await supabase
       .from('users')
-      .update({ team_id: teamId })
+      .update({ team_id: teamId, role: roleForTeam(teamId) })
       .in('id', selectedUserIds);
 
     if (error) {

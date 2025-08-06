@@ -4,7 +4,6 @@ import AutoCompleteInput from "../AutoCompleteInput";
 import TollCalculator from "../TollCalculator";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
-import SearchBar from "../helpers/SearchBar";
 import Sun from 'lucide-react/dist/esm/icons/sun';
 import Moon from 'lucide-react/dist/esm/icons/moon';
 import { Link } from "react-router-dom";
@@ -15,14 +14,13 @@ import { debounce } from 'lodash'
 import { calculateAndDisplayLiveRoute } from "./helpers/liveRoute";
 import { fetchPostalCode } from "./helpers/reversePostal.js";
 import "./App.css";
+import Header from "../components/header.js";
 
 const MainPage = ({ user })  => {
   const [allIn, setAllIn] = useState(false);
   const [fixedTotalCost, setFixedTotalCost] = useState(''); // only used when allIn===true
   const [activeTab, setActiveTab] = useState("input"); // "input" | "results"
   const [addresses, setAddresses] = useState([]);
-  const [viaLocation, setViaLocation] = useState(null);
-  const [viaPostal, setViaPostal]     = useState(null);
   const [distance, setDistance] = useState(null);
   const [routes, setRoutes] = useState([]); // Array cu rutele alternative
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
@@ -53,10 +51,24 @@ const MainPage = ({ user })  => {
   const [identifier, setIdentifier] = useState(''); // unique run ID
   const [saveMsg, setSaveMsg] = useState('');
   const [durationWithBreaks, setDurationWithBreaks] = useState(null);
+  const [viaPoints, setViaPoints] = useState([]); // [{lat, lng, postal, legIndex}, ...]
 
-  const viaRef = useRef(null);
+
+  const viaMarkersRef = useRef([]);            // H.map.DomMarker refs per point
   const behaviorRef = useRef(null);
   const currentLineGeom = useRef(null);
+
+  const debouncedLive = debounce((lat, lng, legIdx) => {
+    calculateAndDisplayLiveRoute(
+      mapRef.current,
+      addresses[legIdx],
+      { lat, lng },
+      addresses[legIdx + 1],
+      vehicleType,
+      process.env.REACT_APP_HERE_API_KEY,
+      legIdx
+    );
+  }, 50);
 
   //compute total wall-clock seconds (driving + breaks) once per render
   const secWithBreaks = rawDuration != null
@@ -187,7 +199,6 @@ const MainPage = ({ user })  => {
   };
 
   // Adaugă adrese
-// always async, always await fetchPostalCode
 const addAddress = async (coordsWithLabel) => {
   const code = await fetchPostalCode(coordsWithLabel.lat, coordsWithLabel.lng);
   const countryCode = coordsWithLabel.label
@@ -201,7 +212,7 @@ const addAddress = async (coordsWithLabel) => {
     ...prev,
     { 
       ...coordsWithLabel,
-      postal: code || "",      // give it something, even if lookup failed
+      postal: code || "",
       country: countryCode, 
     }
   ]);
@@ -226,282 +237,242 @@ const addAddress = async (coordsWithLabel) => {
   };
 
   // Obținere rute
-  const getRoute = async (pts = addresses) => {    
-    setIsLoading(true);
-    
-    const startCoordinates = pts[0];
-    const endCoordinates = pts[pts.length - 1];
-    const intermediatePoints = pts.slice(1, pts.length - 1);
-    try {
-      let url = `https://router.hereapi.com/v8/routes?origin=${startCoordinates.lat},${startCoordinates.lng}`;
-      intermediatePoints.forEach((point) => {
-        const viaParam = point.radius ? 
-          `${point.lat},${point.lng};r=${point.radius}` : 
-          `${point.lat},${point.lng}`;
-        url += `&via=${point.lat},${point.lng}`;
-      });
-      url += `&destination=${endCoordinates.lat},${endCoordinates.lng}`;
-      url += `&return=polyline,summary,actions,instructions,tolls`;
-      url += `&alternatives=3`; // max 3 rute alternative  
-      url += `&vehicle[weightPerAxle]=11500`;
-      url += `&transportMode=truck`;
-      url += `&vehicle[height]=400`;
-      url += `&vehicle[width]=255`;
-      url += `&vehicle[length]=1875`;
-      url += `&truck[axleCount]=${vehicleType.axles}`;
-      url += `&vehicle[grossWeight]=${vehicleType.weight}`;
-      url += `&truck[limitedWeight]=7500`;
-      url += `&tolls[emissionType]=euro6`;
-      url += `&apikey=${process.env.REACT_APP_HERE_API_KEY}`;
+const getRoute = async (pts = addresses) => {
+  setIsLoading(true);
 
-      const response = await fetch(url);
-      const data = await response.json();
-
-
-      if (!data.routes || data.routes.length === 0) {
-        console.error("No routes found:", data);
-        alert("No routes found for the selected addresses. Try other locations.");
-        setIsLoading(false);
-        return;
-      }
-
-
-      const rawRoutes = data.routes;
-
-      const withDurations = rawRoutes.map(route => {
-        const totalDuration = route.sections
-          .reduce((sum, s) => sum + (s.summary?.duration || 0), 0);
-        return { route, duration: totalDuration };
-      });
-
-      withDurations.sort((a, b) => a.duration - b.duration);
-
-      const sortedRoutes = withDurations.map(({ route }) => route);
-
-      const initialCosts = Array(sortedRoutes.length).fill(0);
-      const initialTollLists = Array(sortedRoutes.length).fill({
-        totalCost: 0,
-        tollList: []
-      });
-
-      setRoutes(sortedRoutes);
-      setRouteTaxCosts(initialCosts);
-      setTollCosts(initialTollLists);
-      setSelectedRouteIndex(0);
-      displayRoute(sortedRoutes[0]);
-
-      if (data.routes[0].sections && data.routes[0].sections.length > 0) {
-        let totalDistance = 0;
-        let totalDuration = 0;
-        data.routes[0].sections.forEach((section) => {
-          if (section.summary) {
-            totalDistance += section.summary.length;
-            totalDuration += section.summary.duration;
-          }
-        });
-        setDistance((totalDistance / 1000).toFixed(2));
-        setRawDistance(totalDistance);
-        setRawDuration(totalDuration);
-        const secWithBreaks = addLegalBreaks(totalDuration);
-        const hWB = Math.floor(secWithBreaks/3600);
-        const mWB = Math.floor((secWithBreaks%3600)/60);
-        setDurationWithBreaks(`${hWB}h ${mWB}m`);
-        const hours = Math.floor(totalDuration / 3600);
-        const minutes = Math.floor((totalDuration % 3600) / 60);
-        setDuration(`${hours}h ${minutes}m`);
-      }
-      setActiveTab("results");
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Error fetching route:", error);
-      alert("An error occurred while calculating the route. Please try again.");
-      setIsLoading(false);
-    }
-  };
-
-  const createDraggableMarker = (pt, idx) => {
-  const el = document.createElement('div');
-  el.className = 'via-handle';
-  el.style.cursor = 'via-handle'
-
-  const icon = new window.H.map.DomIcon(el, { volatility: false });
-  const marker = new window.H.map.DomMarker({ lat: pt.lat, lng: pt.lng }, { icon, volatility: false });
-
-  let dragging = false;
-
-  el.addEventListener('pointerdown', (evt) => {
-    evt.stopPropagation();
-    dragging = true;
-    el.style.cursor = 'grabbing';
-    behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
-  });
-
-  mapRef.current.addEventListener('pointermove', (evt) => {
-    if (!dragging) return;
-    const { viewportX, viewportY } = evt.currentPointer;
-    const geo = mapRef.current.screenToGeo(viewportX, viewportY);
-    marker.setGeometry(geo);
-  });
-
-  mapRef.current.addEventListener('pointerup', async () => {
-    if (!dragging) return;
-    dragging = false;
-    el.style.cursor = 'grab';
-    behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-
-    const newGeo = marker.getGeometry();
-    const postal = await fetchPostalCode(newGeo.lat, newGeo.lng);
-
-    // 🧠 Update this address in the list:
-    setAddresses((prev) => {
-      const updated = [...prev];
-      updated[idx] = {
-        ...updated[idx],
-        lat: newGeo.lat,
-        lng: newGeo.lng,
-        postal: postal || updated[idx].postal
-      };
-      return updated;
+  try {
+    // Build waypoints and insert all viaPoints per leg
+    const combined = [];
+    pts.forEach((addr, idx) => {
+      combined.push(addr);
+      viaPoints
+        .filter(p => p.legIndex === idx)
+        .forEach(p => combined.push({ lat: p.lat, lng: p.lng }));
     });
-  });
+    const waypoints = combined;
+    // ③ Now waypoints = [start, …vias…, end]
+    const origin      = waypoints[0];
+    const destination = waypoints[waypoints.length - 1];
 
-  return marker;
+    let url = `https://router.hereapi.com/v8/routes?apikey=${process.env.REACT_APP_HERE_API_KEY}`;
+    url += `&origin=${origin.lat},${origin.lng}`;
+
+    // ④ Add each “via” (everything except first & last)
+    waypoints.slice(1, -1).forEach(pt => {
+      url += `&via=${pt.lat},${pt.lng}`;
+    });
+
+    url += `&destination=${destination.lat},${destination.lng}`;
+    // return what we need
+    url += `&return=polyline,summary,actions,instructions,tolls`;
+    url += `&alternatives=3`;
+
+    // truck profile
+    url += `&transportMode=truck`;
+    url += `&vehicle[weightPerAxle]=11500`;
+    url += `&vehicle[height]=400`;
+    url += `&vehicle[width]=255`;
+    url += `&vehicle[length]=1875`;
+    url += `&truck[axleCount]=${vehicleType.axles}`;
+    url += `&vehicle[grossWeight]=${vehicleType.weight}`;
+    url += `&truck[limitedWeight]=7500`;
+    url += `&tolls[emissionType]=euro6`;
+
+    
+
+    // 2️⃣ Fetch & parse
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!data.routes || data.routes.length === 0) {
+      console.error("No routes found:", data);
+      alert("No routes found. Try different points.");
+      return;
+    }
+
+    // 3️⃣ Sort by raw duration
+    const sorted = data.routes
+      .map(route => ({
+        route,
+        duration: route.sections.reduce((sum, s) => sum + (s.summary?.duration || 0), 0)
+      }))
+      .sort((a, b) => a.duration - b.duration)
+      .map(item => item.route);
+
+    // 4️⃣ Initialize state
+    setRoutes(sorted);
+    setRouteTaxCosts(Array(sorted.length).fill(0));
+    setTollCosts(Array(sorted.length).fill({ totalCost: 0, tollList: [] }));
+    setSelectedRouteIndex(0);
+
+    // 5️⃣ Render the fastest one on the map
+    displayRoute(sorted[0]);
+
+    // 6️⃣ Extract summary for the first route
+    const first = sorted[0];
+    let totalDist = 0;
+    let totalDur = 0;
+    first.sections.forEach(sec => {
+      if (sec.summary) {
+        totalDist += sec.summary.length;
+        totalDur  += sec.summary.duration;
+      }
+    });
+    setDistance((totalDist / 1000).toFixed(2));
+    setRawDistance(totalDist);
+    setRawDuration(totalDur);
+
+    const breaks = addLegalBreaks(totalDur);
+    const h = Math.floor(breaks / 3600);
+    const m = Math.floor((breaks % 3600) / 60);
+    setDurationWithBreaks(`${h}h ${m}m`);
+
+    const hh = Math.floor(totalDur / 3600);
+    const mm = Math.floor((totalDur % 3600) / 60);
+    setDuration(`${hh}h ${mm}m`);
+
+    setActiveTab("results");
+
+  } catch (err) {
+    console.error("Error fetching route:", err);
+    alert("Error calculating route. Please try again.");
+  } finally {
+    setIsLoading(false);
+  }
 };
 
+  // Split the full route.sections into N−1 “legs” (one per interval between stops)
+  const buildLegs = (routeSections) => {
+    const stops = addresses.length;
+    const total = routeSections.length;
+    const per = Math.floor(total / (stops - 1));
+    const legs = [];
+    for (let i = 0; i < stops - 1; i++) {
+      const start = i * per;
+      // last leg takes any remainder
+      const end = (i === stops - 2) ? total : (i + 1) * per;
+      legs.push(routeSections.slice(start, end));
+    }
+    return legs;
+  };
 
   // Afișare rută pe hartă
 const displayRoute = (route) => {
   if (!mapRef.current) return;
   const map = mapRef.current;
 
-  // 1) clear old polylines & via-marker
+  // 1) clear old polylines & via-markers
   map.getObjects().forEach(obj => {
     if (obj instanceof window.H.map.Polyline) {
       map.removeObject(obj);
     }
-    if (obj === viaRef.current) {
-      try {
-        map.removeObject(obj);
-      } catch (err) {
-        console.warn("Tried removing viaMarker but it was already removed:", err);
-      }
-    }
   });
 
-  const spawnViaMarker = (lat, lng) => {
+  viaMarkersRef.current.forEach(m => map.removeObject(m));
+  viaMarkersRef.current = [];
+
+  const spawnViaMarker = (lat, lng, legIdx) => {
   if (!mapRef.current) return;
   const map = mapRef.current;
 
-if (viaRef.current) {
-  try {
-    map.removeObject(viaRef.current);
-  } catch (err) {
-    console.warn("Marker cleanup failed:", err);
-  }
-}
-
+  // 1) Create the DOM handle
   const el = document.createElement('div');
   el.className = 'via-handle';
+  el.style.cursor = 'grab';
+  el.style.touchAction = 'none'; // ensure pointer events fire
 
-  el.addEventListener('pointerenter', () => { el.style.opacity = '0.8'; });
-  // el.addEventListener('pointerleave', () => { el.style.opacity = '0'; });
-
+  // 2) Wrap in a HERE DomIcon & DomMarker
   const icon = new window.H.map.DomIcon(el, { volatility: true });
-  const viaMarker = new window.H.map.DomMarker({ lat, lng }, { icon, volatility: true });
-  map.addObject(viaMarker);
-  console.log("Spawned via-handle marker element:", el);
+  const marker = new window.H.map.DomMarker({ lat, lng }, { icon, volatility: true });
+  map.addObject(marker);
 
-  viaRef.current = viaMarker;
+  // 3) Track it so we can clear later
+  viaMarkersRef.current.push(marker);
 
   let dragging = false;
-  let activePointerId = null;
 
+  // // 4) Immediate preview
+  // debouncedLive(lat, lng, legIdx);
 
-  const debouncedLive = debounce((lat, lng) => {
-    calculateAndDisplayLiveRoute(
-      map,
-      addresses[0],
-      addresses[addresses.length - 1],
-      vehicleType,
-      lat,
-      lng,
-      process.env.REACT_APP_HERE_API_KEY
-    );
-  }, 200);
-
-requestAnimationFrame(() => {
-  viaMarker.addEventListener('pointerdown', evt => {
-    evt.stopPropagation();
-    dragging = true;
-    el.style.cursor = 'grabbing';
-
-    try {
-      if (el.setPointerCapture) {
+  // 5) pointerdown on the marker → start drag
+  //    (we attach via the marker so the SDK correctly routes events)
+  requestAnimationFrame(() => {
+    marker.addEventListener('pointerdown', evt => {
+      evt.stopPropagation();
+      dragging = true;
+      el.style.cursor = 'grabbing';
+      behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+      try {
         el.setPointerCapture(evt.pointerId);
+      } catch (e) {
+        console.warn('Pointer capture failed:', e);
       }
-    } catch (err) {
-      console.warn('Pointer capture failed:', err);
-    }
-
-    behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+    });
   });
-});
 
-  map.addEventListener('pointermove', evt => {
+  // 6) pointermove on the map → move marker + live preview
+  const onMove = evt => {
     if (!dragging) return;
     const geo = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
-    viaMarker.setGeometry(geo);
-    debouncedLive(geo.lat, geo.lng);
-  });
+    marker.setGeometry(geo);
+    debouncedLive(geo.lat, geo.lng, legIdx);
+  };
+  map.addEventListener('pointermove', onMove);
 
-  map.addEventListener('pointerup', async evt => {
+  // 7) pointerup on the map → finish drag, save point
+  const onUp = async evt => {
     if (!dragging) return;
     dragging = false;
     el.style.cursor = 'grab';
-try {
-  if (el.releasePointerCapture) {
-    el.releasePointerCapture(evt.pointerId);
-  }
-} catch (err) {
-  console.warn('Pointer release failed:', err);
-}
-
     behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+    try {
+      el.releasePointerCapture(evt.pointerId);
+    } catch (e) {
+      console.warn('Pointer release failed:', e);
+    }
     debouncedLive.flush();
 
-    const geo = viaMarker.getGeometry();
-    setViaLocation({ lat: geo.lat, lng: geo.lng });
+    const { lat: finalLat, lng: finalLng } = marker.getGeometry();
+    const postal = await fetchPostalCode(finalLat, finalLng);
 
-    const code = await fetchPostalCode(geo.lat, geo.lng);
-    setViaPostal(code);
-  });
+    setViaPoints(points => {
+      const others = points.filter(p => p.legIndex !== legIdx);
+      return [...others, { lat: finalLat, lng: finalLng, postal, legIndex: legIdx }];
+    });
+  };
+  map.addEventListener('pointerup', onUp);
 };
+
+
 
 
   // 2) draw the route polyline
   const fullLineString = new window.H.geo.LineString();
-route.sections.forEach(section => {
-  const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
-  const pts = ls.getLatLngAltArray(); 
-  for (let i = 0; i < pts.length; i += 3) {
-    fullLineString.pushLatLngAlt(pts[i], pts[i+1], pts[i+2]);
-  }
 
-  const polyline = new window.H.map.Polyline(ls, {
-    style: { strokeColor: 'blue', lineWidth: 4 }
+  const legs = buildLegs(route.sections);
+  legs.forEach((legSections, legIdx) => {
+    // stitch together this leg’s sections into one LineString
+    const ls = new window.H.geo.LineString();
+    legSections.forEach(sec => {
+      const part = window.H.geo.LineString.fromFlexiblePolyline(sec.polyline);
+      const arr = part.getLatLngAltArray();
+      for (let i = 0; i < arr.length; i += 3) {
+        ls.pushLatLngAlt(arr[i], arr[i+1], arr[i+2]);
+      }
+    });
+
+    // draw the leg
+    const legPolyline = new window.H.map.Polyline(ls, {
+      style: { strokeColor: 'blue', lineWidth: 4 }
+    });
+    // tapping any leg sets viaLegIndex and drops a via-marker
+    legPolyline.addEventListener('tap', evt => {
+      const { lat, lng } = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
+      spawnViaMarker(lat, lng, legIdx);
+    });
+    map.addObject(legPolyline);
   });
 
-  // ✨ TAP TO ADD VIA POINT
-  polyline.addEventListener('tap', evt => {
-    const geo = evt.target.getGeometry().extractPoint(
-      Math.floor(evt.target.getGeometry().getPointCount() / 2)
-    );
-    const screen = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
-    spawnViaMarker(screen.lat, screen.lng); // 🔥 defined next
-  });
-
-  map.addObject(polyline);
-});
   currentLineGeom.current = fullLineString;
 
   // 3) re-center map
@@ -509,58 +480,7 @@ route.sections.forEach(section => {
   if (bounds) {
     map.getViewModel().setLookAtData({ bounds });
   }
-
-// 4) skip adding default viaMarker if user hasn't clicked the route yet
-if (!viaLocation) return;
-
-  // 6) re-attach drag logic (no snapping!)
-  let dragging = false;
-  const debouncedLive = debounce((lat, lng) => {
-    calculateAndDisplayLiveRoute(
-      map,
-      addresses[0],
-      addresses[addresses.length - 1],
-      vehicleType,
-      lat,
-      lng,
-      process.env.REACT_APP_HERE_API_KEY
-    );
-  }, 200);
-
-  // viaMarker.addEventListener('pointerdown', evt => {
-  //   evt.stopPropagation();
-  //   dragging = true;
-  //   viaEl.style.cursor = 'grabbing';
-  //   behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
-  // });
-
-  // map.addEventListener('pointermove', evt => {
-  //   if (!dragging) return;
-  //   const { viewportX, viewportY } = evt.currentPointer;
-  //   const geo = map.screenToGeo(viewportX, viewportY);
-  //   viaMarker.setGeometry(geo);
-  //   debouncedLive(geo.lat, geo.lng);
-  // });
-
-  // map.addEventListener('pointerup', async () => {
-  //   if (!dragging) return;
-  //   dragging = false;
-  //   viaEl.style.cursor = 'grab';
-  //   behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-  //   debouncedLive.flush();
-
-  //   // ↳ save the raw drop coords, no snapping:
-  //   const rawGeo = viaMarker.getGeometry();
-  //   setViaLocation({ lat: rawGeo.lat, lng: rawGeo.lng });
-
-  //   // ↳ lookup postal
-  //   const code = await fetchPostalCode(rawGeo.lat, rawGeo.lng);
-  //   setViaPostal(code);
-  // });
 };
-
-
-
 
   // Selectare rută
   const handleRouteSelect = (index) => {
@@ -588,21 +508,24 @@ if (!viaLocation) return;
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (addresses.length < 2) {
-      alert('Trebuie să adaugi minimum două adrese înainte de calcul.');
-      return;
-    }
-    // If user dragged a via, insert it between start & end
-    let coords = [...addresses];
-    if (viaLocation) {
-      coords = [ coords[0], viaLocation, coords[ coords.length - 1 ] ];
-    }
-    apiCallCount++;
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (addresses.length < 2) {
+    alert('At least two addresses required!');
+    return;
+  }
+
+  // 🚀 Only the addresses array defines your waypoints
+  const coords = [...addresses];
+
+  setIsLoading(true);
+  apiCallCount++;
+  try {
     await getRoute(coords);
-    // setViaLocation(null);
-  };
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // 3) Callback - când TollCalculator calculează costul pt o rută, îl salvăm și într-un array numeric simplu routeTaxCosts, și în tollCosts (pt listă).
   const updateTollCostForRoute = (index, tollData) => {
@@ -667,36 +590,6 @@ setTimeout(() => {
     const { costPerKm } = computeRouteMetrics(routes[selectedRouteIndex]);
     return costPerKm;
   };
-
-  //TODO: VEZI DACA RAMANE COMENTAT SAU IL FOLOSESTI
-
-  // // Zoom-scaler pentru marker-ele DOM
-  // useEffect(() => {
-  //   if (!mapRef.current) return;
-  //   const map = mapRef.current;
-
-  //   const onMapViewChange = () => {
-  //     const zoom = map.getZoom();
-  //     if (markerGroupRef.current) {
-  //       markerGroupRef.current.getObjects().forEach(marker => {
-  //         const el = marker.__domElement;
-  //         if (el) {
-  //           const scale = 0.5 + zoom * 0.1;
-  //           el.style.transform = `translate(-50%,-110%) scale(${scale})`;
-  //           el.style.pointerEvents = 'auto'; // force it, in case zoom janks it
-
-  //         }
-  //       });
-  //     }
-  //   };
-    
-
-  //   map.addEventListener('mapviewchange', onMapViewChange);
-
-  //   return () => {
-  //     map.removeEventListener('mapviewchange', onMapViewChange);
-  //   };
-  // }, []);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -840,83 +733,7 @@ setTimeout(() => {
   <div className="App flex flex-col h-screen">
     <div className={`flex flex-col flex-1 transition-colors duration-500 ${darkMode ? 'bg-gray-900 ' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
       
-    {/* HEADER */}
-    <header className={`top-0 z-30 ${darkMode ? 'bg-gray-900 text-white' : 'bg-white'}`}>
-        <div className="max-w-100xl mx-auto px-6 py-5 flex justify-between items-center">
-          {/* LEFT: Logo / Titlu */}
-           <div className="flex items-center">
-            <Link to="/">
-              <img
-                src={RossikLogo}
-                alt="Rossik Logo"
-                className="h-12 object-contain cursor-pointer"
-              />
-            </Link>
-          </div>
-
-      {/* <SearchBar /> */}
-
-
-      <div className="flex items-center space-x-3">
-        {/* Butoane nav */}
-          {/* <button
-            onClick={() => setDarkMode(!darkMode)}
-            className="p-3 rounded hover:bg-white/40 dark:hover:bg-gray-700"
-          >
-            {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
-          </button> */}
-          <button
-              onClick={() => navigate('/spotgo')}
-              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-            >
-              SpotGo
-          </button>
-          {user.role === 'admin' && (
-            <button
-              onClick={() => navigate('/admin')}
-              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-            >
-              Admin Panel
-            </button>
-          )}
-          {(user.role === 'admin' || user.role === 'team_lead') && (
-            <button
-              onClick={() => navigate('/admin/teams')}
-              className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-            >
-              Teams
-            </button>
-          )}
-
-          <button
-            onClick={() => navigate('/')}
-            className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-          >
-            Main Page
-          </button>
-
-          <button
-            onClick={() => navigate('/history')}
-            className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-          >
-            History
-          </button>
-          
-          <button
-            onClick={handleLogout}
-            className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
-          >
-            Logout
-          </button>
-
-        {/* Numele user-ului */}
-          <div className="text-xl font-semibold ml-3">
-            {formatName(user?.email)}
-          </div>
-      </div>
-    </div>
-      
-    </header>
+    <Header user = {user} />
      {/* MAIN CONTENT */}
       <div className="flex flex-row flex-1 overflow-hidden">
         {/* LEFT SIDE */}
@@ -985,15 +802,6 @@ setTimeout(() => {
                   })}
                 </ul>
 
-                {viaLocation && (
-                  <div className="mt-2 text-sm text-gray-700">
-                    <strong>VIA:</strong>{' '}
-                    {viaPostal
-                      ? <>postal code – {viaPostal}</>
-                      : <>lat: {viaLocation.lat.toFixed(5)}, lng: {viaLocation.lng.toFixed(5)}</>
-                    }
-                  </div>
-                )}
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -1249,54 +1057,6 @@ setTimeout(() => {
               </div>
             </div>
           )}
-        
-          {/*{/* ROW 4: Buton salvare ruta 
-          {routes.length > 0 && isManager && (
-            <div className="mt-4 p-4 border rounded bg-red-50 shadow-sm">
-              <h3 className="font-semibold mb-2">Save this route</h3>
-              <div className="flex flex-row gap-4 items-end mb-4">
-
-                {/* ← Truck Plate Select 
-                <div className="flex-1">
-                  <label className="block text-sm">Truck Plate</label>
-                  <select
-                    className="border p-1 w-full"
-                    value={plate}
-                    onChange={e => setPlate(e.target.value)}
-                    required
-                  >
-                    <option value="" disabled>Select your truck</option>
-                    {trucks.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.plate}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Tour Number stays the same 
-                <div className="flex-1">
-                  <label className="block text-sm">Tour Number</label>
-                  <input
-                    className="border p-1 w-full"
-                    placeholder="unique ID"
-                    value={identifier}
-                    onChange={e => setIdentifier(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <button
-                  onClick={handleSaveRoute}
-                  className="bg-green-600 text-white px-4 py-2"
-                >
-                  Save Route
-                </button>
-              </div>
-              {saveMsg && <p className="mt-2 text-sm">{saveMsg}</p>}
-            </div>
-          )}   */}
-
         </div>
 
         {/* RIGHT SIDE - MAP */}
@@ -1332,10 +1092,20 @@ setTimeout(() => {
 
 export default MainPage;
 
-//TODO1: check toll calculation and why its different from desktop app
+//TODO: id in team view
 
-//TODO3: edit via station - not working properly
+//TODO: add a new landing page called Rossik Tools - model - admin dashboard, but instead of the gets you have Map and Guide and SpotGo
 
-//TODO4: integrate in translogica
+//TODO: map after you hit calculate route doesnt show up.
 
-//Ticketing system:
+//TODO: loading and unloading can accept multiple addresses - spotgo
+
+//TODO: prefix de la email - spotgo
+
+//TODO: adaugare header in spotgo
+
+//TODO: diferentiere intre cursele tale si restul - spotgo
+
+//TODO: edit, copy ????????????? - spotgo
+
+//TODO FOR THE FUTURE: map and guide post directly to spotgo, or have a button that copies the inputs and adds them in the spotgo form
