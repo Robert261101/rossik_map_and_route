@@ -43,8 +43,8 @@ const bodyTypes = {
 };
 
 export default function SpotGoPage() {
-  const [prefix, setPrefix] = useState(DEFAULT_PREFIX);
-  const [prefixEditEnabled, setPrefixEditEnabled] = useState(false);
+//   const [prefix, setPrefix] = useState(DEFAULT_PREFIX);
+//   const [prefixEditEnabled, setPrefixEditEnabled] = useState(false);
 
   const [hideLocations, setHideLocations] = useState(false);
   const [palletsExchange, setPalletsExchange] = useState(false);
@@ -72,6 +72,8 @@ export default function SpotGoPage() {
   const [offers, setOffers] = useState([]);
   const [loadingLocation, setLoadingLocation] = useState(null);
   const [unloadingLocation, setUnloadingLocation] = useState(null);
+  const [externalPrefix, setExternalPrefix] = useState("");
+
   const [loadingPostal, setLoadingPostal] = useState("");
   const [unloadingPostal, setUnloadingPostal] = useState("");
 
@@ -91,62 +93,70 @@ export default function SpotGoPage() {
         setUnloadingLocation({ ...loc, ...enriched });
     };
 
-    useEffect(() => {
-        const savedPrefix = localStorage.getItem("spotgo_prefix");
-        if (savedPrefix) setPrefix(savedPrefix);
-        initializeDefaultTimes();
-    }, []);
+    // useEffect(() => {
+    //     const savedPrefix = localStorage.getItem("spotgo_prefix");
+    //     if (savedPrefix) setPrefix(savedPrefix);
+    //     initializeDefaultTimes();
+    // }, []);
 
     async function refreshSubmittedOffers() {
-  const { data, error } = await supabase
-    .from('submitted_offers')
-    .select('*')
-    .order('created_at', { ascending: false });
+        const { data, error } = await supabase
+            .from('submitted_offers')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error("Failed to fetch submitted offers:", error);
-  } else {
-    const formatted = data.map(o => {
-      const idShort = o.offer_id?.replace(/-/g, '').slice(0, 10) || 'N/A';
+        if (error) {
+            console.error("Failed to fetch submitted offers:", error);
+        } else {
+            const formatted = data.map(o => {
 
-      // Format Loading Address
-      let formattedLoading = o.loading_address || "";
-      if (formattedLoading) {
-        const postalMatch = formattedLoading.match(/\d{4,}/)?.[0] || "";
-        const addressOnly = formattedLoading.replace(/.*?(?=\d{4,})\d{4,}\s*/, "").replace(/,?\s*[^,]+$/, "").trim();
-        const countryMatch = formattedLoading.match(/([A-Za-z ]+),?\s*$/);
-        const country = countryMatch ? countryMatch[1].trim() : "";
-        const cc = countries.getAlpha2Code(country, "en") || "";
+                // Format Loading Address
+                let formattedLoading = o.loading_address || "";
+                if (formattedLoading) {
+                    const postalMatch = formattedLoading.match(/\d{4,}/)?.[0] || "";
+                    const addressOnly = formattedLoading.replace(/.*?(?=\d{4,})\d{4,}\s*/, "").replace(/,?\s*[^,]+$/, "").trim();
+                    const countryMatch = formattedLoading.match(/([A-Za-z ]+),?\s*$/);
+                    const country = countryMatch ? countryMatch[1].trim() : "";
+                    const cc = countries.getAlpha2Code(country, "en") || "";
 
-        formattedLoading = postalMatch
-          ? `${cc}-${postalMatch} ${addressOnly}`
-          : `${addressOnly}, ${country}`;
-      }
+                    formattedLoading = postalMatch
+                    ? `${cc}-${postalMatch} ${addressOnly}`
+                    : `${addressOnly}, ${country}`;
+                }
 
-      // Format Unloading Address
-      let formattedUnloading = o.unloading_address || "";
-      if (formattedUnloading) {
-        const postalMatch = formattedUnloading.match(/\d{4,}/)?.[0] || "";
-        const addressOnly = formattedUnloading.replace(/.*?(?=\d{4,})\d{4,}\s*/, "").replace(/,?\s*[^,]+$/, "").trim();
-        const countryMatch = formattedUnloading.match(/([A-Za-z ]+),?\s*$/);
-        const country = countryMatch ? countryMatch[1].trim() : "";
-        const cc = countries.getAlpha2Code(country, "en") || "";
+                // Format Unloading Address
+                let formattedUnloading = o.unloading_address || "";
+                if (formattedUnloading) {
+                    const postalMatch = formattedUnloading.match(/\d{4,}/)?.[0] || "";
+                    const addressOnly = formattedUnloading.replace(/.*?(?=\d{4,})\d{4,}\s*/, "").replace(/,?\s*[^,]+$/, "").trim();
+                    const countryMatch = formattedUnloading.match(/([A-Za-z ]+),?\s*$/);
+                    const country = countryMatch ? countryMatch[1].trim() : "";
+                    const cc = countries.getAlpha2Code(country, "en") || "";
 
-        formattedUnloading = postalMatch
-          ? `${cc}-${postalMatch} ${addressOnly}`
-          : `${addressOnly}, ${country}`;
-      }
+                    formattedUnloading = postalMatch
+                    ? `${cc}-${postalMatch} ${addressOnly}`
+                    : `${addressOnly}, ${country}`;
+                }
 
-      return {
-        id: o.offer_id,
-        externalNumber: `${prefix}${idShort}`,
-        _loading: formattedLoading,
-        _unloading: formattedUnloading
-      };
-    });
-    setOffers(formatted);
-  }
-}
+                    const isMine = o.external_number?.startsWith(externalPrefix);
+
+                    return {
+                        id: o.offer_id,
+                        externalNumber: o.external_number || o.offer_id,
+                        _loading: formattedLoading,
+                        _unloading: formattedUnloading,
+                        isMine
+                    };
+                });
+
+            formatted.sort((a, b) => {
+                if (a.isMine === b.isMine) return 0;
+                return a.isMine ? -1 : 1;
+            });
+
+            setOffers(formatted);
+        }
+    }
 
 
     useEffect(() => {
@@ -161,7 +171,7 @@ export default function SpotGoPage() {
             } else {
             const formatted = data.map(o => ({
                 id: o.offer_id,
-                externalNumber: `${prefix}-${o.offer_id}`,
+                externalNumber: o.external_number,
                 _loading: o.loading_address,
                 _unloading: o.unloading_address
             }));
@@ -297,45 +307,79 @@ export default function SpotGoPage() {
     }
 
 
-  function handleModifyPrefix() {
-    const pw = prompt("Enter password to modify prefix:");
-    if (pw === PREFIX_PASSWORD) {
-      setPrefixEditEnabled(true);
-      alert("Prefix editing unlocked.");
-    } else if (pw !== null) {
-      alert("Incorrect password.");
+//   function handleModifyPrefix() {
+//     const pw = prompt("Enter password to modify prefix:");
+//     if (pw === PREFIX_PASSWORD) {
+//       setPrefixEditEnabled(true);
+//       alert("Prefix editing unlocked.");
+//     } else if (pw !== null) {
+//       alert("Incorrect password.");
+//     }
+//   }
+
+//   function handleSavePrefix() {
+//     const newPref = prefix.trim();
+//     if (!newPref) {
+//       alert("Prefix cannot be empty.");
+//       return;
+//     }
+//     setPrefix(newPref);
+//     localStorage.setItem("spotgo_prefix", newPref);
+//     setPrefixEditEnabled(false);
+//     alert(`Prefix "${newPref}" saved.`);
+//   }
+
+    useEffect(() => {
+        async function initPrefixFromEmail() {
+            const stored = localStorage.getItem("email_based_prefix");
+            if (stored) {
+            setExternalPrefix(stored);
+            return;
+            }
+
+            const { data: { session } } = await supabase.auth.getSession();
+            const userEmail = session?.user?.email || "unknown@user.com";
+            const generated = getOrCreatePersistentPrefix(userEmail);
+
+            localStorage.setItem("email_based_prefix", generated);
+            setExternalPrefix(generated);
+        }
+
+        initPrefixFromEmail();
+        initializeDefaultTimes();
+    }, []);
+
+    function toggleVehicleType(id) {
+        setSelectedVehicles(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
     }
-  }
 
-  function handleSavePrefix() {
-    const newPref = prefix.trim();
-    if (!newPref) {
-      alert("Prefix cannot be empty.");
-      return;
+    function toggleBodyType(id) {
+        setSelectedBodies(prev => {
+        if (prev.includes(id)) return prev.filter(b => b !== id);
+        if (prev.length >= 5) {
+            alert("You can select up to 5 body types.");
+            return prev;
+        }
+        return [...prev, id];
+        });
     }
-    setPrefix(newPref);
-    localStorage.setItem("spotgo_prefix", newPref);
-    setPrefixEditEnabled(false);
-    alert(`Prefix "${newPref}" saved.`);
-  }
-
-  function toggleVehicleType(id) {
-    setSelectedVehicles(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
-  }
-
-  function toggleBodyType(id) {
-    setSelectedBodies(prev => {
-      if (prev.includes(id)) return prev.filter(b => b !== id);
-      if (prev.length >= 5) {
-        alert("You can select up to 5 body types.");
-        return prev;
-      }
-      return [...prev, id];
-    });
-  }
 
     const address0 = loadingLocation;
     const address1 = unloadingLocation;
+
+    function getOrCreatePersistentPrefix(email) {
+        const saved = localStorage.getItem("email_based_prefix");
+        if (saved) return saved;
+
+        const parts = email.split("@")[0].split(".");
+        const initials = parts.map(p => p[0].toUpperCase() + p.slice(1, 2).toLowerCase()).join("");
+        const randDigits = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+        const prefix = `${initials}-0${randDigits}/`;
+        localStorage.setItem("email_based_prefix", prefix);
+        return prefix;
+    }
+
+
 
     async function handleSubmitOffer(e) {
         e.preventDefault();
@@ -402,45 +446,53 @@ export default function SpotGoPage() {
 
         console.log(">>> final payload.locations:", [address0, address1]);
 
+        const { data: { session } } = await supabase.auth.getSession();
+        const userEmail = session?.user?.email || "unknown@user.com";
+
+        // ⚠️ Aici suprascriem prefixul cu ceva generat automat
+        const emailBasedPrefix = getOrCreatePersistentPrefix(userEmail);
+        const externalPrefix = `${emailBasedPrefix}`;
+
+
         const payload = {
-        type: "Spot",
-        externalNumber: prefix,
-        sources: ["1","2","3","4","8","9","12","14","16"],
-        useAlternativeLocations: hideLocations,
-        locations: [
-            {
-            sequence: 1,
-            type: "Loading",
-            address: address0,
-            period: {
-                startDate: `${loadStartDate}T${loadStartTime}:00Z`,
-                endDate:   `${loadEndDate}T${loadEndTime}:00Z`
-            }
+            type: "Spot",
+            externalNumber: externalPrefix,
+            sources: ["1","2","3","4","8","9","12","14","16"],
+            useAlternativeLocations: hideLocations,
+            locations: [
+                {
+                sequence: 1,
+                type: "Loading",
+                address: address0,
+                period: {
+                    startDate: `${loadStartDate}T${loadStartTime}:00Z`,
+                    endDate:   `${loadEndDate}T${loadEndTime}:00Z`
+                }
+                },
+                {
+                sequence: 2,
+                type: "Unloading",
+                address: address1,
+                period: {
+                    startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
+                    endDate:   `${unloadEndDate}T${unloadEndTime}:00Z`
+                }
+                }
+            ],
+            requirements: {
+                capacity:       parseFloat(weightT),
+                ldm:            parseFloat(lengthM),
+                pallets:        33,
+                loadingSide:    "All",
+                palletsExchange,
+                vehicleTypes:   selectedVehicles,
+                trailerTypes:   selectedBodies,
+                ftl:            parseFloat(lengthM) >= 13.6
             },
-            {
-            sequence: 2,
-            type: "Unloading",
-            address: address1,
-            period: {
-                startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
-                endDate:   `${unloadEndDate}T${unloadEndTime}:00Z`
-            }
-            }
-        ],
-        requirements: {
-            capacity:       parseFloat(weightT),
-            ldm:            parseFloat(lengthM),
-            pallets:        33,
-            loadingSide:    "All",
-            palletsExchange,
-            vehicleTypes:   selectedVehicles,
-            trailerTypes:   selectedBodies,
-            ftl:            parseFloat(lengthM) >= 13.6
-        },
-        comments: externalComment || undefined,
-        internalComments: hideLocations
-            ? "Locations hidden."
-            : "Load/Unload points visible."
+            comments: externalComment || undefined,
+            internalComments: hideLocations
+                ? "Locations hidden."
+                : "Load/Unload points visible."
         };
 
         if (freightCharge) {
@@ -450,7 +502,7 @@ export default function SpotGoPage() {
         payload.payment = pay;
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
+        // const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
 
         try {
@@ -477,7 +529,7 @@ export default function SpotGoPage() {
                 .insert([
                 {
                     offer_id: result.id,
-                    external_number: `${prefix}${result.id.replace(/-/g, '').slice(0, 10)}`,
+                    external_number: `${externalPrefix}${result.id.replace(/-/g, '').slice(0, 10)}`,
                     loading_address: address0.label,
                     unloading_address: address1.label,
                     created_at: new Date().toISOString()
@@ -574,11 +626,11 @@ export default function SpotGoPage() {
   <div style={{ padding: '30px', background: '#f5f9fd', fontFamily: 'Arial, sans-serif' }}>
     {/* Offer Prefix Section */}
     <div style={{ marginBottom: '30px', padding: '20px', background: '#ffffff', boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)', borderRadius: '8px', display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={{ fontWeight: 'bold', marginRight: '10px' }}>Offer Prefix:</label>
             <input 
                 type="text" 
-                value={prefix} 
+                value={externalPrefix} 
                 onChange={e => setPrefix(e.target.value)} 
                 onFocus={handleFocus}
                 onBlur={handleBlur}
@@ -587,7 +639,7 @@ export default function SpotGoPage() {
             />
             <button type="button" onClick={handleModifyPrefix} style={{ ...buttonInputStyle, padding: '5px 10px' }}>Modify Prefix</button>
             <button type="button" onClick={handleSavePrefix} style={{ ...buttonInputStyle, padding: '5px 10px' }}>Save Prefix</button>
-        </div>
+        </div> */}
         <button
             type="button"
             onClick={() => navigate('/')}
@@ -730,7 +782,7 @@ export default function SpotGoPage() {
             </thead>
             <tbody>
               {offers.map((offer, idx) => (
-                <tr key={offer.id} style={{ background: idx % 2 === 0 ? '#f2f8fc' : '#ffffff' }}>
+                <tr key={offer.id} style={{ backgroundColor: offer.isMine ? (idx % 2 === 0 ? '#f2f8fc' : '#ffffff') : '#fff6e0' }}>
                   <td style={{ padding: '8px' }}>{offer.externalNumber}</td>
                   <td style={{ padding: '8px' }}>{offer._loading}</td>
                   <td style={{ padding: '8px' }}>{offer._unloading}</td>
