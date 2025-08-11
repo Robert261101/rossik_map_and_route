@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   const { data: { user } } = await supabaseAdmin.auth.getUser(token);
   if (!user) return res.status(401).json({ error: 'Invalid token' });
 
-  const apiKey = process.env.SPOTGO_API_KEY;
+  apiKey = process.env.SPOTGO_API_KEY;
   const ownerEmail = process.env.SPOTGO_OWNER_EMAIL;
   if (!apiKey || !ownerEmail) return res.status(500).json({ error: 'Server misconfigured' });
 
