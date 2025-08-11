@@ -857,7 +857,7 @@ export default function SpotGoPage() {
 
         try {
             // Delete from SpotGo
-            const res = await fetch(`/api/spotgo/${offerId}`, {
+            const res = await fetch(`${API_BASE}/api/spotgo/${offerId}`, {
                 method: "DELETE",
                 headers: { 'Authorization': `Bearer ${token}` }
             });
