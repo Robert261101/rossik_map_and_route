@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
 import countries from "i18n-iso-countries";
 import enLocale  from "i18n-iso-countries/langs/en.json";
+import Header from '../components/header';
 
 
 countries.registerLocale(enLocale);
@@ -42,7 +43,7 @@ const bodyTypes = {
   19: "Any"
 };
 
-export default function SpotGoPage() {
+export default function SpotGoPage({ user }) {
 //   const [prefix, setPrefix] = useState(DEFAULT_PREFIX);
 //   const [prefixEditEnabled, setPrefixEditEnabled] = useState(false);
 
@@ -965,20 +966,20 @@ export default function SpotGoPage() {
     const baseInputStyle = {
     padding: '6px 10px',
     borderRadius: '5px',
-    border: '1px solid #ccc',
+    border: '1px solid rgba(185, 28, 28, 0.2)',
     width: '100%',
-    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+    boxShadow: '0 2px 8px rgba(185, 28, 28, 0.15)',
     transition: 'all 0.2s ease-in-out'
     };
 
     const highlightStyle = {
-    border: '1px solid #1e4a7b',
-    boxShadow: '0 0 4px #a5c9f0'
+    border: '1px solid rgba(185, 28, 28, 0.2)',
+    boxShadow: '0 2px 8px rgba(185, 28, 28, 0.15)'
     };
 
     const buttonInputStyle={
         padding: '10px 20px',
-        background: '#1e4a7b',
+        background: '#b91c1c',
         color: '#fff',
         border: 'none',
         borderRadius: '4px',
@@ -997,10 +998,12 @@ export default function SpotGoPage() {
 
   
   return (
-  <div style={{ padding: '30px', background: '#f5f9fd', fontFamily: 'Arial, sans-serif' }}>
+  <div style={{ padding: '30px', background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ marginBottom: '20px' }}>
+        <Header user = {user} />
+    </div>
     {/* Offer Prefix Section */}
-    <div style={{ marginBottom: '30px', padding: '20px', background: '#ffffff', boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)', borderRadius: '8px', display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+     {/* <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={{ fontWeight: 'bold', marginRight: '10px' }}>Offer Prefix:</label>
             <input 
                 type="text" 
@@ -1014,20 +1017,11 @@ export default function SpotGoPage() {
             <button type="button" onClick={handleModifyPrefix} style={{ ...buttonInputStyle, padding: '5px 10px' }}>Modify Prefix</button>
             <button type="button" onClick={handleSavePrefix} style={{ ...buttonInputStyle, padding: '5px 10px' }}>Save Prefix</button>
         </div> */}
-        <button
-            type="button"
-            onClick={() => navigate('/')}
-            style={{ ...buttonInputStyle, padding: '5px 10px', marginLeft: 'auto' }}
-            >
-            Back
-        </button>
-
-    </div>
 
     <div style={{ display: 'flex', alignItems: 'flex-start' }}>
       {/* Left Form */}
-      <form onSubmit={handleSubmitOffer} style={{ flex: '1', marginRight: '30px', background: '#ffffff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}>
-        <h3 style={{ color: '#1e4a7b', marginBottom: '15px' }}>Addresses</h3>
+      <form onSubmit={handleSubmitOffer} style={{ flex: '1', marginRight: '30px', background: '#ffffff', padding: '20px', borderRadius: '8px',boxShadow: '0 2px 8px rgba(185, 28, 28, 0.15)' }}>
+        <h3 style={{ color: '#8a1414ff', marginBottom: '15px' }}>Addresses</h3>
 
         {/* Address Fields */}
         <div style={{display: 'flex',gap: '30px',alignItems: 'flex-start',marginBottom: '20px',paddingBottom: '15px',borderBottom: '1px dashed #09111aff',flexWrap: 'wrap'}} >
@@ -1045,7 +1039,7 @@ export default function SpotGoPage() {
         {/* Date & Time Inputs */}
         <div style={{marginBottom: '20px',paddingBottom: '15px',borderBottom: '1px dashed #09111aff',display: 'flex',gap: '30px',flexWrap: 'wrap'}}>
             <fieldset style={{flex: 1,minWidth: '300px',border: '1px solid #ddd',padding: '15px',borderRadius: '8px'}}>
-                <legend style={{ fontWeight: 'bold', color: '#1e4a7b' }}>Loading Time</legend>
+                <legend style={{ fontWeight: 'bold', color: '#8a1414ff' }}>Loading Time</legend>
                 <label>Start:</label>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                     <input type="date" value={loadStartDate} onChange={e => setLoadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
@@ -1072,7 +1066,7 @@ export default function SpotGoPage() {
             </fieldset>
 
             <fieldset style={{flex: 1,minWidth: '300px',border: '1px solid #ddd',padding: '15px',borderRadius: '8px'}}>
-                <legend style={{ fontWeight: 'bold', color: '#1e4a7b' }}>Unloading Time</legend>
+                <legend style={{ fontWeight: 'bold', color: '#8a1414ff' }}>Unloading Time</legend>
                 <label>Start:</label>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                     <input type="date" value={unloadStartDate} onChange={e => setUnloadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
@@ -1153,14 +1147,14 @@ export default function SpotGoPage() {
       </form>
 
       {/* Submitted Offers */}
-      <div style={{ flex: '1', background: '#ffffff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}>
-        <h3 style={{ color: '#1e4a7b' }}>Submitted Offers</h3>
+      <div style={{ flex: '1', background: '#ffffff', padding: '20px', borderRadius: '8px',boxShadow: '0 2px 8px rgba(185, 28, 28, 0.15)' }}>
+        {/*<h3 style={{ color: '#b91c1c' }}>Submitted Offers</h3>*/}
         {offers.length === 0 ? (
           <p>No offers submitted yet.</p>
         ) : (
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '14px' }}>
             <thead>
-              <tr style={{ background: '#d7e9f7' }}>
+              <tr style={{ background: '#ff0a0aa6' }}>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Offer</th>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Loading</th>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Unloading</th>
