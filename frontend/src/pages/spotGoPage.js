@@ -74,6 +74,8 @@ export default function SpotGoPage() {
     const [isPrefilling, setIsPrefilling] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editingOfferId, setEditingOfferId] = useState(null);
+    const [resetKey, setResetKey] = useState(0);
+
 
 
     const navigate = useNavigate()
@@ -94,6 +96,52 @@ export default function SpotGoPage() {
 
     const parseDbDate = s => s?.slice(0,10) ?? todayStr;
     const parseDbHHMM = s => s?.slice(11,16) ?? "08:00";
+
+    // put this above handleSubmitOffer
+    function resetForm() {
+        const today = new Date();
+        const todayStr = today.toISOString().slice(0,10);
+
+        const nextHour = new Date(today);
+        nextHour.setMinutes(0,0,0);
+        nextHour.setHours(today.getHours() + 1);
+        const startHHMM = nextHour.toTimeString().slice(0,5);
+
+        const end = new Date(nextHour);
+        end.setHours(nextHour.getHours() + 2);
+        const endHHMM = end.toTimeString().slice(0,5);
+
+        // locations
+        setLoadingLocation(null);
+        setUnloadingLocation(null);
+
+        setResetKey(k => k + 1);
+
+        // dates
+        setLoadStartDate(todayStr);
+        setLoadEndDate(todayStr);
+        setUnloadStartDate(todayStr);
+        setUnloadEndDate(todayStr);
+
+        // times
+        setLoadStartTime(startHHMM);
+        setLoadEndTime(endHHMM);
+        setUnloadStartTime(startHHMM);
+        setUnloadEndTime(endHHMM);
+
+        // misc fields
+        setLengthM("13.6");
+        setWeightT("24");
+        setExternalComment("");
+        setFreightCharge("");
+        setCurrency("");      // or "EUR" if you want EUR selected by default
+        setPaymentDue("");
+        setHideLocations(false);
+        setPalletsExchange(false);
+        setSelectedVehicles([]);
+        setSelectedBodies([]);
+    }
+
     
     async function refreshSubmittedOffers() {
         const { data, error } = await supabase
@@ -667,30 +715,18 @@ export default function SpotGoPage() {
 
         // Refresh the table view
         await refreshSubmittedOffers();
+        resetForm();
         setIsPrefilling(false);
         setIsEditing(false);
         setEditingOfferId(null);
 
-        alert("Freight offer submitted successfully.");
+        // alert("Freight offer submitted successfully.");
 
         } catch (error) {
             console.error("Submit offer error:", error);
             alert("An unexpected error occurred during submission.");
         }
     }
-
-    const toTimeHHMM = (isoStr) => {
-        if (!isoStr) return "08:00";
-        try {
-            const parts = isoStr.split("T")[1]?.split(":");
-            if (!parts || parts.length < 2) return "08:00";
-            return `${parts[0]}:${parts[1]}`;
-        } catch {
-            return "08:00";
-        }
-    };
-
-
 
     async function handleEditOffer(offer) {
         if (!offer?.id) return;
@@ -756,6 +792,8 @@ export default function SpotGoPage() {
             setSelectedVehicles(data.vehicle_types || []);
             setSelectedBodies(data.body_types || []);
         
+            alert("📋 Form copied, ready to be edited.");
+
         });
     }
 
@@ -940,12 +978,12 @@ export default function SpotGoPage() {
         <div style={{display: 'flex',gap: '30px',alignItems: 'flex-start',marginBottom: '20px',paddingBottom: '15px',borderBottom: '1px dashed #09111aff',flexWrap: 'wrap'}} >
         <div style={{flex: 1,minWidth: '300px',border: '1px solid #ccc',padding: '15px',borderRadius: '8px', backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Loading Address:</label><br />
-            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
+            <AutoCompleteInput key={`loading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
         </div>
 
         <div style={{flex: 1, minWidth: '300px',border: '1px solid #ccc',padding: '15px', borderRadius: '8px',backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
-            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
+            <AutoCompleteInput key={`loading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
         </div>
         </div>
 
@@ -1081,27 +1119,32 @@ export default function SpotGoPage() {
                     <td style={{ padding: '8px' }}>{offer._loading}</td>
                     <td style={{ padding: '8px' }}>{offer._unloading}</td>
                     <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
-                            <button 
-                            onClick={() => handleEditOffer(offer)} 
-                            style={{ padding: '5px 10px', background: '#37d344ff', color: '#fff', border: 'none', borderRadius: '4px' }}
+                        {offer.isMine ? (
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
+                            <button
+                                onClick={() => handleEditOffer(offer)}
+                                style={{ padding: '5px 10px', background: '#15803d', color: '#fff', border: 'none', borderRadius: '4px' }}
                             >
-                            Edit
+                                Edit
                             </button>
-                            <button 
-                            onClick={(e) => { e.stopPropagation(); handleCopyOffer(offer); }} 
-                            style={{ padding: '5px 10px', background: '#993de4ff', color: '#fff', border: 'none', borderRadius: '4px' }}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleCopyOffer(offer); }}
+                                style={{ padding: '5px 10px', background: '#1e4a7b', color: '#fff', border: 'none', borderRadius: '4px' }}
                             >
-                            Copy
+                                Copy
                             </button>
-                            <button 
-                            onClick={() => handleDeleteOffer(offer.id)} 
-                            style={{ padding: '5px 10px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px' }}
+                            <button
+                                onClick={() => handleDeleteOffer(offer.id)}
+                                style={{ padding: '5px 10px', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: '4px' }}
                             >
-                            Delete
+                                Delete
                             </button>
-                        </div>
+                            </div>
+                        ) : (
+                            <span style={{ color: '#9aa2af', fontStyle: 'italic' }}></span>
+                        )}
                     </td>
+
                 </tr>
               ))}
             </tbody>
