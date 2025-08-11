@@ -20,7 +20,15 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.SPOTGO_API_KEY;
   const ownerEmail = process.env.SPOTGO_OWNER_EMAIL;
-  if (!apiKey || !ownerEmail) return res.status(500).json({ error: 'Server misconfigured' });
+const missing = [
+  !process.env.SPOTGO_API_KEY && 'SPOTGO_API_KEY',
+  !process.env.SPOTGO_OWNER_EMAIL && 'SPOTGO_OWNER_EMAIL'
+].filter(Boolean);
+
+if (missing.length) {
+  console.error('[spotgo/submit] missing env:', missing.join(', '));
+  return res.status(500).json({ error: `Server misconfigured: ${missing.join(', ')}` });
+}
 
   const payload = { ...req.body, owner: ownerEmail };
 
