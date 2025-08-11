@@ -105,12 +105,13 @@ export default function App() {
           element={<ResetPasswordPage />} />
         <Route 
           path="/" 
-          element={<RossikTools user={user} />} />
+          element={user ? <RossikTools user={user} /> : <Navigate to="login" />} />
         <Route
           path="/map-and-guide"
           element={user ? <MainPage user={user} /> : <Navigate to="/login" />} />
         <Route 
-          path="/spotgo" element={<SpotGoPage />} />
+          path="/spotgo"
+          element={user ? <SpotGoPage /> : <Navigate to="/login" />} />
         <Route
           path="/history"
           element={user ? <HistoryPage user={user} /> : <Navigate to="/login" />} />
