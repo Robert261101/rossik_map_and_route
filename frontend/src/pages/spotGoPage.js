@@ -158,28 +158,8 @@ export default function SpotGoPage() {
         }
     }
 
-
     useEffect(() => {
-        async function fetchSubmittedOffers() {
-            const { data, error } = await supabase
-            .from('submitted_offers')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-            if (error) {
-            console.error("Failed to fetch submitted offers:", error);
-            } else {
-            const formatted = data.map(o => ({
-                id: o.offer_id,
-                externalNumber: o.external_number,
-                _loading: o.loading_address,
-                _unloading: o.unloading_address
-            }));
-            setOffers(formatted);
-            }
-        }
-
-        fetchSubmittedOffers();
+        refreshSubmittedOffers();
     }, []);
 
     useEffect(() => {
@@ -760,7 +740,7 @@ export default function SpotGoPage() {
             setUnloadStartDate(parseDbDate(data.unloading_start_time));
             setUnloadStartTime(parseDbHHMM(data.unloading_start_time));
 
-            setUnloadEndDate(parseDbDate(data.unloading_start_time));
+            setUnloadEndDate(parseDbDate(data.unloading_end_time));
             setUnloadEndTime(parseDbHHMM(data.unloading_end_time));
 
             // 🔽 All other fields
@@ -830,7 +810,7 @@ export default function SpotGoPage() {
         setUnloadStartDate(parseDbDate(data.unloading_start_time));
         setUnloadStartTime(parseDbHHMM(data.unloading_start_time));
 
-        setUnloadEndDate(parseDbDate(data.unloading_start_time));
+        setUnloadEndDate(parseDbDate(data.unloading_end_time));
         setUnloadEndTime(parseDbHHMM(data.unloading_end_time));
 
         // 🔽 All other fields
@@ -1088,7 +1068,7 @@ export default function SpotGoPage() {
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '14px' }}>
             <thead>
               <tr style={{ background: '#d7e9f7' }}>
-                <th style={{ padding: '10px', textAlign: 'left' }}>Offer</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>User</th>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Loading</th>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Unloading</th>
                 <th style={{ padding: '10px', textAlign: 'center' }}>Action</th>
