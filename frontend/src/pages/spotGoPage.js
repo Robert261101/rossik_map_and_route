@@ -12,6 +12,7 @@ countries.registerLocale(enLocale);
 
 const PREFIX_PASSWORD = "parola_ta_secreta";
 const DEFAULT_PREFIX = "APP-OFFER-";
+const API_BASE = 'http://localhost:4000';
 
 const vehicleTypes = {
   1: "Semi trailer",
@@ -43,8 +44,6 @@ const bodyTypes = {
 };
 
 export default function SpotGoPage() {
-//   const [prefix, setPrefix] = useState(DEFAULT_PREFIX);
-//   const [prefixEditEnabled, setPrefixEditEnabled] = useState(false);
 
     const [hideLocations, setHideLocations] = useState(false);
     const [palletsExchange, setPalletsExchange] = useState(false);
@@ -72,7 +71,7 @@ export default function SpotGoPage() {
     const [offers, setOffers] = useState([]);
     const [loadingLocation, setLoadingLocation] = useState(null);
     const [unloadingLocation, setUnloadingLocation] = useState(null);
-    const [isCopying, setIsCopying] = useState(false);
+    const [isPrefilling, setIsPrefilling] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editingOfferId, setEditingOfferId] = useState(null);
 
@@ -91,11 +90,10 @@ export default function SpotGoPage() {
         setUnloadingLocation({ ...loc, ...enriched });
     };
 
-    // useEffect(() => {
-    //     const savedPrefix = localStorage.getItem("spotgo_prefix");
-    //     if (savedPrefix) setPrefix(savedPrefix);
-    //     initializeDefaultTimes();
-    // }, []);]
+    const buildDbTs = (d, t) => `${d}T${t}:00`;  // stays exactly as typed
+
+    const parseDbDate = s => s?.slice(0,10) ?? todayStr;
+    const parseDbHHMM = s => s?.slice(11,16) ?? "08:00";
     
     async function refreshSubmittedOffers() {
         const { data, error } = await supabase
@@ -189,8 +187,7 @@ export default function SpotGoPage() {
     }, [offers]);
 
     useEffect(() => {
-        if (isCopying) {
-            console.log("intra in useEffect pentru start time");
+        if (isPrefilling) {
             return;  // ⛔️ blocăm override-ul
             }
         const now = new Date();
@@ -202,7 +199,7 @@ export default function SpotGoPage() {
     }, [loadStartDate]);
 
     useEffect(() => {
-        if (isCopying) return;  // ⛔️ blocăm override-ul
+        if (isPrefilling) return;  // ⛔️ blocăm override-ul
         const now = new Date();
         const end = new Date(now);
         end.setHours(now.getHours() + 2);
@@ -212,7 +209,7 @@ export default function SpotGoPage() {
     }, [loadEndDate]);
 
     useEffect(() => {
-        if (isCopying) return;  // ⛔️ blocăm override-ul
+        if (isPrefilling) return;  // ⛔️ blocăm override-ul
         const now = new Date();
         const nextHour = new Date(now);
         nextHour.setMinutes(0, 0, 0);
@@ -222,7 +219,7 @@ export default function SpotGoPage() {
     }, [unloadStartDate]);
 
     useEffect(() => {
-        if (isCopying) return;  // ⛔️ blocăm override-ul
+        if (isPrefilling) return;  // ⛔️ blocăm override-ul
         const now = new Date();
         const end = new Date(now);
         end.setHours(now.getHours() + 2);
@@ -413,8 +410,6 @@ export default function SpotGoPage() {
             return;
         }
 
-        console.log(">>> final payload.locations:", [address0, address1]);
-
         const { data: { session } } = await supabase.auth.getSession();
         const userEmail = session?.user?.email || "unknown@user.com";
 
@@ -513,8 +508,6 @@ export default function SpotGoPage() {
                 : "Load/Unload points visible."
         };
 
-        console.log("🧾 FINAL PAYLOAD:", JSON.stringify(payload, null, 2));
-
         if (freightCharge || currency || paymentDue) {
             const pay = {};
 
@@ -538,74 +531,20 @@ export default function SpotGoPage() {
             payload.comments = externalComment;
         }
 
-        // const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-
-        const updatePayload = {
-            sendToSpotGo: true,
-            spotGoPayload: {
-                type: "Spot",
-                externalNumber: finalPrefix,
-                sources: ["1", "2", "3", "4", "8", "9", "12", "14", "16"],
-                useAlternativeLocations: hideLocations,
-                locations: [
-                {
-                    sequence: 1,
-                    type: "Loading",
-                    address: cleanAddress(address0),
-                    period: {
-                    startDate: `${loadStartDate}T${loadStartTime}:00Z`,
-                    endDate: `${loadEndDate}T${loadEndTime}:00Z`
-                    }
-                },
-                {
-                    sequence: 2,
-                    type: "Unloading",
-                    address: cleanAddress(address1),
-                    period: {
-                    startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
-                    endDate: `${unloadEndDate}T${unloadEndTime}:00Z`
-                    }
-                }
-                ],
-                requirements: {
-                capacity: parseFloat(weightT),
-                ldm: parseFloat(lengthM),
-                pallets: 33,
-                loadingSide: "All",
-                palletsExchange,
-                vehicleTypes: selectedVehicles,
-                trailerTypes: selectedBodies,
-                ftl: parseFloat(lengthM) >= 13.6
-                },
-                ...(externalComment ? { comments: externalComment } : {}),
-                internalComments: hideLocations
-                ? "Locations hidden."
-                : "Load/Unload points visible.",
-                payment: getPaymentObj()
-            }
-        };
-
-        const cleanPayload = cleanObject(updatePayload.spotGoPayload);
-        updatePayload.spotGoPayload = cleanPayload;
-
-        console.log("🚿 Cleaned SpotGo payload:", JSON.stringify(cleanPayload, null, 2));
-        console.log("🧾 FINAL UPDATEPAYLOAD:", JSON.stringify(updatePayload, null, 2));
+        const cleanPayload = cleanObject(payload);
 
         try {
 
             const endpoint = isEditing
-                ? `/api/spotgo/${editingOfferId}`  // <-- for PUT
-                : `/api/spotgo/submit`;
+                ? `${API_BASE}/api/spotgo/${editingOfferId}`
+                : `${API_BASE}/api/spotgo/submit`;
+            const method   = isEditing ? "PUT" : "POST";
+            const bodyToSend = isEditing ? cleanPayload : payload;
 
-            const method = isEditing ? "PUT" : "POST";
+            console.log("🧾 FINAL BODY:", bodyToSend);
 
-            console.log("🧾 FINAL UPDATEPAYLOAD:", {
-                sendToSpotGo: true,
-                spotGoPayload: updatePayload.spotGoPayload  // obiectul final SpotGo
-            });
-
-            if (!updatePayload?.spotGoPayload?.locations?.length) {
+            if (!bodyToSend?.locations?.length) {
                 console.error("🚨 No SpotGo payload being sent!");
                 return;
             }
@@ -618,17 +557,18 @@ export default function SpotGoPage() {
                     'Content-Type': 'application/json',
                     'x-api-version': '1.0'
                 },
-                body: JSON.stringify(isEditing ? updatePayload : payload)
+                body: JSON.stringify(bodyToSend)
             });
 
+            const raw = await res.text();
             if (!res.ok) {
-                const errText = await res.text();
-                alert(`Failed to submit offer: ${errText}`);
-                return;
+            alert(`Failed to submit offer: ${raw}`);
+            return;
             }
-        
-        const result = await res.json();
-        console.log("✅ Supabase insert OK:", result);
+
+            let result;
+            try { result = raw ? JSON.parse(raw) : {}; }  // tolerate empty body
+            catch { result = { raw }; }
 
         // TODO luni: momentan fac insertul de aici, dar trebuie vazut de ce nu vrea sa il faca din // frontend/api/spotGo/submit.js si in tabel pe web si in DB. pe spotgo face insert
         // try {
@@ -659,7 +599,7 @@ export default function SpotGoPage() {
                     external_number: finalPrefix,
                     loading_address: address0?.label || '',
                     unloading_address: address1?.label || '',
-                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
 
                     loading_country_code: address0?.countryCode || null,
                     loading_postal_code: address0?.postalCode || null,
@@ -671,10 +611,10 @@ export default function SpotGoPage() {
                     unloading_lat: address1?.lat || null,
                     unloading_lng: address1?.lng || null,
 
-                    loading_start_time: loadStart.toISOString(),
-                    loading_end_time: loadEnd.toISOString(),
-                    unloading_start_time: unloadStart.toISOString(),
-                    unloading_end_time: unloadEnd.toISOString(),
+                    loading_start_time: buildDbTs(loadStartDate,  loadStartTime),
+                    loading_end_time: buildDbTs(loadEndDate,    loadEndTime),
+                    unloading_start_time: buildDbTs(unloadStartDate,unloadStartTime),
+                    unloading_end_time: buildDbTs(unloadEndDate,  unloadEndTime),
 
                     external_comment: externalComment || null,
                     hide_locations: hideLocations,
@@ -706,7 +646,7 @@ export default function SpotGoPage() {
                         external_number: finalPrefix,
                         loading_address: address0?.label || '',
                         unloading_address: address1?.label || '',
-                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
 
                         loading_country_code: address0?.countryCode || null,
                         loading_postal_code: address0?.postalCode || null,
@@ -718,10 +658,10 @@ export default function SpotGoPage() {
                         unloading_lat: address1?.lat || null,
                         unloading_lng: address1?.lng || null,
 
-                        loading_start_time: loadStart.toISOString(),
-                        loading_end_time: loadEnd.toISOString(),
-                        unloading_start_time: unloadStart.toISOString(),
-                        unloading_end_time: unloadEnd.toISOString(),
+                        loading_start_time:  buildDbTs(loadStartDate,  loadStartTime),
+                        loading_end_time:    buildDbTs(loadEndDate,    loadEndTime),
+                        unloading_start_time:buildDbTs(unloadStartDate,unloadStartTime),
+                        unloading_end_time:  buildDbTs(unloadEndDate,  unloadEndTime),
 
                         external_comment: externalComment || null,
                         hide_locations: hideLocations,
@@ -747,7 +687,7 @@ export default function SpotGoPage() {
 
         // Refresh the table view
         await refreshSubmittedOffers();
-        setIsCopying(false);
+        setIsPrefilling(false);
         setIsEditing(false);
         setEditingOfferId(null);
 
@@ -787,8 +727,8 @@ export default function SpotGoPage() {
                 return;
             }
 
-            console.log("Loaded offer for edit:", data);
-            setIsCopying(true);
+            // console.log("Loaded offer for edit:", data);
+            setIsPrefilling(true);
             setIsEditing(true);
             setEditingOfferId(offer.id);  // Store ID to be used on submit
 
@@ -801,14 +741,6 @@ export default function SpotGoPage() {
                 countryCode: data.loading_country_code
             });
             
-            console.log("setting loadingLocation", {
-                label: data.loading_address,
-                lat: data.loading_lat,
-                lng: data.loading_lng,
-                postalCode: data.loading_postal_code,
-                countryCode: data.loading_country_code
-            });
-
             setUnloadingLocation({
                 label: data.unloading_address,
                 lat: data.unloading_lat,
@@ -817,19 +749,19 @@ export default function SpotGoPage() {
                 countryCode: data.unloading_country_code
             });
 
-            setLoadStartDate(data.loading_start_time?.slice(0,10) || todayStr);
-            setLoadStartTime(toTimeHHMM(data.loading_start_time) || "08:00");
-            console.log("Setting loadStartTime =", toTimeHHMM(data.loading_start_time));
-
-            setLoadEndDate(data.loading_end_time?.slice(0,10) || todayStr);
-            setLoadEndTime(toTimeHHMM(data.loading_end_time) || "15:00");
-
-            setUnloadStartDate(data.unloading_start_time?.slice(0,10) || todayStr);
-            setUnloadStartTime(toTimeHHMM(data.unloading_start_time) || "08:00");
-            setUnloadEndDate(data.unloading_end_time?.slice(0,10) || todayStr);
-            setUnloadEndTime(toTimeHHMM(data.unloading_end_time) || "15:00");
 
 
+            setLoadStartDate(parseDbDate(data.loading_start_time));
+            setLoadStartTime(parseDbHHMM(data.loading_start_time));
+
+            setLoadEndDate(parseDbDate(data.loading_end_time));
+            setLoadEndTime(parseDbHHMM(data.loading_end_time));
+
+            setUnloadStartDate(parseDbDate(data.unloading_start_time));
+            setUnloadStartTime(parseDbHHMM(data.unloading_start_time));
+
+            setUnloadEndDate(parseDbDate(data.unloading_start_time));
+            setUnloadEndTime(parseDbHHMM(data.unloading_end_time));
 
             // 🔽 All other fields
             setLengthM(String(data.length_m || "13.6"));
@@ -844,8 +776,6 @@ export default function SpotGoPage() {
             setSelectedVehicles(data.vehicle_types || []);
             setSelectedBodies(data.body_types || []);
         
-
-            alert("🔧 Coming soon: Editing feature for " + offer.externalNumber);
         });
     }
 
@@ -864,9 +794,7 @@ export default function SpotGoPage() {
             return;
         }
 
-        console.log("Loaded offer:", data);
-
-        setIsCopying(true);
+        setIsPrefilling(true);
         // 🔽 Location reconstruction (HERE-compatible object)
         setLoadingLocation({
             label: data.loading_address,
@@ -892,19 +820,18 @@ export default function SpotGoPage() {
             countryCode: data.unloading_country_code
         });
 
-        setLoadStartDate(data.loading_start_time?.slice(0,10) || todayStr);
-        setLoadStartTime(toTimeHHMM(data.loading_start_time) || "08:00");
-        console.log("Setting loadStartTime =", toTimeHHMM(data.loading_start_time));
+        setLoadStartDate(parseDbDate(data.loading_start_time));
+        setLoadStartTime(parseDbHHMM(data.loading_start_time));
+        console.log("Setting loadStartTime =", data.loading_start_time);
 
-        setLoadEndDate(data.loading_end_time?.slice(0,10) || todayStr);
-        setLoadEndTime(toTimeHHMM(data.loading_end_time) || "15:00");
+        setLoadEndDate(parseDbDate(data.loading_end_time));
+        setLoadEndTime(parseDbHHMM(data.loading_end_time));
 
-        setUnloadStartDate(data.unloading_start_time?.slice(0,10) || todayStr);
-        setUnloadStartTime(toTimeHHMM(data.unloading_start_time) || "08:00");
-        setUnloadEndDate(data.unloading_end_time?.slice(0,10) || todayStr);
-        setUnloadEndTime(toTimeHHMM(data.unloading_end_time) || "15:00");
+        setUnloadStartDate(parseDbDate(data.unloading_start_time));
+        setUnloadStartTime(parseDbHHMM(data.unloading_start_time));
 
-
+        setUnloadEndDate(parseDbDate(data.unloading_start_time));
+        setUnloadEndTime(parseDbHHMM(data.unloading_end_time));
 
         // 🔽 All other fields
         setLengthM(String(data.length_m || "13.6"));
