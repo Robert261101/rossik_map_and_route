@@ -23,7 +23,7 @@ const requireRole = require('./middleware/requireRole');
 
 const spotgoSubmit = require('./routes/spotgo/submit');
 const spotgoDelete = require('./routes/spotgo/delete');
-
+const spotgoUpdate = require('./routes/spotgo/update');
 
 const app = express();
 app.use(express.json({ limit: '500kb' }));
@@ -147,6 +147,8 @@ app.post(
     res.status(201).json({ success: true, route: inserted });
   }
 );
+
+app.put('/api/spotgo/:id', spotgoUpdate);
 
 // -- DELETE A ROUTE (team_lead or admin only) --
 app.delete(

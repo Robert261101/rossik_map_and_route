@@ -1,7 +1,7 @@
 // Enhanced AutoCompleteInput with full geocoding fallback
 import React, { useState, useEffect, useRef } from 'react';
 
-const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
+const AutoCompleteInput = ({ apiKey, onSelect, className, value}) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
@@ -96,6 +96,14 @@ const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
     });
   };
 
+  useEffect(() => {
+    if (value?.label) {
+      setSelectedAddress(value.label);
+      setQuery(value.label);
+    }
+  }, [value]);
+
+
   const fetchCoordinates = async (address) => {
     const url = `https://geocode.search.hereapi.com/v1/geocode?q=${encodeURIComponent(address)}&apiKey=${apiKey}`;
     try {
@@ -115,7 +123,7 @@ const AutoCompleteInput = ({ apiKey, onSelect, className }) => {
         ref={inputRef}
         value={selectedAddress || query}
         onKeyDown={handleKeyDown}
-        onFocus={() => selectedAddress && setSelectedAddress(null)}
+        onFocus={() => selectedAddress && setSelectedAddress(null)} // setSelectedAddress(null) face ca sa dispara adresa imediat ce dau click pe textbox dupa ce am o adresa selectata
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Enter address or postal code"
         className="w-full border-2 border-indigo-300 rounded p-2 shadow-sm transition focus-within:ring-2 focus-within:ring-indigo-300 focus:outline-none border-none"

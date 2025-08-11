@@ -46,42 +46,40 @@ export default function SpotGoPage() {
 //   const [prefix, setPrefix] = useState(DEFAULT_PREFIX);
 //   const [prefixEditEnabled, setPrefixEditEnabled] = useState(false);
 
-  const [hideLocations, setHideLocations] = useState(false);
-  const [palletsExchange, setPalletsExchange] = useState(false);
+    const [hideLocations, setHideLocations] = useState(false);
+    const [palletsExchange, setPalletsExchange] = useState(false);
 
-  const todayStr = new Date().toISOString().slice(0,10);
-  const [loadStartDate, setLoadStartDate] = useState(todayStr);
-  const [loadStartTime, setLoadStartTime] = useState("");
-  const [loadEndDate, setLoadEndDate] = useState(todayStr);
-  const [loadEndTime, setLoadEndTime] = useState("");
-  const [unloadStartDate, setUnloadStartDate] = useState(todayStr);
-  const [unloadStartTime, setUnloadStartTime] = useState("");
-  const [unloadEndDate, setUnloadEndDate] = useState(todayStr);
-  const [unloadEndTime, setUnloadEndTime] = useState("");
+    const todayStr = new Date().toISOString().slice(0,10);
+    const [loadStartDate, setLoadStartDate] = useState(todayStr);
+    const [loadStartTime, setLoadStartTime] = useState("");
+    const [loadEndDate, setLoadEndDate] = useState(todayStr);
+    const [loadEndTime, setLoadEndTime] = useState("");
+    const [unloadStartDate, setUnloadStartDate] = useState(todayStr);
+    const [unloadStartTime, setUnloadStartTime] = useState("");
+    const [unloadEndDate, setUnloadEndDate] = useState(todayStr);
+    const [unloadEndTime, setUnloadEndTime] = useState("");
 
-  const [lengthM, setLengthM] = useState("13.6");
-  const [weightT, setWeightT] = useState("24");
-  const [externalComment, setExternalComment] = useState("");
-  const [freightCharge, setFreightCharge] = useState("");
-  const [currency, setCurrency] = useState("");
-  const [paymentDue, setPaymentDue] = useState("");
+    const [lengthM, setLengthM] = useState("13.6");
+    const [weightT, setWeightT] = useState("24");
+    const [externalComment, setExternalComment] = useState("");
+    const [freightCharge, setFreightCharge] = useState("");
+    const [currency, setCurrency] = useState("");
+    const [paymentDue, setPaymentDue] = useState("");
 
-  const [selectedVehicles, setSelectedVehicles] = useState([]);
-  const [selectedBodies, setSelectedBodies] = useState([]);
+    const [selectedVehicles, setSelectedVehicles] = useState([]);
+    const [selectedBodies, setSelectedBodies] = useState([]);
 
-  const [offers, setOffers] = useState([]);
-  const [loadingLocation, setLoadingLocation] = useState(null);
-  const [unloadingLocation, setUnloadingLocation] = useState(null);
-  const [externalPrefix, setExternalPrefix] = useState("");
+    const [offers, setOffers] = useState([]);
+    const [loadingLocation, setLoadingLocation] = useState(null);
+    const [unloadingLocation, setUnloadingLocation] = useState(null);
+    const [isCopying, setIsCopying] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingOfferId, setEditingOfferId] = useState(null);
 
-  const [loadingPostal, setLoadingPostal] = useState("");
-  const [unloadingPostal, setUnloadingPostal] = useState("");
 
-  const navigate = useNavigate()
+    const navigate = useNavigate()
 
-  const HERE_API_KEY = process.env.REACT_APP_HERE_API_KEY;  // pulled at build time
-
-  const RADIUSES = [0, 100, 500, 1000, 5000];
+    const HERE_API_KEY = process.env.REACT_APP_HERE_API_KEY;  // pulled at build time
 
     const handleLoadingSelect = async (loc) => {
         const enriched = await reverseWithFallback(loc, HERE_API_KEY);
@@ -97,8 +95,8 @@ export default function SpotGoPage() {
     //     const savedPrefix = localStorage.getItem("spotgo_prefix");
     //     if (savedPrefix) setPrefix(savedPrefix);
     //     initializeDefaultTimes();
-    // }, []);
-
+    // }, []);]
+    
     async function refreshSubmittedOffers() {
         const { data, error } = await supabase
             .from('submitted_offers')
@@ -108,6 +106,10 @@ export default function SpotGoPage() {
         if (error) {
             console.error("Failed to fetch submitted offers:", error);
         } else {
+            const { data: { session } } = await supabase.auth.getSession();
+            const userEmail = session?.user?.email || "unknown@user.com";
+            const finalPrefix = formatName(userEmail);
+
             const formatted = data.map(o => {
 
                 // Format Loading Address
@@ -137,8 +139,8 @@ export default function SpotGoPage() {
                     ? `${cc}-${postalMatch} ${addressOnly}`
                     : `${addressOnly}, ${country}`;
                 }
-
-                    const isMine = o.external_number?.startsWith(externalPrefix);
+                    // TODO: crezi ca ar fi util sa puneam namePrefix ul in utils? il creez si aici si in fetchSubmitOffer
+                    const isMine = o.external_number?.startsWith(finalPrefix);
 
                     return {
                         id: o.offer_id,
@@ -186,23 +188,11 @@ export default function SpotGoPage() {
         localStorage.setItem("spotgo_offers", JSON.stringify(offers));
     }, [offers]);
 
-    function initializeDefaultTimes() {
-        const now = new Date();
-        const nextHour = new Date(now);
-        nextHour.setMinutes(0, 0, 0);
-        nextHour.setHours(now.getHours() + 1);
-        const timeStr = (dateObj) => dateObj.toTimeString().slice(0,5);
-        setLoadStartTime(loadStartDate === todayStr ? timeStr(nextHour) : "08:00");
-        const loadEnd = new Date(nextHour);
-        loadEnd.setHours(loadEnd.getHours() + 1);
-        setLoadEndTime(loadEndDate === todayStr ? timeStr(loadEnd) : "15:00");
-        setUnloadStartTime(unloadStartDate === todayStr ? timeStr(nextHour) : "08:00");
-        const unloadEnd = new Date(nextHour);
-        unloadEnd.setHours(unloadEnd.getHours() + 1);
-        setUnloadEndTime(unloadEndDate === todayStr ? timeStr(unloadEnd) : "15:00");
-    }
-
     useEffect(() => {
+        if (isCopying) {
+            console.log("intra in useEffect pentru start time");
+            return;  // ⛔️ blocăm override-ul
+            }
         const now = new Date();
         const nextHour = new Date(now);
         nextHour.setMinutes(0, 0, 0);
@@ -212,6 +202,7 @@ export default function SpotGoPage() {
     }, [loadStartDate]);
 
     useEffect(() => {
+        if (isCopying) return;  // ⛔️ blocăm override-ul
         const now = new Date();
         const end = new Date(now);
         end.setHours(now.getHours() + 2);
@@ -221,6 +212,7 @@ export default function SpotGoPage() {
     }, [loadEndDate]);
 
     useEffect(() => {
+        if (isCopying) return;  // ⛔️ blocăm override-ul
         const now = new Date();
         const nextHour = new Date(now);
         nextHour.setMinutes(0, 0, 0);
@@ -230,6 +222,7 @@ export default function SpotGoPage() {
     }, [unloadStartDate]);
 
     useEffect(() => {
+        if (isCopying) return;  // ⛔️ blocăm override-ul
         const now = new Date();
         const end = new Date(now);
         end.setHours(now.getHours() + 2);
@@ -241,69 +234,69 @@ export default function SpotGoPage() {
  * Reverse‑geocode in expanding radii until we get a postalCode + valid 2‑letter countryCode.
  * If that fails, fall back to a forward‑geocode on the label.
  */
- async function reverseWithFallback(loc, apiKey) {
-  const radii = [0, 100, 500, 1000, 5000];
-  let lastAddr = null;
-  const base   = "https://revgeocode.search.hereapi.com/v1/revgeocode";
-  // note the correct `lang=` here
-  const common = `?at=${loc.lat},${loc.lng}&lang=en-US&limit=1&apiKey=${apiKey}`;
+    async function reverseWithFallback(loc, apiKey) {
+    const radii = [0, 100, 500, 1000, 5000];
+    let lastAddr = null;
+    const base   = "https://revgeocode.search.hereapi.com/v1/revgeocode";
+    // note the correct `lang=` here
+    const common = `?at=${loc.lat},${loc.lng}&lang=en-US&limit=1&apiKey=${apiKey}`;
 
-  // 1) Spiral‑out reverse‑geocoding
-  for (const r of radii) {
-    const url = r === 0
-        ? `${base}?at=${loc.lat},${loc.lng}&lang=en-US&limit=1&apiKey=${apiKey}`
-        : `${base}?in=circle:${loc.lat},${loc.lng};r=${r}&lang=en-US&limit=1&apiKey=${apiKey}`;
-
-    try {
-      const resp = await fetch(url);
-      if (!resp.ok) continue;
-
-      const { items = [] } = await resp.json();
-      const addr = items[0]?.address;
-      if (!addr) continue;
-
-      // normalize CC
-      const rawCC = addr.countryCode || "";
-      const cc2 = countries.alpha3ToAlpha2(rawCC) || (rawCC.length === 2 && rawCC) || "";
-      addr.countryCode = cc2;
-
-      lastAddr = addr;
-      if (addr.postalCode && cc2.length === 2) {
-        return addr; // ✅ success
-      }
-    } catch (e) {
-      console.warn(`reverse@r=${r} failed:`, e);
-    }
-  }
-
-  // 2) Forward‑geocode fallback
-  if (!lastAddr?.postalCode) {
-    const label = lastAddr?.label || loc.label;
-    const geoUrl =
-        `https://geocode.search.hereapi.com/v1/geocode` +
-        `?q=${encodeURIComponent(label)}` +
-        `&lang=en-US&limit=1&apiKey=${apiKey}`;
+    // 1) Spiral‑out reverse‑geocoding
+    for (const r of radii) {
+        const url = r === 0
+            ? `${base}?at=${loc.lat},${loc.lng}&lang=en-US&limit=1&apiKey=${apiKey}`
+            : `${base}?in=circle:${loc.lat},${loc.lng};r=${r}&lang=en-US&limit=1&apiKey=${apiKey}`;
 
         try {
-        const gr = await fetch(geoUrl);
-        if (gr.ok) {
-            const { items = [] } = await gr.json();
-            const fwd = items[0]?.address;
-            if (fwd?.postalCode) {
-            lastAddr.postalCode = fwd.postalCode;
-            const rawCC2 = fwd.countryCode || "";
-            lastAddr.countryCode = 
-                countries.alpha3ToAlpha2(rawCC2) 
-                || (rawCC2.length === 2 && rawCC2) 
-                || lastAddr.countryCode;
-            }
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+
+        const { items = [] } = await resp.json();
+        const addr = items[0]?.address;
+        if (!addr) continue;
+
+        // normalize CC
+        const rawCC = addr.countryCode || "";
+        const cc2 = countries.alpha3ToAlpha2(rawCC) || (rawCC.length === 2 && rawCC) || "";
+        addr.countryCode = cc2;
+
+        lastAddr = addr;
+        if (addr.postalCode && cc2.length === 2) {
+            return addr; // ✅ success
         }
         } catch (e) {
-        console.warn("forward‑geocode failed:", e);
+        console.warn(`reverse@r=${r} failed:`, e);
         }
     }
 
-    return lastAddr || {};
+    // 2) Forward‑geocode fallback
+    if (!lastAddr?.postalCode) {
+        const label = lastAddr?.label || loc.label;
+        const geoUrl =
+            `https://geocode.search.hereapi.com/v1/geocode` +
+            `?q=${encodeURIComponent(label)}` +
+            `&lang=en-US&limit=1&apiKey=${apiKey}`;
+
+            try {
+            const gr = await fetch(geoUrl);
+            if (gr.ok) {
+                const { items = [] } = await gr.json();
+                const fwd = items[0]?.address;
+                if (fwd?.postalCode) {
+                lastAddr.postalCode = fwd.postalCode;
+                const rawCC2 = fwd.countryCode || "";
+                lastAddr.countryCode = 
+                    countries.alpha3ToAlpha2(rawCC2) 
+                    || (rawCC2.length === 2 && rawCC2) 
+                    || lastAddr.countryCode;
+                }
+            }
+            } catch (e) {
+            console.warn("forward‑geocode failed:", e);
+            }
+        }
+
+        return lastAddr || {};
     }
 
 
@@ -329,25 +322,15 @@ export default function SpotGoPage() {
 //     alert(`Prefix "${newPref}" saved.`);
 //   }
 
-    useEffect(() => {
-        async function initPrefixFromEmail() {
-            const stored = localStorage.getItem("email_based_prefix");
-            if (stored) {
-            setExternalPrefix(stored);
-            return;
-            }
+    const formatName = (email = '') => {
+        if (!email.includes('@')) return '';
+        const local = email.split('@')[0];
+        return local
+            .split('.')
+            .map(p => p[0]?.toUpperCase() + p.slice(1))
+            .join(' ');
+    };
 
-            const { data: { session } } = await supabase.auth.getSession();
-            const userEmail = session?.user?.email || "unknown@user.com";
-            const generated = getOrCreatePersistentPrefix(userEmail);
-
-            localStorage.setItem("email_based_prefix", generated);
-            setExternalPrefix(generated);
-        }
-
-        initPrefixFromEmail();
-        initializeDefaultTimes();
-    }, []);
 
     function toggleVehicleType(id) {
         setSelectedVehicles(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
@@ -366,20 +349,6 @@ export default function SpotGoPage() {
 
     const address0 = loadingLocation;
     const address1 = unloadingLocation;
-
-    function getOrCreatePersistentPrefix(email) {
-        const saved = localStorage.getItem("email_based_prefix");
-        if (saved) return saved;
-
-        const parts = email.split("@")[0].split(".");
-        const initials = parts.map(p => p[0].toUpperCase() + p.slice(1, 2).toLowerCase()).join("");
-        const randDigits = Math.floor(Math.random() * 100).toString().padStart(2, '0');
-        const prefix = `${initials}-0${randDigits}/`;
-        localStorage.setItem("email_based_prefix", prefix);
-        return prefix;
-    }
-
-
 
     async function handleSubmitOffer(e) {
         e.preventDefault();
@@ -422,17 +391,17 @@ export default function SpotGoPage() {
 
         let paymentTerm;
         if (paymentDue) {
-        const dueDateObj = new Date(paymentDue);
-        const today = new Date();
-        dueDateObj.setHours(0,0,0,0);
-        today.setHours(0,0,0,0);
-        if (dueDateObj <= today) {
-            alert("Payment due date must be in the future.");
-            return;
-        }
-        const diffMs = dueDateObj - today;
-        paymentTerm = Math.round(diffMs / (1000 * 60 * 60 * 24));
-        if (paymentTerm < 1) paymentTerm = 1;
+            const dueDateObj = new Date(paymentDue);
+            const today = new Date();
+            dueDateObj.setHours(0,0,0,0);
+            today.setHours(0,0,0,0);
+            if (dueDateObj <= today) {
+                alert("Payment due date must be in the future.");
+                return;
+            }
+            const diffMs = dueDateObj - today;
+            paymentTerm = Math.round(diffMs / (1000 * 60 * 60 * 24));
+            if (paymentTerm < 1) paymentTerm = 1;
         }
 
         if (address0.countryCode.length !== 2 || address1.countryCode.length !== 2) {
@@ -449,21 +418,70 @@ export default function SpotGoPage() {
         const { data: { session } } = await supabase.auth.getSession();
         const userEmail = session?.user?.email || "unknown@user.com";
 
-        // ⚠️ Aici suprascriem prefixul cu ceva generat automat
-        const emailBasedPrefix = getOrCreatePersistentPrefix(userEmail);
-        const externalPrefix = `${emailBasedPrefix}`;
+        const formatName = (email = '') => {
+            if (!email.includes('@')) return '';
+            const local = email.split('@')[0];
+            return local
+                .split('.')
+                .map(p => p[0]?.toUpperCase() + p.slice(1))
+                .join(' ');
+        };
+
+        const finalPrefix = formatName(userEmail);
+
+        const extractCity = (label = '') => {
+            const parts = label.split(',');
+            // Încercăm să luăm al doilea sau penultimul cuvânt din adresă, dacă pare a fi oraș
+            return parts.length >= 2 ? parts[parts.length - 2].trim() : "Unknown";
+        };
+
+        const cleanAddress = (raw) => ({
+            countryCode: raw.countryCode,
+            postalCode: raw.postalCode,
+            city: raw.city || extractCity(raw.label),
+            coordinates: {
+                latitude: raw.lat,
+                longitude: raw.lng
+            }
+        });
+
+        const getPaymentObj = () => {
+            if (!freightCharge && !currency && !paymentDue) return undefined;
+            const obj = {};
+            if (freightCharge) obj.from = parseFloat(freightCharge);
+            if (currency) obj.currency = currency;
+            if (paymentDue) {
+                obj.dueDate = new Date(paymentDue).toISOString().split("T")[0];
+            }
+            return obj;
+        };
+
+        function cleanObject(obj) {
+            if (Array.isArray(obj)) {
+                return obj.map(cleanObject);
+            } else if (typeof obj === "object" && obj !== null) {
+                return Object.entries(obj)
+                .filter(([_, v]) => v !== undefined)
+                .reduce((acc, [k, v]) => {
+                    acc[k] = cleanObject(v);
+                    return acc;
+                }, {});
+            }
+            return obj;
+        }
+
 
 
         const payload = {
             type: "Spot",
-            externalNumber: externalPrefix,
+            externalNumber: finalPrefix,
             sources: ["1","2","3","4","8","9","12","14","16"],
             useAlternativeLocations: hideLocations,
             locations: [
                 {
                 sequence: 1,
                 type: "Loading",
-                address: address0,
+                address: cleanAddress(address0),
                 period: {
                     startDate: `${loadStartDate}T${loadStartTime}:00Z`,
                     endDate:   `${loadEndDate}T${loadEndTime}:00Z`
@@ -472,7 +490,7 @@ export default function SpotGoPage() {
                 {
                 sequence: 2,
                 type: "Unloading",
-                address: address1,
+                address: cleanAddress(address1),
                 period: {
                     startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
                     endDate:   `${unloadEndDate}T${unloadEndTime}:00Z`
@@ -495,62 +513,413 @@ export default function SpotGoPage() {
                 : "Load/Unload points visible."
         };
 
-        if (freightCharge) {
-        const pay = { from: parseFloat(freightCharge) || 0 };
-        if (currency) pay.currency = currency;
-        if (paymentTerm) pay.term = paymentTerm;
-        payload.payment = pay;
+        console.log("🧾 FINAL PAYLOAD:", JSON.stringify(payload, null, 2));
+
+        if (freightCharge || currency || paymentDue) {
+            const pay = {};
+
+            if (freightCharge) {
+                pay.from = parseFloat(freightCharge) || 0;
+            }
+
+            if (currency) {
+                pay.currency = currency;
+            }
+
+            if (paymentDue) {
+                const dueDateStr = new Date(paymentDue).toISOString().split('T')[0]; // "YYYY-MM-DD"
+                pay.dueDate = dueDateStr;
+            }
+
+            payload.payment = pay;
+        }
+
+        if (externalComment) {
+            payload.comments = externalComment;
         }
 
         // const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
 
-        try {
-        const res = await fetch("/api/spotgo/submit", {
-            method: "POST",
-            headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-            const errText = await res.text();
-            alert(`Failed to submit offer: ${errText}`);
-            return;
-        }
-
-        const result = await res.json();
-
-        try {
-            const { error } = await supabase
-                .from('submitted_offers')
-                .insert([
+        const updatePayload = {
+            sendToSpotGo: true,
+            spotGoPayload: {
+                type: "Spot",
+                externalNumber: finalPrefix,
+                sources: ["1", "2", "3", "4", "8", "9", "12", "14", "16"],
+                useAlternativeLocations: hideLocations,
+                locations: [
                 {
-                    offer_id: result.id,
-                    external_number: `${externalPrefix}${result.id.replace(/-/g, '').slice(0, 10)}`,
-                    loading_address: address0.label,
-                    unloading_address: address1.label,
-                    created_at: new Date().toISOString()
+                    sequence: 1,
+                    type: "Loading",
+                    address: cleanAddress(address0),
+                    period: {
+                    startDate: `${loadStartDate}T${loadStartTime}:00Z`,
+                    endDate: `${loadEndDate}T${loadEndTime}:00Z`
+                    }
+                },
+                {
+                    sequence: 2,
+                    type: "Unloading",
+                    address: cleanAddress(address1),
+                    period: {
+                    startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
+                    endDate: `${unloadEndDate}T${unloadEndTime}:00Z`
+                    }
                 }
-                ]);
+                ],
+                requirements: {
+                capacity: parseFloat(weightT),
+                ldm: parseFloat(lengthM),
+                pallets: 33,
+                loadingSide: "All",
+                palletsExchange,
+                vehicleTypes: selectedVehicles,
+                trailerTypes: selectedBodies,
+                ftl: parseFloat(lengthM) >= 13.6
+                },
+                ...(externalComment ? { comments: externalComment } : {}),
+                internalComments: hideLocations
+                ? "Locations hidden."
+                : "Load/Unload points visible.",
+                payment: getPaymentObj()
+            }
+        };
 
-            if (error) {
-                console.error("Failed to insert into Supabase:", error.message);
+        const cleanPayload = cleanObject(updatePayload.spotGoPayload);
+        updatePayload.spotGoPayload = cleanPayload;
+
+        console.log("🚿 Cleaned SpotGo payload:", JSON.stringify(cleanPayload, null, 2));
+        console.log("🧾 FINAL UPDATEPAYLOAD:", JSON.stringify(updatePayload, null, 2));
+
+        try {
+
+            const endpoint = isEditing
+                ? `/api/spotgo/${editingOfferId}`  // <-- for PUT
+                : `/api/spotgo/submit`;
+
+            const method = isEditing ? "PUT" : "POST";
+
+            console.log("🧾 FINAL UPDATEPAYLOAD:", {
+                sendToSpotGo: true,
+                spotGoPayload: updatePayload.spotGoPayload  // obiectul final SpotGo
+            });
+
+            if (!updatePayload?.spotGoPayload?.locations?.length) {
+                console.error("🚨 No SpotGo payload being sent!");
+                return;
+            }
+
+            const res = await fetch(endpoint, {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'authorization-email': userEmail,
+                    'Content-Type': 'application/json',
+                    'x-api-version': '1.0'
+                },
+                body: JSON.stringify(isEditing ? updatePayload : payload)
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                alert(`Failed to submit offer: ${errText}`);
+                return;
+            }
+        
+        const result = await res.json();
+        console.log("✅ Supabase insert OK:", result);
+
+        // TODO luni: momentan fac insertul de aici, dar trebuie vazut de ce nu vrea sa il faca din // frontend/api/spotGo/submit.js si in tabel pe web si in DB. pe spotgo face insert
+        // try {
+        //     const { error } = await supabase
+        //         .from('submitted_offers')
+        //         .insert([
+        //         {
+        //             offer_id: result.id,
+        //             external_number: finalPrefix,
+        //             loading_address: address0.label,
+        //             unloading_address: address1.label,
+        //             created_at: new Date().toISOString()
+        //         }
+        //         ]);
+
+        //     if (error) {
+        //         console.error("Failed to insert into Supabase:", error.message);
+        //     }
+        // } catch (e) {
+        // console.error("Supabase insert error:", e.message);
+        // }
+
+        try {
+            if (isEditing && editingOfferId) {
+                const { error } = await supabase
+                    .from('submitted_offers')
+                    .update({
+                    external_number: finalPrefix,
+                    loading_address: address0?.label || '',
+                    unloading_address: address1?.label || '',
+                    created_at: new Date().toISOString(),
+
+                    loading_country_code: address0?.countryCode || null,
+                    loading_postal_code: address0?.postalCode || null,
+                    loading_lat: address0?.lat || null,
+                    loading_lng: address0?.lng || null,
+
+                    unloading_country_code: address1?.countryCode || null,
+                    unloading_postal_code: address1?.postalCode || null,
+                    unloading_lat: address1?.lat || null,
+                    unloading_lng: address1?.lng || null,
+
+                    loading_start_time: loadStart.toISOString(),
+                    loading_end_time: loadEnd.toISOString(),
+                    unloading_start_time: unloadStart.toISOString(),
+                    unloading_end_time: unloadEnd.toISOString(),
+
+                    external_comment: externalComment || null,
+                    hide_locations: hideLocations,
+                    pallets_exchange: palletsExchange,
+                    vehicle_types: selectedVehicles.length ? selectedVehicles : null,
+                    body_types: selectedBodies.length ? selectedBodies : null,
+                    freight_charge: freightCharge ? parseFloat(freightCharge) : null,
+                    currency: currency || null,
+                    payment_due: paymentDue || null,
+                    length_m: lengthM ? parseFloat(lengthM) : null,
+                    weight_t: weightT ? parseFloat(weightT) : null,
+                    submitted_by_email: userEmail
+                    })
+                    .eq('offer_id', editingOfferId);
+
+                if (error) {
+                    console.error("Failed to update offer in Supabase:", error.message);
+                }
+
+                // Resetezi starea de editare
+                setIsEditing(false);
+                setEditingOfferId(null);
+                } else {
+                const { error } = await supabase
+                    .from('submitted_offers')
+                    .insert([
+                    {
+                        offer_id: result.id || null,
+                        external_number: finalPrefix,
+                        loading_address: address0?.label || '',
+                        unloading_address: address1?.label || '',
+                        created_at: new Date().toISOString(),
+
+                        loading_country_code: address0?.countryCode || null,
+                        loading_postal_code: address0?.postalCode || null,
+                        loading_lat: address0?.lat || null,
+                        loading_lng: address0?.lng || null,
+
+                        unloading_country_code: address1?.countryCode || null,
+                        unloading_postal_code: address1?.postalCode || null,
+                        unloading_lat: address1?.lat || null,
+                        unloading_lng: address1?.lng || null,
+
+                        loading_start_time: loadStart.toISOString(),
+                        loading_end_time: loadEnd.toISOString(),
+                        unloading_start_time: unloadStart.toISOString(),
+                        unloading_end_time: unloadEnd.toISOString(),
+
+                        external_comment: externalComment || null,
+                        hide_locations: hideLocations,
+                        pallets_exchange: palletsExchange,
+                        vehicle_types: selectedVehicles.length ? selectedVehicles : null,
+                        body_types: selectedBodies.length ? selectedBodies : null,
+                        freight_charge: freightCharge ? parseFloat(freightCharge) : null,
+                        currency: currency || null,
+                        payment_due: paymentDue || null,
+                        length_m: lengthM ? parseFloat(lengthM) : null,
+                        weight_t: weightT ? parseFloat(weightT) : null,
+                        submitted_by_email: userEmail
+                    }
+                    ]);
+
+                if (error) {
+                    console.error("Failed to insert full offer in Supabase:", error.message);
+                }
             }
         } catch (e) {
-        console.error("Supabase insert error:", e.message);
+        console.error("Supabase insert exception:", e.message);
         }
 
         // Refresh the table view
         await refreshSubmittedOffers();
+        setIsCopying(false);
+        setIsEditing(false);
+        setEditingOfferId(null);
 
         alert("Freight offer submitted successfully.");
+
         } catch (error) {
             console.error("Submit offer error:", error);
             alert("An unexpected error occurred during submission.");
         }
+    }
+
+    const toTimeHHMM = (isoStr) => {
+        if (!isoStr) return "08:00";
+        try {
+            const parts = isoStr.split("T")[1]?.split(":");
+            if (!parts || parts.length < 2) return "08:00";
+            return `${parts[0]}:${parts[1]}`;
+        } catch {
+            return "08:00";
+        }
+    };
+
+
+
+    async function handleEditOffer(offer) {
+        if (!offer?.id) return;
+
+        supabase
+            .from('submitted_offers')
+            .select('*')
+            .eq('offer_id', offer.id)
+            .single()
+            .then(({ data, error }) => {
+            if (error || !data) {
+                alert("Failed to fetch full offer data.");
+                console.error("Edit error:", error);
+                return;
+            }
+
+            console.log("Loaded offer for edit:", data);
+            setIsCopying(true);
+            setIsEditing(true);
+            setEditingOfferId(offer.id);  // Store ID to be used on submit
+
+            // 🔽 Location reconstruction (HERE-compatible object)
+            setLoadingLocation({
+                label: data.loading_address,
+                lat: data.loading_lat,
+                lng: data.loading_lng,
+                postalCode: data.loading_postal_code,
+                countryCode: data.loading_country_code
+            });
+            
+            console.log("setting loadingLocation", {
+                label: data.loading_address,
+                lat: data.loading_lat,
+                lng: data.loading_lng,
+                postalCode: data.loading_postal_code,
+                countryCode: data.loading_country_code
+            });
+
+            setUnloadingLocation({
+                label: data.unloading_address,
+                lat: data.unloading_lat,
+                lng: data.unloading_lng,
+                postalCode: data.unloading_postal_code,
+                countryCode: data.unloading_country_code
+            });
+
+            setLoadStartDate(data.loading_start_time?.slice(0,10) || todayStr);
+            setLoadStartTime(toTimeHHMM(data.loading_start_time) || "08:00");
+            console.log("Setting loadStartTime =", toTimeHHMM(data.loading_start_time));
+
+            setLoadEndDate(data.loading_end_time?.slice(0,10) || todayStr);
+            setLoadEndTime(toTimeHHMM(data.loading_end_time) || "15:00");
+
+            setUnloadStartDate(data.unloading_start_time?.slice(0,10) || todayStr);
+            setUnloadStartTime(toTimeHHMM(data.unloading_start_time) || "08:00");
+            setUnloadEndDate(data.unloading_end_time?.slice(0,10) || todayStr);
+            setUnloadEndTime(toTimeHHMM(data.unloading_end_time) || "15:00");
+
+
+
+            // 🔽 All other fields
+            setLengthM(String(data.length_m || "13.6"));
+            setWeightT(String(data.weight_t || "24"));
+            setExternalComment(data.external_comment || "");
+            setFreightCharge(data.freight_charge ? String(data.freight_charge) : "");
+            setCurrency(data.currency || "EUR");
+            setPaymentDue(data.payment_due || "");
+
+            setHideLocations(!!data.hide_locations);
+            setPalletsExchange(!!data.pallets_exchange);
+            setSelectedVehicles(data.vehicle_types || []);
+            setSelectedBodies(data.body_types || []);
+        
+
+            alert("🔧 Coming soon: Editing feature for " + offer.externalNumber);
+        });
+    }
+
+    async function handleCopyOffer(offer) {
+        if (!offer?.id) return;
+
+        const { data, error } = await supabase
+            .from('submitted_offers')
+            .select('*')
+            .eq('offer_id', offer.id)
+            .single();
+
+        if (error || !data) {
+            alert("Failed to fetch full offer data.");
+            console.error("Copy error:", error);
+            return;
+        }
+
+        console.log("Loaded offer:", data);
+
+        setIsCopying(true);
+        // 🔽 Location reconstruction (HERE-compatible object)
+        setLoadingLocation({
+            label: data.loading_address,
+            lat: data.loading_lat,
+            lng: data.loading_lng,
+            postalCode: data.loading_postal_code,
+            countryCode: data.loading_country_code
+        });
+        
+        console.log("setting loadingLocation", {
+            label: data.loading_address,
+            lat: data.loading_lat,
+            lng: data.loading_lng,
+            postalCode: data.loading_postal_code,
+            countryCode: data.loading_country_code
+        });
+
+        setUnloadingLocation({
+            label: data.unloading_address,
+            lat: data.unloading_lat,
+            lng: data.unloading_lng,
+            postalCode: data.unloading_postal_code,
+            countryCode: data.unloading_country_code
+        });
+
+        setLoadStartDate(data.loading_start_time?.slice(0,10) || todayStr);
+        setLoadStartTime(toTimeHHMM(data.loading_start_time) || "08:00");
+        console.log("Setting loadStartTime =", toTimeHHMM(data.loading_start_time));
+
+        setLoadEndDate(data.loading_end_time?.slice(0,10) || todayStr);
+        setLoadEndTime(toTimeHHMM(data.loading_end_time) || "15:00");
+
+        setUnloadStartDate(data.unloading_start_time?.slice(0,10) || todayStr);
+        setUnloadStartTime(toTimeHHMM(data.unloading_start_time) || "08:00");
+        setUnloadEndDate(data.unloading_end_time?.slice(0,10) || todayStr);
+        setUnloadEndTime(toTimeHHMM(data.unloading_end_time) || "15:00");
+
+
+
+        // 🔽 All other fields
+        setLengthM(String(data.length_m || "13.6"));
+        setWeightT(String(data.weight_t || "24"));
+        setExternalComment(data.external_comment || "");
+        setFreightCharge(data.freight_charge ? String(data.freight_charge) : "");
+        setCurrency(data.currency || "EUR");
+        setPaymentDue(data.payment_due || "");
+
+        setHideLocations(!!data.hide_locations);
+        setPalletsExchange(!!data.pallets_exchange);
+        setSelectedVehicles(data.vehicle_types || []);
+        setSelectedBodies(data.body_types || []);
+       
+        alert("📋 Offer copied into form for submission.");
     }
 
     async function handleDeleteOffer(offerId) {
@@ -621,6 +990,11 @@ export default function SpotGoPage() {
     const handleFocus = e => Object.assign(e.target.style, { ...baseInputStyle, ...highlightStyle });
     const handleBlur = e => Object.assign(e.target.style, baseInputStyle);
 
+
+    useEffect(() => {
+  console.log("🎯 Current loadStartTime:", loadStartTime);
+}, [loadStartTime]);
+
   
   return (
   <div style={{ padding: '30px', background: '#f5f9fd', fontFamily: 'Arial, sans-serif' }}>
@@ -659,12 +1033,12 @@ export default function SpotGoPage() {
         <div style={{display: 'flex',gap: '30px',alignItems: 'flex-start',marginBottom: '20px',paddingBottom: '15px',borderBottom: '1px dashed #09111aff',flexWrap: 'wrap'}} >
         <div style={{flex: 1,minWidth: '300px',border: '1px solid #ccc',padding: '15px',borderRadius: '8px', backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Loading Address:</label><br />
-            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} onSelect={handleLoadingSelect} />
+            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
         </div>
 
         <div style={{flex: 1, minWidth: '300px',border: '1px solid #ccc',padding: '15px', borderRadius: '8px',backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
-            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} onSelect={handleUnloadingSelect} />
+            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
         </div>
         </div>
 
@@ -675,12 +1049,25 @@ export default function SpotGoPage() {
                 <label>Start:</label>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                     <input type="date" value={loadStartDate} onChange={e => setLoadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                    <input type="time" value={loadStartTime} onChange={e => setLoadStartTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                    <input
+                        type="time"
+                        value={loadStartTime}
+                        onChange={(e) => {
+                            console.log("🕓 Changing loadStartTime to", e.target.value);
+                            setLoadStartTime(e.target.value);
+                        }}
+                        lang="en-GB"
+                        step="60"
+                        onFocus={handleFocus}
+                        onBlur={handleBlur}
+                        style={{ ...baseInputStyle, flex: 1 }}
+                    />
+
                 </div>
                 <label>End:</label>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <input type="date" value={loadEndDate} onChange={e => setLoadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                    <input type="time" value={loadEndTime} onChange={e => setLoadEndTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                    <input type="time" value={loadEndTime} onChange={e => setLoadEndTime(e.target.value)} lang="en-GB" step="60" onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
                 </div>
             </fieldset>
 
@@ -689,12 +1076,12 @@ export default function SpotGoPage() {
                 <label>Start:</label>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                     <input type="date" value={unloadStartDate} onChange={e => setUnloadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                    <input type="time" value={unloadStartTime} onChange={e => setUnloadStartTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                    <input type="time" value={unloadStartTime} onChange={e => setUnloadStartTime(e.target.value)} lang="en-GB" step="60" onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
                 </div>
                 <label>End:</label>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <input type="date" value={unloadEndDate} onChange={e => setUnloadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                    <input type="time" value={unloadEndTime} onChange={e => setUnloadEndTime(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
+                    <input type="time" value={unloadEndTime} onChange={e => setUnloadEndTime(e.target.value)} lang="en-GB" step="60" onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
                 </div>
             </fieldset>
         </div>
@@ -761,8 +1148,8 @@ export default function SpotGoPage() {
             </label>
           ))}
         </div>
-
-        <button type="submit" style={{...buttonInputStyle}}>Submit Offer</button>
+        <h3>{isEditing ? "Edit Offer" : "New Offer"}</h3>
+        <button type="submit" style={{...buttonInputStyle}}>{isEditing ? "Update Offer" : "Submit Offer"}</button>
       </form>
 
       {/* Submitted Offers */}
@@ -783,17 +1170,31 @@ export default function SpotGoPage() {
             <tbody>
               {offers.map((offer, idx) => (
                 <tr key={offer.id} style={{ backgroundColor: offer.isMine ? (idx % 2 === 0 ? '#f2f8fc' : '#ffffff') : '#fff6e0' }}>
-                  <td style={{ padding: '8px' }}>{offer.externalNumber}</td>
-                  <td style={{ padding: '8px' }}>{offer._loading}</td>
-                  <td style={{ padding: '8px' }}>{offer._unloading}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    <button 
-                      onClick={() => handleDeleteOffer(offer.id)} 
-                      style={{ padding: '5px 10px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px' }}
-                    >
-                      Delete
-                    </button>
-                   </td>
+                    <td style={{ padding: '8px' }}>{offer.externalNumber}</td>
+                    <td style={{ padding: '8px' }}>{offer._loading}</td>
+                    <td style={{ padding: '8px' }}>{offer._unloading}</td>
+                    <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
+                            <button 
+                            onClick={() => handleEditOffer(offer)} 
+                            style={{ padding: '5px 10px', background: '#37d344ff', color: '#fff', border: 'none', borderRadius: '4px' }}
+                            >
+                            Edit
+                            </button>
+                            <button 
+                            onClick={(e) => { e.stopPropagation(); handleCopyOffer(offer); }} 
+                            style={{ padding: '5px 10px', background: '#993de4ff', color: '#fff', border: 'none', borderRadius: '4px' }}
+                            >
+                            Copy
+                            </button>
+                            <button 
+                            onClick={() => handleDeleteOffer(offer.id)} 
+                            style={{ padding: '5px 10px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px' }}
+                            >
+                            Delete
+                            </button>
+                        </div>
+                    </td>
                 </tr>
               ))}
             </tbody>

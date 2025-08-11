@@ -1,7 +1,15 @@
 // frontend/api/spotGo/submit.js
 
-// import fetch from 'node-fetch';
 import { supabaseAdmin } from '../../src/lib/supabaseAdmin'
+
+const formatName = (email = '') => {
+  if (!email.includes('@')) return '';
+  const local = email.split('@')[0];
+  return local
+    .split('.')
+    .map(p => p[0]?.toUpperCase() + p.slice(1))
+    .join(' ');
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -31,41 +39,73 @@ export default async function handler(req, res) {
       body: JSON.stringify(freightData)
     });
 
-    const text = await response.text();
 
     if (!response.ok) {
       console.error(`[SpotGo Error] ${response.status}:`, text);
       return res.status(response.status).send(text || 'Unknown error from SpotGo');
     }
 
-    let json;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = { raw: text };
-    }
+    const json = await response.json();
 
     try {
-        const shortId = json.id?.replace(/-/g, '').slice(0, 10);
-        freightData.externalNumber = `${freightData.externalNumber}/${shortId}`;
-        
-        const { error } = await supabaseAdmin.from('submitted_offers').insert([
-            {
-            offer_id: json.id || null, // stays as full UUID
-            external_number: freightData.externalNumber, // prefix + shortId goes here
-            loading_address: freightData.locations?.[0]?.address?.label || '',
-            unloading_address: freightData.locations?.[1]?.address?.label || '',
-            submitted_at: new Date().toISOString()
-            }
-        ]);
+      const userEmail = req.headers['authorization-email'] || 'unknown@example.com';
+      const namePrefix = formatName(userEmail);
 
-        if (error) {
-            console.error("Failed to save to Supabase:", error);
+      freightData.externalNumber = namePrefix;
+
+      console.log("freightData.comments:", freightData.comments);
+      console.log("freightData.payment:", freightData.payment);
+      console.log("freightData.requirements:", freightData.requirements);
+      console.log("freightData.locations:", freightData.locations);
+
+
+      console.log("DB INSERT PAYLOAD:", {
+        offer_id: json.id || null,
+        external_number: freightData.externalNumber,
+        loading_address: freightData.locations?.[0]?.address?.label || '',
+        unloading_address: freightData.locations?.[1]?.address?.label || '',
+        external_comment: freightData.comments || null,
+        hide_locations: freightData.useAlternativeLocations ?? null,
+        pallets_exchange: freightData.requirements?.palletsExchange ?? null,
+        vehicle_types: freightData.requirements?.vehicleTypes || null,
+        body_types: freightData.requirements?.trailerTypes || null,
+        freight_charge: freightData.payment?.from ?? null,
+        currency: freightData.payment?.currency || null,
+        payment_due: freightData.payment?.dueDate || null,
+        length_m: freightData.requirements?.ldm ?? null,
+        weight_t: freightData.requirements?.capacity ?? null,
+        submitted_by_email: userEmail
+      });
+
+      const { error } = await supabaseAdmin.from('submitted_offers').insert([
+        {
+          offer_id: json.id || null,
+          external_number: namePrefix,
+          loading_address: freightData.locations?.[0]?.address?.label || '',
+          unloading_address: freightData.locations?.[1]?.address?.label || '',
+          created_at: new Date().toISOString(),
+
+          // new fields
+          external_comment: freightData.comments || null,
+          hide_locations: freightData.useAlternativeLocations ?? null,
+          pallets_exchange: freightData.requirements?.palletsExchange ?? null,
+          vehicle_types: freightData.requirements?.vehicleTypes || null,
+          body_types: freightData.requirements?.trailerTypes || null,
+          freight_charge: freightData.payment?.from ?? null,
+          currency: freightData.payment?.currency || null,
+          payment_due: freightData.payment?.dueDate || null,
+          length_m: freightData.requirements?.ldm ?? null,
+          weight_t: freightData.requirements?.capacity ?? null,
+          submitted_by_email: userEmail
         }
-    } catch (e) {
-        console.error("Supabase insert exception:", e);
-    }
+      ]);
 
+      if (error) {
+        console.error("Failed to save to Supabase:", error);
+      }
+    } catch (e) {
+      console.error("Supabase insert exception:", e);
+    }
 
     res.status(200).json(json);
   } catch (err) {
