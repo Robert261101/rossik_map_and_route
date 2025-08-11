@@ -1,5 +1,5 @@
 // pages/spotGoPage.js
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import AutoCompleteInput from "../AutoCompleteInput";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
@@ -76,7 +76,8 @@ export default function SpotGoPage() {
     const [editingOfferId, setEditingOfferId] = useState(null);
     const [resetKey, setResetKey] = useState(0);
 
-
+    const formRef = useRef(null);
+    const [listMaxH, setListMaxH] = useState(0);
 
     const navigate = useNavigate()
 
@@ -209,6 +210,25 @@ export default function SpotGoPage() {
     useEffect(() => {
         refreshSubmittedOffers();
     }, []);
+
+    useEffect(() => {
+        if (!formRef.current) return;
+        const el = formRef.current;
+
+        const update = () => setListMaxH(el.offsetHeight);
+
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+
+        update(); // initial
+        window.addEventListener('resize', update);
+
+        return () => {
+            ro.disconnect();
+            window.removeEventListener('resize', update);
+        };
+    }, []);
+
 
     useEffect(() => {
         localStorage.setItem("spotgo_offers", JSON.stringify(offers));
@@ -720,8 +740,6 @@ export default function SpotGoPage() {
         setIsEditing(false);
         setEditingOfferId(null);
 
-        // alert("Freight offer submitted successfully.");
-
         } catch (error) {
             console.error("Submit offer error:", error);
             alert("An unexpected error occurred during submission.");
@@ -971,7 +989,11 @@ export default function SpotGoPage() {
 
     <div style={{ display: 'flex', alignItems: 'flex-start' }}>
       {/* Left Form */}
-      <form onSubmit={handleSubmitOffer} style={{ flex: '1', marginRight: '30px', background: '#ffffff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}>
+        <form
+            ref={formRef}
+            onSubmit={handleSubmitOffer}
+            style={{ flex: '1', marginRight: '30px', background: '#ffffff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}
+        >
         <h3 style={{ color: '#1e4a7b', marginBottom: '15px' }}>Addresses</h3>
 
         {/* Address Fields */}
@@ -983,7 +1005,7 @@ export default function SpotGoPage() {
 
         <div style={{flex: 1, minWidth: '300px',border: '1px solid #ccc',padding: '15px', borderRadius: '8px',backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
-            <AutoCompleteInput key={`loading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
+            <AutoCompleteInput key={`unloading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
         </div>
         </div>
 
@@ -1098,14 +1120,24 @@ export default function SpotGoPage() {
       </form>
 
       {/* Submitted Offers */}
-      <div style={{ flex: '1', background: '#ffffff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}>
+        <div
+            style={{
+                flex: '1',
+                background: '#ffffff',
+                padding: '20px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                maxHeight: listMaxH || 'auto',
+                overflowY: 'auto'
+            }}
+        >
         <h3 style={{ color: '#1e4a7b' }}>Submitted Offers</h3>
         {offers.length === 0 ? (
           <p>No offers submitted yet.</p>
         ) : (
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '14px' }}>
             <thead>
-              <tr style={{ background: '#d7e9f7' }}>
+              <tr style={{ background: '#d7e9f7', position: 'sticky' }}>
                 <th style={{ padding: '10px', textAlign: 'left' }}>User</th>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Loading</th>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Unloading</th>
