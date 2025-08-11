@@ -1,9 +1,9 @@
-// frontend/api/spotgo/submit.js
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-const apiKey = "zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$"
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,14 +11,14 @@ export default async function handler(req, res) {
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  // Require a browser JWT as well (Option B)
+  // Require browser JWT (Option B)
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Missing token' });
   const { data: { user } } = await supabaseAdmin.auth.getUser(token);
   if (!user) return res.status(401).json({ error: 'Invalid token' });
 
-  apiKey = process.env.SPOTGO_API_KEY;
+  const apiKey = process.env.SPOTGO_API_KEY;
   const ownerEmail = process.env.SPOTGO_OWNER_EMAIL;
   if (!apiKey || !ownerEmail) return res.status(500).json({ error: 'Server misconfigured' });
 
