@@ -592,8 +592,8 @@ export default function SpotGoPage() {
         try {
 
             const endpoint = isEditing
-                ? `${API_BASE}/api/spotgo/${editingOfferId}`
-                : `${API_BASE}/api/spotgo/submit`;
+                ? `/api/spotgo/${editingOfferId}`
+                : `/api/spotgo/submit`;
             const method   = isEditing ? "PUT" : "POST";
             const bodyToSend = isEditing ? cleanPayload : payload;
 
