@@ -12,7 +12,7 @@ countries.registerLocale(enLocale);
 
 const PREFIX_PASSWORD = "parola_ta_secreta";
 const DEFAULT_PREFIX = "APP-OFFER-";
-const API_BASE = 'http://localhost:4000';
+const API_BASE = '';
 
 const vehicleTypes = {
   1: "Semi trailer",
@@ -82,6 +82,13 @@ export default function SpotGoPage() {
     const navigate = useNavigate()
 
     const HERE_API_KEY = process.env.REACT_APP_HERE_API_KEY;  // pulled at build time
+
+    const API_BASE =
+        process.env.REACT_APP_API_BASE ??
+        (window.location.hostname === 'localhost'
+            ? 'http://localhost:4000'
+            : window.location.origin);
+
 
     const handleLoadingSelect = async (loc) => {
         const enriched = await reverseWithFallback(loc, HERE_API_KEY);
@@ -590,12 +597,26 @@ export default function SpotGoPage() {
             const method   = isEditing ? "PUT" : "POST";
             const bodyToSend = isEditing ? cleanPayload : payload;
 
-            console.log("🧾 FINAL BODY:", bodyToSend);
-
             if (!bodyToSend?.locations?.length) {
                 console.error("🚨 No SpotGo payload being sent!");
                 return;
             }
+
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+            alert('Please sign in first.');
+            return;
+            }
+            const token = session.access_token;
+            const userEmail = session.user.email;
+
+            const headers = {
+            'Content-Type': 'application/json',
+            'x-api-version': '1.0',
+            'authorization-email': userEmail,
+            'Authorization': `Bearer ${token}`,
+            };
+
 
             const res = await fetch(endpoint, {
                 method,
