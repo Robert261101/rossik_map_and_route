@@ -760,6 +760,8 @@ export default function SpotGoPage() {
         setIsPrefilling(false);
         setIsEditing(false);
         setEditingOfferId(null);
+        
+        alert("Succesfully updated offer!")
 
         } catch (error) {
             console.error("Submit offer error:", error);
