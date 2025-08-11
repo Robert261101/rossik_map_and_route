@@ -1,5 +1,5 @@
 // pages/spotGoPage.js
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import AutoCompleteInput from "../AutoCompleteInput";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
@@ -13,6 +13,7 @@ countries.registerLocale(enLocale);
 
 const PREFIX_PASSWORD = "parola_ta_secreta";
 const DEFAULT_PREFIX = "APP-OFFER-";
+const API_BASE = '';
 
 const vehicleTypes = {
   1: "Semi trailer",
@@ -44,8 +45,6 @@ const bodyTypes = {
 };
 
 export default function SpotGoPage({ user }) {
-//   const [prefix, setPrefix] = useState(DEFAULT_PREFIX);
-//   const [prefixEditEnabled, setPrefixEditEnabled] = useState(false);
 
     const [hideLocations, setHideLocations] = useState(false);
     const [palletsExchange, setPalletsExchange] = useState(false);
@@ -73,14 +72,24 @@ export default function SpotGoPage({ user }) {
     const [offers, setOffers] = useState([]);
     const [loadingLocation, setLoadingLocation] = useState(null);
     const [unloadingLocation, setUnloadingLocation] = useState(null);
-    const [isCopying, setIsCopying] = useState(false);
+    const [isPrefilling, setIsPrefilling] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editingOfferId, setEditingOfferId] = useState(null);
+    const [resetKey, setResetKey] = useState(0);
 
+    const formRef = useRef(null);
+    const [listMaxH, setListMaxH] = useState(0);
 
     const navigate = useNavigate()
 
     const HERE_API_KEY = process.env.REACT_APP_HERE_API_KEY;  // pulled at build time
+
+    const API_BASE =
+        process.env.REACT_APP_API_BASE ??
+        (window.location.hostname === 'localhost'
+            ? 'http://localhost:4000'
+            : window.location.origin);
+
 
     const handleLoadingSelect = async (loc) => {
         const enriched = await reverseWithFallback(loc, HERE_API_KEY);
@@ -92,11 +101,56 @@ export default function SpotGoPage({ user }) {
         setUnloadingLocation({ ...loc, ...enriched });
     };
 
-    // useEffect(() => {
-    //     const savedPrefix = localStorage.getItem("spotgo_prefix");
-    //     if (savedPrefix) setPrefix(savedPrefix);
-    //     initializeDefaultTimes();
-    // }, []);]
+    const buildDbTs = (d, t) => `${d}T${t}:00`;  // stays exactly as typed
+
+    const parseDbDate = s => s?.slice(0,10) ?? todayStr;
+    const parseDbHHMM = s => s?.slice(11,16) ?? "08:00";
+
+    // put this above handleSubmitOffer
+    function resetForm() {
+        const today = new Date();
+        const todayStr = today.toISOString().slice(0,10);
+
+        const nextHour = new Date(today);
+        nextHour.setMinutes(0,0,0);
+        nextHour.setHours(today.getHours() + 1);
+        const startHHMM = nextHour.toTimeString().slice(0,5);
+
+        const end = new Date(nextHour);
+        end.setHours(nextHour.getHours() + 2);
+        const endHHMM = end.toTimeString().slice(0,5);
+
+        // locations
+        setLoadingLocation(null);
+        setUnloadingLocation(null);
+
+        setResetKey(k => k + 1);
+
+        // dates
+        setLoadStartDate(todayStr);
+        setLoadEndDate(todayStr);
+        setUnloadStartDate(todayStr);
+        setUnloadEndDate(todayStr);
+
+        // times
+        setLoadStartTime(startHHMM);
+        setLoadEndTime(endHHMM);
+        setUnloadStartTime(startHHMM);
+        setUnloadEndTime(endHHMM);
+
+        // misc fields
+        setLengthM("13.6");
+        setWeightT("24");
+        setExternalComment("");
+        setFreightCharge("");
+        setCurrency("");      // or "EUR" if you want EUR selected by default
+        setPaymentDue("");
+        setHideLocations(false);
+        setPalletsExchange(false);
+        setSelectedVehicles([]);
+        setSelectedBodies([]);
+    }
+
     
     async function refreshSubmittedOffers() {
         const { data, error } = await supabase
@@ -161,37 +215,35 @@ export default function SpotGoPage({ user }) {
         }
     }
 
+    useEffect(() => {
+        refreshSubmittedOffers();
+    }, []);
 
     useEffect(() => {
-        async function fetchSubmittedOffers() {
-            const { data, error } = await supabase
-            .from('submitted_offers')
-            .select('*')
-            .order('created_at', { ascending: false });
+        if (!formRef.current) return;
+        const el = formRef.current;
 
-            if (error) {
-            console.error("Failed to fetch submitted offers:", error);
-            } else {
-            const formatted = data.map(o => ({
-                id: o.offer_id,
-                externalNumber: o.external_number,
-                _loading: o.loading_address,
-                _unloading: o.unloading_address
-            }));
-            setOffers(formatted);
-            }
-        }
+        const update = () => setListMaxH(el.offsetHeight);
 
-        fetchSubmittedOffers();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+
+        update(); // initial
+        window.addEventListener('resize', update);
+
+        return () => {
+            ro.disconnect();
+            window.removeEventListener('resize', update);
+        };
     }, []);
+
 
     useEffect(() => {
         localStorage.setItem("spotgo_offers", JSON.stringify(offers));
     }, [offers]);
 
     useEffect(() => {
-        if (isCopying) {
-            console.log("intra in useEffect pentru start time");
+        if (isPrefilling) {
             return;  // ⛔️ blocăm override-ul
             }
         const now = new Date();
@@ -203,7 +255,7 @@ export default function SpotGoPage({ user }) {
     }, [loadStartDate]);
 
     useEffect(() => {
-        if (isCopying) return;  // ⛔️ blocăm override-ul
+        if (isPrefilling) return;  // ⛔️ blocăm override-ul
         const now = new Date();
         const end = new Date(now);
         end.setHours(now.getHours() + 2);
@@ -213,7 +265,7 @@ export default function SpotGoPage({ user }) {
     }, [loadEndDate]);
 
     useEffect(() => {
-        if (isCopying) return;  // ⛔️ blocăm override-ul
+        if (isPrefilling) return;  // ⛔️ blocăm override-ul
         const now = new Date();
         const nextHour = new Date(now);
         nextHour.setMinutes(0, 0, 0);
@@ -223,7 +275,7 @@ export default function SpotGoPage({ user }) {
     }, [unloadStartDate]);
 
     useEffect(() => {
-        if (isCopying) return;  // ⛔️ blocăm override-ul
+        if (isPrefilling) return;  // ⛔️ blocăm override-ul
         const now = new Date();
         const end = new Date(now);
         end.setHours(now.getHours() + 2);
@@ -414,8 +466,6 @@ export default function SpotGoPage({ user }) {
             return;
         }
 
-        console.log(">>> final payload.locations:", [address0, address1]);
-
         const { data: { session } } = await supabase.auth.getSession();
         const userEmail = session?.user?.email || "unknown@user.com";
 
@@ -514,8 +564,6 @@ export default function SpotGoPage({ user }) {
                 : "Load/Unload points visible."
         };
 
-        console.log("🧾 FINAL PAYLOAD:", JSON.stringify(payload, null, 2));
-
         if (freightCharge || currency || paymentDue) {
             const pay = {};
 
@@ -539,77 +587,37 @@ export default function SpotGoPage({ user }) {
             payload.comments = externalComment;
         }
 
-        // const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-
-        const updatePayload = {
-            sendToSpotGo: true,
-            spotGoPayload: {
-                type: "Spot",
-                externalNumber: finalPrefix,
-                sources: ["1", "2", "3", "4", "8", "9", "12", "14", "16"],
-                useAlternativeLocations: hideLocations,
-                locations: [
-                {
-                    sequence: 1,
-                    type: "Loading",
-                    address: cleanAddress(address0),
-                    period: {
-                    startDate: `${loadStartDate}T${loadStartTime}:00Z`,
-                    endDate: `${loadEndDate}T${loadEndTime}:00Z`
-                    }
-                },
-                {
-                    sequence: 2,
-                    type: "Unloading",
-                    address: cleanAddress(address1),
-                    period: {
-                    startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
-                    endDate: `${unloadEndDate}T${unloadEndTime}:00Z`
-                    }
-                }
-                ],
-                requirements: {
-                capacity: parseFloat(weightT),
-                ldm: parseFloat(lengthM),
-                pallets: 33,
-                loadingSide: "All",
-                palletsExchange,
-                vehicleTypes: selectedVehicles,
-                trailerTypes: selectedBodies,
-                ftl: parseFloat(lengthM) >= 13.6
-                },
-                ...(externalComment ? { comments: externalComment } : {}),
-                internalComments: hideLocations
-                ? "Locations hidden."
-                : "Load/Unload points visible.",
-                payment: getPaymentObj()
-            }
-        };
-
-        const cleanPayload = cleanObject(updatePayload.spotGoPayload);
-        updatePayload.spotGoPayload = cleanPayload;
-
-        console.log("🚿 Cleaned SpotGo payload:", JSON.stringify(cleanPayload, null, 2));
-        console.log("🧾 FINAL UPDATEPAYLOAD:", JSON.stringify(updatePayload, null, 2));
+        const cleanPayload = cleanObject(payload);
 
         try {
 
             const endpoint = isEditing
-                ? `/api/spotgo/${editingOfferId}`  // <-- for PUT
-                : `/api/spotgo/submit`;
+                ? `${API_BASE}/api/spotgo/${editingOfferId}`
+                : `${API_BASE}/api/spotgo/submit`;
+            const method   = isEditing ? "PUT" : "POST";
+            const bodyToSend = isEditing ? cleanPayload : payload;
 
-            const method = isEditing ? "PUT" : "POST";
-
-            console.log("🧾 FINAL UPDATEPAYLOAD:", {
-                sendToSpotGo: true,
-                spotGoPayload: updatePayload.spotGoPayload  // obiectul final SpotGo
-            });
-
-            if (!updatePayload?.spotGoPayload?.locations?.length) {
+            if (!bodyToSend?.locations?.length) {
                 console.error("🚨 No SpotGo payload being sent!");
                 return;
             }
+
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+            alert('Please sign in first.');
+            return;
+            }
+            const token = session.access_token;
+            const userEmail = session.user.email;
+
+            const headers = {
+            'Content-Type': 'application/json',
+            'x-api-version': '1.0',
+            'authorization-email': userEmail,
+            'Authorization': `Bearer ${token}`,
+            };
+
 
             const res = await fetch(endpoint, {
                 method,
@@ -619,17 +627,18 @@ export default function SpotGoPage({ user }) {
                     'Content-Type': 'application/json',
                     'x-api-version': '1.0'
                 },
-                body: JSON.stringify(isEditing ? updatePayload : payload)
+                body: JSON.stringify(bodyToSend)
             });
 
+            const raw = await res.text();
             if (!res.ok) {
-                const errText = await res.text();
-                alert(`Failed to submit offer: ${errText}`);
-                return;
+            alert(`Failed to submit offer: ${raw}`);
+            return;
             }
-        
-        const result = await res.json();
-        console.log("✅ Supabase insert OK:", result);
+
+            let result;
+            try { result = raw ? JSON.parse(raw) : {}; }  // tolerate empty body
+            catch { result = { raw }; }
 
         // TODO luni: momentan fac insertul de aici, dar trebuie vazut de ce nu vrea sa il faca din // frontend/api/spotGo/submit.js si in tabel pe web si in DB. pe spotgo face insert
         // try {
@@ -660,7 +669,7 @@ export default function SpotGoPage({ user }) {
                     external_number: finalPrefix,
                     loading_address: address0?.label || '',
                     unloading_address: address1?.label || '',
-                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
 
                     loading_country_code: address0?.countryCode || null,
                     loading_postal_code: address0?.postalCode || null,
@@ -672,10 +681,10 @@ export default function SpotGoPage({ user }) {
                     unloading_lat: address1?.lat || null,
                     unloading_lng: address1?.lng || null,
 
-                    loading_start_time: loadStart.toISOString(),
-                    loading_end_time: loadEnd.toISOString(),
-                    unloading_start_time: unloadStart.toISOString(),
-                    unloading_end_time: unloadEnd.toISOString(),
+                    loading_start_time: buildDbTs(loadStartDate,  loadStartTime),
+                    loading_end_time: buildDbTs(loadEndDate,    loadEndTime),
+                    unloading_start_time: buildDbTs(unloadStartDate,unloadStartTime),
+                    unloading_end_time: buildDbTs(unloadEndDate,  unloadEndTime),
 
                     external_comment: externalComment || null,
                     hide_locations: hideLocations,
@@ -707,7 +716,7 @@ export default function SpotGoPage({ user }) {
                         external_number: finalPrefix,
                         loading_address: address0?.label || '',
                         unloading_address: address1?.label || '',
-                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
 
                         loading_country_code: address0?.countryCode || null,
                         loading_postal_code: address0?.postalCode || null,
@@ -719,10 +728,10 @@ export default function SpotGoPage({ user }) {
                         unloading_lat: address1?.lat || null,
                         unloading_lng: address1?.lng || null,
 
-                        loading_start_time: loadStart.toISOString(),
-                        loading_end_time: loadEnd.toISOString(),
-                        unloading_start_time: unloadStart.toISOString(),
-                        unloading_end_time: unloadEnd.toISOString(),
+                        loading_start_time:  buildDbTs(loadStartDate,  loadStartTime),
+                        loading_end_time:    buildDbTs(loadEndDate,    loadEndTime),
+                        unloading_start_time:buildDbTs(unloadStartDate,unloadStartTime),
+                        unloading_end_time:  buildDbTs(unloadEndDate,  unloadEndTime),
 
                         external_comment: externalComment || null,
                         hide_locations: hideLocations,
@@ -748,30 +757,20 @@ export default function SpotGoPage({ user }) {
 
         // Refresh the table view
         await refreshSubmittedOffers();
-        setIsCopying(false);
+        resetForm();
+        setIsPrefilling(false);
         setIsEditing(false);
         setEditingOfferId(null);
 
-        alert("Freight offer submitted successfully.");
-
+        if(isEditing) {
+            alert("Succesfully updated offer!")
+        }
+        
         } catch (error) {
             console.error("Submit offer error:", error);
             alert("An unexpected error occurred during submission.");
         }
     }
-
-    const toTimeHHMM = (isoStr) => {
-        if (!isoStr) return "08:00";
-        try {
-            const parts = isoStr.split("T")[1]?.split(":");
-            if (!parts || parts.length < 2) return "08:00";
-            return `${parts[0]}:${parts[1]}`;
-        } catch {
-            return "08:00";
-        }
-    };
-
-
 
     async function handleEditOffer(offer) {
         if (!offer?.id) return;
@@ -788,8 +787,8 @@ export default function SpotGoPage({ user }) {
                 return;
             }
 
-            console.log("Loaded offer for edit:", data);
-            setIsCopying(true);
+            // console.log("Loaded offer for edit:", data);
+            setIsPrefilling(true);
             setIsEditing(true);
             setEditingOfferId(offer.id);  // Store ID to be used on submit
 
@@ -802,14 +801,6 @@ export default function SpotGoPage({ user }) {
                 countryCode: data.loading_country_code
             });
             
-            console.log("setting loadingLocation", {
-                label: data.loading_address,
-                lat: data.loading_lat,
-                lng: data.loading_lng,
-                postalCode: data.loading_postal_code,
-                countryCode: data.loading_country_code
-            });
-
             setUnloadingLocation({
                 label: data.unloading_address,
                 lat: data.unloading_lat,
@@ -818,19 +809,19 @@ export default function SpotGoPage({ user }) {
                 countryCode: data.unloading_country_code
             });
 
-            setLoadStartDate(data.loading_start_time?.slice(0,10) || todayStr);
-            setLoadStartTime(toTimeHHMM(data.loading_start_time) || "08:00");
-            console.log("Setting loadStartTime =", toTimeHHMM(data.loading_start_time));
-
-            setLoadEndDate(data.loading_end_time?.slice(0,10) || todayStr);
-            setLoadEndTime(toTimeHHMM(data.loading_end_time) || "15:00");
-
-            setUnloadStartDate(data.unloading_start_time?.slice(0,10) || todayStr);
-            setUnloadStartTime(toTimeHHMM(data.unloading_start_time) || "08:00");
-            setUnloadEndDate(data.unloading_end_time?.slice(0,10) || todayStr);
-            setUnloadEndTime(toTimeHHMM(data.unloading_end_time) || "15:00");
 
 
+            setLoadStartDate(parseDbDate(data.loading_start_time));
+            setLoadStartTime(parseDbHHMM(data.loading_start_time));
+
+            setLoadEndDate(parseDbDate(data.loading_end_time));
+            setLoadEndTime(parseDbHHMM(data.loading_end_time));
+
+            setUnloadStartDate(parseDbDate(data.unloading_start_time));
+            setUnloadStartTime(parseDbHHMM(data.unloading_start_time));
+
+            setUnloadEndDate(parseDbDate(data.unloading_end_time));
+            setUnloadEndTime(parseDbHHMM(data.unloading_end_time));
 
             // 🔽 All other fields
             setLengthM(String(data.length_m || "13.6"));
@@ -845,8 +836,8 @@ export default function SpotGoPage({ user }) {
             setSelectedVehicles(data.vehicle_types || []);
             setSelectedBodies(data.body_types || []);
         
+            alert("📋 Form copied, ready to be edited.");
 
-            alert("🔧 Coming soon: Editing feature for " + offer.externalNumber);
         });
     }
 
@@ -865,9 +856,7 @@ export default function SpotGoPage({ user }) {
             return;
         }
 
-        console.log("Loaded offer:", data);
-
-        setIsCopying(true);
+        setIsPrefilling(true);
         // 🔽 Location reconstruction (HERE-compatible object)
         setLoadingLocation({
             label: data.loading_address,
@@ -893,19 +882,18 @@ export default function SpotGoPage({ user }) {
             countryCode: data.unloading_country_code
         });
 
-        setLoadStartDate(data.loading_start_time?.slice(0,10) || todayStr);
-        setLoadStartTime(toTimeHHMM(data.loading_start_time) || "08:00");
-        console.log("Setting loadStartTime =", toTimeHHMM(data.loading_start_time));
+        setLoadStartDate(parseDbDate(data.loading_start_time));
+        setLoadStartTime(parseDbHHMM(data.loading_start_time));
+        console.log("Setting loadStartTime =", data.loading_start_time);
 
-        setLoadEndDate(data.loading_end_time?.slice(0,10) || todayStr);
-        setLoadEndTime(toTimeHHMM(data.loading_end_time) || "15:00");
+        setLoadEndDate(parseDbDate(data.loading_end_time));
+        setLoadEndTime(parseDbHHMM(data.loading_end_time));
 
-        setUnloadStartDate(data.unloading_start_time?.slice(0,10) || todayStr);
-        setUnloadStartTime(toTimeHHMM(data.unloading_start_time) || "08:00");
-        setUnloadEndDate(data.unloading_end_time?.slice(0,10) || todayStr);
-        setUnloadEndTime(toTimeHHMM(data.unloading_end_time) || "15:00");
+        setUnloadStartDate(parseDbDate(data.unloading_start_time));
+        setUnloadStartTime(parseDbHHMM(data.unloading_start_time));
 
-
+        setUnloadEndDate(parseDbDate(data.unloading_end_time));
+        setUnloadEndTime(parseDbHHMM(data.unloading_end_time));
 
         // 🔽 All other fields
         setLengthM(String(data.length_m || "13.6"));
@@ -931,7 +919,7 @@ export default function SpotGoPage({ user }) {
 
         try {
             // Delete from SpotGo
-            const res = await fetch(`/api/spotgo/${offerId}`, {
+            const res = await fetch(`${API_BASE}/api/spotgo/${offerId}`, {
                 method: "DELETE",
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -991,12 +979,6 @@ export default function SpotGoPage({ user }) {
     const handleFocus = e => Object.assign(e.target.style, { ...baseInputStyle, ...highlightStyle });
     const handleBlur = e => Object.assign(e.target.style, baseInputStyle);
 
-
-    useEffect(() => {
-  console.log("🎯 Current loadStartTime:", loadStartTime);
-}, [loadStartTime]);
-
-  
   return (
   <div style={{ padding: '30px', background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
     <div style={{ marginBottom: '20px' }}>
@@ -1027,12 +1009,12 @@ export default function SpotGoPage({ user }) {
         <div style={{display: 'flex',gap: '30px',alignItems: 'flex-start',marginBottom: '20px',paddingBottom: '15px',borderBottom: '1px dashed #09111aff',flexWrap: 'wrap'}} >
         <div style={{flex: 1,minWidth: '300px',border: '1px solid #ccc',padding: '15px',borderRadius: '8px', backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Loading Address:</label><br />
-            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
+            <AutoCompleteInput key={`loading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
         </div>
 
         <div style={{flex: 1, minWidth: '300px',border: '1px solid #ccc',padding: '15px', borderRadius: '8px',backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
-            <AutoCompleteInput apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
+            <AutoCompleteInput key={`unloading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
         </div>
         </div>
 
@@ -1154,8 +1136,8 @@ export default function SpotGoPage({ user }) {
         ) : (
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '14px' }}>
             <thead>
-              <tr style={{ background: '#ff0a0aa6' }}>
-                <th style={{ padding: '10px', textAlign: 'left' }}>Offer</th>
+              <tr style={{ background: '#ff0a0aa6', position: 'sticky' }}>
+                <th style={{ padding: '10px', textAlign: 'left' }}>User</th>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Loading</th>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Unloading</th>
                 <th style={{ padding: '10px', textAlign: 'center' }}>Action</th>
@@ -1168,27 +1150,32 @@ export default function SpotGoPage({ user }) {
                     <td style={{ padding: '8px' }}>{offer._loading}</td>
                     <td style={{ padding: '8px' }}>{offer._unloading}</td>
                     <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
-                            <button 
-                            onClick={() => handleEditOffer(offer)} 
-                            style={{ padding: '5px 10px', background: '#37d344ff', color: '#fff', border: 'none', borderRadius: '4px' }}
+                        {offer.isMine ? (
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
+                            <button
+                                onClick={() => handleEditOffer(offer)}
+                                style={{ padding: '5px 10px', background: '#15803d', color: '#fff', border: 'none', borderRadius: '4px' }}
                             >
-                            Edit
+                                Edit
                             </button>
-                            <button 
-                            onClick={(e) => { e.stopPropagation(); handleCopyOffer(offer); }} 
-                            style={{ padding: '5px 10px', background: '#993de4ff', color: '#fff', border: 'none', borderRadius: '4px' }}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleCopyOffer(offer); }}
+                                style={{ padding: '5px 10px', background: '#1e4a7b', color: '#fff', border: 'none', borderRadius: '4px' }}
                             >
-                            Copy
+                                Copy
                             </button>
-                            <button 
-                            onClick={() => handleDeleteOffer(offer.id)} 
-                            style={{ padding: '5px 10px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px' }}
+                            <button
+                                onClick={() => handleDeleteOffer(offer.id)}
+                                style={{ padding: '5px 10px', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: '4px' }}
                             >
-                            Delete
+                                Delete
                             </button>
-                        </div>
+                            </div>
+                        ) : (
+                            <span style={{ color: '#9aa2af', fontStyle: 'italic' }}></span>
+                        )}
                     </td>
+
                 </tr>
               ))}
             </tbody>

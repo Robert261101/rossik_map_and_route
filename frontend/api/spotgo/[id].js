@@ -1,86 +1,68 @@
-// pages/api/spotGo/[id].js
-import { supabaseAdmin } from '../../../src/lib/supabaseAdmin';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const SPOTGO_API_KEY="zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$";
+
 
 export default async function handler(req, res) {
   const { id } = req.query;
+  if (!id) return res.status(400).json({ error: 'Missing freight ID' });
 
-  if (!id) return res.status(400).json({ error: "Missing freight ID in request." });
+  // Require logged-in user (Option B)
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Missing token' });
 
-  const SPOTGO_URL = `https://api.spotgo.eu/api/v1/freights/${id}`;
-  const apiKey = "zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$";
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: 'Invalid token or user not found' });
 
-  if (!apiKey) return res.status(500).json({ error: "Missing SpotGo API key." });
+  const apiKey = SPOTGO_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'Server misconfigured (SPOTGO_API_KEY)' });
 
-  if (req.method === 'DELETE') {
-    try {
-      const response = await fetch(SPOTGO_URL, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-version': '1.0',
-          'X-Api-Key': apiKey
-        }
+  const url = `https://api.spotgo.eu/api/v1/freights/${id}`;
+  const common = { 'x-api-version': '1.0', 'X-Api-Key': apiKey };
+
+  try {
+    if (req.method === 'PUT') {
+      const upstream = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...common },
+        body: JSON.stringify(req.body)
       });
 
-      const errText = await response.text();
-      if (!response.ok) {
-        console.error(`[SpotGo Delete Error] ${response.status}:`, errText);
-        return res.status(response.status).send(errText || 'Unknown delete error');
-      }
+      const text = await upstream.text();
+      if (!upstream.ok) return res.status(upstream.status).send(text || 'SpotGo error');
 
-      return res.status(200).json({ message: "Freight deleted." });
-    } catch (err) {
-      console.error("Delete proxy error:", err);
-      res.status(500).json({ error: err.message || 'Unexpected error' });
+      // optional DB update
+      const { error } = await supabaseAdmin
+        .from('submitted_offers')
+        .update({ ...req.body, updated_at: new Date().toISOString() })
+        .eq('offer_id', id);
+      if (error) console.error('Supabase PUT update error:', error.message);
+
+      return res.status(200).send(text);
     }
-  }
 
-  else if (req.method === 'PUT') {
-    const token = req.headers.authorization?.replace("Bearer ", "");
-    const userEmail = req.headers['authorization-email'] || "unknown@user.com";
+    if (req.method === 'DELETE') {
+      const upstream = await fetch(url, { method: 'DELETE', headers: common });
+      const text = await upstream.text();
+      if (!upstream.ok) return res.status(upstream.status).send(text || 'SpotGo error');
 
-    console.log("💥 Incoming PUT payload:", JSON.stringify(req.body, null, 2));
+      // optional DB delete
+      const { error } = await supabaseAdmin.from('submitted_offers').delete().eq('offer_id', id);
+      if (error) console.error('Supabase delete error:', error.message);
 
-    try {
-        const response = await fetch(SPOTGO_URL, {
-            method: 'PUT',
-            headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'authorization-email': userEmail,
-            'x-api-version': '1.0'
-            },
-            body: JSON.stringify(req.body)
-        });
-
-        const text = await response.text();
-        console.log("📨 SpotGo PUT status:", response.status);
-        console.log("📨 SpotGo PUT response:", text);
-
-        if (!response.ok) {
-            console.error(`[SpotGo PUT Error] ${response.status}:`, text);
-            return res.status(response.status).send(text);
-        }
-
-        const { error } = await supabaseAdmin
-            .from('submitted_offers')
-            .update({
-            ...req.body,
-            updated_at: new Date().toISOString()
-            })
-            .eq('offer_id', id);
-
-        if (error) console.error("Supabase PUT update error:", error.message);
-
-        return res.status(200).json({id, message: "Freight updated." });
-    } catch (err) {
-      console.error("PUT proxy error:", err);
-      return res.status(500).json({ error: err.message || 'Unexpected PUT error' });
+      return res.status(200).json({ message: 'Freight deleted.' });
     }
-  }
 
-  else {
-    res.setHeader('Allow', ['DELETE', 'PUT']);
+    res.setHeader('Allow', ['PUT', 'DELETE']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
+  } catch (e) {
+    console.error('[spotgo/[id]] error:', e);
+    return res.status(500).json({ error: 'A server error has occurred' });
   }
 }

@@ -77,11 +77,7 @@ export default function Header({ user }) {
     setToolsOpen(false);
   };
   const handleMapGuide = () => {
-    navigate("/", { state: { fromMapGuide: true } });
-    setToolsOpen(false);
-  };
-  const handleHistory = () => {
-    navigate("/history", { state: { fromHistory: true } });
+    navigate('/map-and-guide', { state: { fromMapGuide: true } });
     setToolsOpen(false);
   };
 
