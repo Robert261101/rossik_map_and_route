@@ -1,8 +1,10 @@
 import React from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import RossikLogo from "../VektorLogo_Rossik_rot.gif";
 import { ChevronDown } from "lucide-react";
 import { supabase } from "../lib/supabase";
+
+const logoSrc = "/rossik_tools.png";
+
 
 /**
  * Header modernizat pentru Rossik
@@ -144,8 +146,8 @@ export default function Header({ user }) {
               <div className="flex items-center gap-3 min-w-0">
                 <Link to="/" className="shrink-0">
                   <img
-                    src={RossikLogo}
-                    alt="Rossik Logo"
+                    src={logoSrc}
+                    alt="Rossik Tools"
                     className="h-10 md:h-12 object-contain cursor-pointer drop-shadow"
                   />
                 </Link>
