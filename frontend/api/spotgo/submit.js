@@ -5,8 +5,8 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-SPOTGO_API_KEY="zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$";
-SPOTGO_OWNER_EMAIL='spot.loads@rossik.eu'
+const SPOTGO_API_KEY="zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$";
+const SPOTGO_OWNER_EMAIL='spot.loads@rossik.eu'
 
 
 export default async function handler(req, res) {
