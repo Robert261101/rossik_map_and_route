@@ -953,12 +953,6 @@ export default function SpotGoPage() {
     const handleFocus = e => Object.assign(e.target.style, { ...baseInputStyle, ...highlightStyle });
     const handleBlur = e => Object.assign(e.target.style, baseInputStyle);
 
-
-    useEffect(() => {
-  console.log("🎯 Current loadStartTime:", loadStartTime);
-}, [loadStartTime]);
-
-  
   return (
   <div style={{ padding: '30px', background: '#f5f9fd', fontFamily: 'Arial, sans-serif' }}>
     {/* Offer Prefix Section */}

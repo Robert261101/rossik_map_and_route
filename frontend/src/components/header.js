@@ -43,7 +43,7 @@ export default function Header({ user }) {
   };
 
   const handleMapGuide = () => {
-    navigate('/', { state: { fromMapGuide: true } });
+    navigate('/map-and-guide', { state: { fromMapGuide: true } });
     setToolsOpen(false);
   };
 

@@ -17,6 +17,7 @@ import AddTeamMembers from './admin/AddTeamMembers'
 import ForgotPasswordPage from './ForgotPassword'
 import ResetPasswordPage from './ResetPassword'
 import SpotGoPage from './spotGoPage';
+import RossikTools from './LandingPage'
 import ReactDOM from 'react-dom'
 import { ThemeProvider } from '../contexts/ThemeContext'
 
@@ -102,8 +103,11 @@ export default function App() {
         <Route 
           path="/reset-password"  
           element={<ResetPasswordPage />} />
+        <Route 
+          path="/" 
+          element={<RossikTools user={user} />} />
         <Route
-          path="/"
+          path="/map-and-guide"
           element={user ? <MainPage user={user} /> : <Navigate to="/login" />} />
         <Route 
           path="/spotgo" element={<SpotGoPage />} />
