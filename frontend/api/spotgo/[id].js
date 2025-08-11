@@ -6,7 +6,6 @@ const supabaseAdmin = createClient(
 );
 
 const SPOTGO_API_KEY="zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$";
-const SPOTGO_OWNER_EMAIL='spot.loads@rossik.eu'
 
 
 export default async function handler(req, res) {
@@ -21,7 +20,7 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: 'Invalid token or user not found' });
 
-  const apiKey = process.env.SPOTGO_API_KEY;
+  const apiKey = SPOTGO_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Server misconfigured (SPOTGO_API_KEY)' });
 
   const url = `https://api.spotgo.eu/api/v1/freights/${id}`;
