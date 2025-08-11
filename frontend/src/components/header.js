@@ -81,6 +81,11 @@ export default function Header({ user }) {
     setToolsOpen(false);
   };
 
+  const handleHistory = () => {
+    navigate('/history', { state: { fromHistory: true } });
+    setToolsOpen(false);
+  };
+  
   // Titlu/pagină activă afişat subtil în dreapta
   const pageLabel = React.useMemo(() => {
     switch (path) {
