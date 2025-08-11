@@ -6,6 +6,8 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+const apiKey = "zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$"
+
 export default async function handler(req, res) {
   const { id } = req.query;
   if (!id) return res.status(400).json({ error: 'Missing freight ID' });
@@ -18,7 +20,7 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: 'Invalid token or user not found' });
 
-  const apiKey = process.env.SPOTGO_API_KEY;
+  apiKey = process.env.SPOTGO_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Server misconfigured (SPOTGO_API_KEY)' });
 
   const url = `https://api.spotgo.eu/api/v1/freights/${id}`;
