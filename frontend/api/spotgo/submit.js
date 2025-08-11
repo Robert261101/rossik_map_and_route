@@ -5,6 +5,9 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+SPOTGO_API_KEY="zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$"
+
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -18,10 +21,10 @@ export default async function handler(req, res) {
   const { data: { user } } = await supabaseAdmin.auth.getUser(token);
   if (!user) return res.status(401).json({ error: 'Invalid token' });
 
-  const apiKey = process.env.SPOTGO_API_KEY;
+  const apiKey = SPOTGO_API_KEY;
   const ownerEmail = process.env.SPOTGO_OWNER_EMAIL;
 const missing = [
-  !process.env.SPOTGO_API_KEY && 'SPOTGO_API_KEY',
+  !SPOTGO_API_KEY && 'SPOTGO_API_KEY',
   !process.env.SPOTGO_OWNER_EMAIL && 'SPOTGO_OWNER_EMAIL'
 ].filter(Boolean);
 
