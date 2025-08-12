@@ -1,67 +1,64 @@
-// src/pages/LandingPage.js
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/header';
-import Map from 'lucide-react/dist/esm/icons/map';
-import Compass from 'lucide-react/dist/esm/icons/compass';
+
+const logoSrc = "/Rossik_Tools.png";
+
+const tiles = [
+  { label: 'Map & Guide', to: '/map-and-guide', img: '/Map_and_Guide_Logo.png', alt: 'Map & Guide' },
+  { label: 'SpotGo',      to: '/spotgo',        img: '/Spot_Go_Logo.png',       alt: 'SpotGo' },
+];
 
 export default function RossikTools({ user }) {
   const navigate = useNavigate();
-  const [darkMode] = React.useState(false);
 
-  // tweak these paths later when you wire routes
-  const DESTS = {
-    mapGuide: '/map-and-guide',
-    spotGo: '/spotgo',
-  };
-
-  const Box = ({ label, to, Icon }) => {
+  const Box = ({ to, img, alt, label }) => {
     const open = () => navigate(to);
+    const onKey = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
 
     return (
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${label}`}
         onClick={open}
-        className="relative cursor-pointer border border-white/30 bg-white/80 dark:bg-gray-800/30 backdrop-blur-md rounded-lg p-6 min-w-[280px] text-center shadow-xl hover:shadow-2xl transition-transform duration-300 transform hover:scale-[1.02] group"
+        onKeyDown={onKey}
+        className="group cursor-pointer rounded-2xl overflow-hidden shadow-2xl
+                   transition-transform duration-300 hover:scale-[1.02] active:scale-95
+                   focus:outline-none focus:ring-2 focus:ring-emerald-500
+                   w-[260px] sm:w-[500px] mx-auto"
       >
-        <div className="absolute top-0 right-0 m-3 text-xs px-2 py-1 bg-emerald-500 text-white rounded-full shadow-sm">
-          Active
-        </div>
-        <div className="flex justify-center mb-4">
-          <Icon className="h-10 w-10 text-blue-500 group-hover:text-blue-600 transition duration-300" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">{label}</h2>
-        <div className="flex justify-center">
-          <button
-            onClick={(e) => { e.stopPropagation(); open(); }}
-            className="bg-gradient-to-r from-emerald-400 to-emerald-600 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
-          >
-            Open
-          </button>
-        </div>
+        {/* Full-bleed image fills the “box” */}
+        <img
+          src={img}
+          alt={alt}
+          className="w-full object-cover select-none pointer-events-none"
+          draggable="false"
+          loading="eager"
+          decoding="async"
+        />
+        <span className="sr-only">{label}</span>
       </div>
     );
   };
 
   return (
-    <div
-      className={`min-h-screen top-0 z-50 transition-colors duration-500 ${
-        darkMode
-          ? 'bg-gray-900 text-white'
-          : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'
-      }`}
-    >
+    <div className="min-h-screen bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800">
       <Header user={user} />
       <main className="py-12 px-6 max-w-7xl mx-auto">
-        <h1 className="text-4xl font-extrabold mb-10 text-center">Rossik Tools</h1>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-10">
-          <Box label="Map & Guide" to={DESTS.mapGuide} Icon={Map} />
-          <Box label="SpotGo" to={DESTS.spotGo} Icon={Compass} />
+        <h1 className="sr-only">Rossik Tools</h1>
+
+        <div className="mb-10 flex justify-center">
+          <img src={logoSrc} alt="Rossik Tools" className="h-16 md:h-20 w-auto drop-shadow" />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+          {tiles.map(t => <Box key={t.to} {...t} />)}
         </div>
       </main>
 
-      {/* Background Particle Layer (same as AdminDashboard) */}
       <div className="fixed inset-0 -z-10 pointer-events-none">
-        <div className="w-full h-full bg-[radial-gradient(#ffffff33_1px,transparent_1px)] bg-[length:20px_20px] opacity-20"></div>
+        <div className="w-full h-full bg-[radial-gradient(#ffffff33_1px,transparent_1px)] bg-[length:20px_20px] opacity-20" />
       </div>
     </div>
   );

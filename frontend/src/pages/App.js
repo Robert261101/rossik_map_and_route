@@ -111,7 +111,7 @@ export default function App() {
           element={user ? <MainPage user={user} /> : <Navigate to="/login" />} />
         <Route 
           path="/spotgo"
-          element={user ? <SpotGoPage /> : <Navigate to="/login" />} />
+          element={user ? <SpotGoPage user={user} /> : <Navigate to="/login" />} />
         <Route
           path="/history"
           element={user ? <HistoryPage user={user} /> : <Navigate to="/login" />} />
