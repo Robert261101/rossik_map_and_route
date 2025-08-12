@@ -982,7 +982,7 @@ export default function SpotGoPage({ user }) {
   return (
   <div style={{ padding: '30px', background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
     <div style={{ marginBottom: '20px' }}>
-        <Header user = {user} />
+    <Header user = {user} />
     </div>
     {/* Offer Prefix Section */}
      {/* <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
