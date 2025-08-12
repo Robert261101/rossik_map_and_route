@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 import countries from "i18n-iso-countries";
 import enLocale  from "i18n-iso-countries/langs/en.json";
 import Header from '../components/header';
-
+import { shortCodeFor, fullNameForShortCode } from "../utils/userShortCodes";
 
 countries.registerLocale(enLocale);
 
@@ -164,6 +164,7 @@ export default function SpotGoPage({ user }) {
             const { data: { session } } = await supabase.auth.getSession();
             const userEmail = session?.user?.email || "unknown@user.com";
             const finalPrefix = formatName(userEmail);
+            const userShortCode = shortCodeFor(userEmail);
 
             const formatted = data.map(o => {
 
@@ -194,12 +195,11 @@ export default function SpotGoPage({ user }) {
                     ? `${cc}-${postalMatch} ${addressOnly}`
                     : `${addressOnly}, ${country}`;
                 }
-                    // TODO: crezi ca ar fi util sa puneam namePrefix ul in utils? il creez si aici si in fetchSubmitOffer
-                    const isMine = o.external_number?.startsWith(finalPrefix);
+                    const isMine = o.external_number === finalPrefix;
 
                     return {
                         id: o.offer_id,
-                        externalNumber: o.external_number || o.offer_id,
+                        externalNumber: fullNameForShortCode(o.external_number),
                         _loading: formattedLoading,
                         _unloading: formattedUnloading,
                         isMine
@@ -469,14 +469,6 @@ export default function SpotGoPage({ user }) {
         const { data: { session } } = await supabase.auth.getSession();
         const userEmail = session?.user?.email || "unknown@user.com";
 
-        const formatName = (email = '') => {
-            if (!email.includes('@')) return '';
-            const local = email.split('@')[0];
-            return local
-                .split('.')
-                .map(p => p[0]?.toUpperCase() + p.slice(1))
-                .join(' ');
-        };
 
         const finalPrefix = formatName(userEmail);
 
@@ -496,17 +488,7 @@ export default function SpotGoPage({ user }) {
             }
         });
 
-        const getPaymentObj = () => {
-            if (!freightCharge && !currency && !paymentDue) return undefined;
-            const obj = {};
-            if (freightCharge) obj.from = parseFloat(freightCharge);
-            if (currency) obj.currency = currency;
-            if (paymentDue) {
-                obj.dueDate = new Date(paymentDue).toISOString().split("T")[0];
-            }
-            return obj;
-        };
-
+        
         function cleanObject(obj) {
             if (Array.isArray(obj)) {
                 return obj.map(cleanObject);
@@ -525,7 +507,7 @@ export default function SpotGoPage({ user }) {
 
         const payload = {
             type: "Spot",
-            externalNumber: finalPrefix,
+            externalNumber: shortCodeFor(userEmail),
             sources: ["1","2","3","4","8","9","12","14","16"],
             useAlternativeLocations: hideLocations,
             locations: [
@@ -558,7 +540,7 @@ export default function SpotGoPage({ user }) {
                 trailerTypes:   selectedBodies,
                 ftl:            parseFloat(lengthM) >= 13.6
             },
-            comments: externalComment || undefined,
+            comments: [shortCodeFor(userEmail), externalComment].filter(Boolean).join(" - "),
             internalComments: hideLocations
                 ? "Locations hidden."
                 : "Load/Unload points visible."
@@ -640,33 +622,13 @@ export default function SpotGoPage({ user }) {
             try { result = raw ? JSON.parse(raw) : {}; }  // tolerate empty body
             catch { result = { raw }; }
 
-        // TODO luni: momentan fac insertul de aici, dar trebuie vazut de ce nu vrea sa il faca din // frontend/api/spotGo/submit.js si in tabel pe web si in DB. pe spotgo face insert
-        // try {
-        //     const { error } = await supabase
-        //         .from('submitted_offers')
-        //         .insert([
-        //         {
-        //             offer_id: result.id,
-        //             external_number: finalPrefix,
-        //             loading_address: address0.label,
-        //             unloading_address: address1.label,
-        //             created_at: new Date().toISOString()
-        //         }
-        //         ]);
-
-        //     if (error) {
-        //         console.error("Failed to insert into Supabase:", error.message);
-        //     }
-        // } catch (e) {
-        // console.error("Supabase insert error:", e.message);
-        // }
 
         try {
             if (isEditing && editingOfferId) {
                 const { error } = await supabase
                     .from('submitted_offers')
                     .update({
-                    external_number: finalPrefix,
+                    external_number: formatName(userEmail),
                     loading_address: address0?.label || '',
                     unloading_address: address1?.label || '',
                     updated_at: new Date().toISOString(),
@@ -713,7 +675,7 @@ export default function SpotGoPage({ user }) {
                     .insert([
                     {
                         offer_id: result.id || null,
-                        external_number: finalPrefix,
+                        external_number: formatName(userEmail),
                         loading_address: address0?.label || '',
                         unloading_address: address1?.label || '',
                         updated_at: new Date().toISOString(),
