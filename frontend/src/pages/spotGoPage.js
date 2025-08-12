@@ -23,7 +23,7 @@ const vehicleTypes = {
   5: "Double Trailer"
 };
 const bodyTypes = {
-  1: "Tent",
+  1: "Tent", // tilt
   2: "Reefer",
   3: "Tautliner",
   4: "Box",
@@ -31,18 +31,41 @@ const bodyTypes = {
   6: "Mega",
   7: "Jumbo",
   8: "Van",
-  9: "Platform",
-  10: "Road Train 120m3",
-  11: "Tanker",
-  12: "Walking Floor",
-  13: "Coil Mulde",
-  14: "Dump Truck",
-  15: "Car Transporter",
-  16: "Joloda",
-  17: "Low Loader",
-  18: "Silos",
-  19: "Any"
+  //9: ,   // 
+  10: "Any", //
+  11: "Platform", // 
+  12: "Road Train 120m3", //
+  13: "Tanker", // 
+  14: "Walking  Floor", //
+  15: "Coil Mudle", //
+  16: "Dump Truck", // 
+  17: "Car Transporter", // 
+  18: "Joloda", //
+  19: "Low Loader", // 
+  20:"Silos"
 };
+
+// const bodyTypes = {
+//   1: "Tent",
+//   2: "Reefer",
+//   3: "Tautliner",
+//   4: "Box",
+//   5: "Isotherm",
+//   6: "Mega",
+//   7: "Jumbo",
+//   8: "Van",
+//   9: "Platform",   // - invalid code
+//   10: "Road Train 120m3", //Any
+//   11: "Tanker", // Platform
+//   12: "Walking Floor", //Road Train 120m3
+//   13: "Coil Mulde", // Tanker
+//   14: "Dump Truck", //Walking  Floor
+//   15: "Car Transporter", //Coil Mudle
+//   16: "Joloda", // Dump Truck
+//   17: "Low Loader", // Car Transporter
+//   18: "Silos", //Joloda
+//   19: "Any" // Low Loader
+// };
 
 export default function SpotGoPage({ user }) {
 
