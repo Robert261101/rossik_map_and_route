@@ -1,0 +1,41 @@
+// Email -> abreviere (ER1, JB1, AIM1 etc.)
+export const USER_SHORT_CODES = {
+  "erwin.rossik@rossik.eu": "ER1",
+  "jessika.birsan@rossik.eu": "JB1",
+  "laura.demian@rossik.eu": "LD2",
+  "robert.sava@rossik.eu": "RS1",
+  "dragana.petra@rossik.eu": "DP1",
+  "catalin.ivan@rossik.eu": "CI1",
+  "mihaela.balogh@rossik.eu": "MB1",
+  "mihai.cernea@rossik.eu": "MC1",
+  "vlad.erdei@rossik.eu": "VE1",
+  "claudiu.negura@rossik.eu": "CN1",
+  "aleksandar.misic@rossik.eu": "AM2",
+  "alexandru.moldovan@rossik.eu": "AIM1",
+  "marius.gagiu@rossik.eu": "MG2",
+  // adaugi restul aici...
+};
+
+// helper fallback: ia inițialele + '0' dacă nu găsește
+export function shortCodeFor(email) {
+  const key = (email || "").trim().toLowerCase();
+  if (USER_SHORT_CODES[key]) return USER_SHORT_CODES[key];
+  const local = key.split("@")[0] || "";
+  const parts = local.split(/[._-]+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map(p => p[0]?.toUpperCase()).join("") || "XX";
+  return `${initials}1`;
+}
+
+const inverseMap = Object.entries(USER_SHORT_CODES)
+  .reduce((acc, [email, code]) => {
+    const name = email.split("@")[0]
+      .split(".")
+      .map(p => p[0]?.toUpperCase() + p.slice(1))
+      .join(" ");
+    acc[code] = name;
+    return acc;
+  }, {});
+
+export function fullNameForShortCode(code) {
+  return inverseMap[code] || code; // fallback: return codul dacă nu găsește
+}
