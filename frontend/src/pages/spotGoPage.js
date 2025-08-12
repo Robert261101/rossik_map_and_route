@@ -15,6 +15,11 @@ const PREFIX_PASSWORD = "parola_ta_secreta";
 const DEFAULT_PREFIX = "APP-OFFER-";
 const API_BASE = '';
 
+const MULTI_MIN = 2;
+const MULTI_MAX = 5;
+const RADIUS_MAX = 250;
+
+
 const vehicleTypes = {
   1: "Semi trailer",
   2: "Solo (<12t)",
@@ -100,8 +105,28 @@ export default function SpotGoPage({ user }) {
     const [editingOfferId, setEditingOfferId] = useState(null);
     const [resetKey, setResetKey] = useState(0);
 
+    const [postMultiple, setPostMultiple] = useState(false);
+    const [multiCount, setMultiCount] = useState(3);   // default inside [2..5]
+    const [radiusKm, setRadiusKm] = useState(150);     // default, max 250
+
+    // (for next steps)
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewCandidates, setPreviewCandidates] = useState([]); // list of proposed cities
+
+
     const formRef = useRef(null);
     const [listMaxH, setListMaxH] = useState(0);
+
+    const [showMultiConfig, setShowMultiConfig] = useState(false);
+
+    const [loadingPreview, setLoadingPreview] = useState(false);
+    const [previewError, setPreviewError] = useState('');
+    const [previewItems, setPreviewItems] = useState([]); // enriched candidates including selection
+
+
+    const showPreviewAction = postMultiple && !showMultiConfig; // appears after Save
+
+
 
     const navigate = useNavigate()
 
@@ -128,6 +153,9 @@ export default function SpotGoPage({ user }) {
 
     const parseDbDate = s => s?.slice(0,10) ?? todayStr;
     const parseDbHHMM = s => s?.slice(11,16) ?? "08:00";
+
+    const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
 
     // put this above handleSubmitOffer
     function resetForm() {
@@ -374,6 +402,91 @@ export default function SpotGoPage({ user }) {
 
         return lastAddr || {};
     }
+
+    // --- distance + geometry helpers ---
+    const EARTH_KM = 6371;
+    const toRad = d => d * Math.PI / 180;
+    const toDeg = r => r * 180 / Math.PI;
+
+    function haversineKm(a, b) {
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const la1 = toRad(a.lat), la2 = toRad(b.lat);
+    const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
+    return 2 * EARTH_KM * Math.asin(Math.sqrt(h));
+    }
+
+    function destPoint(lat, lng, bearingDeg, distKm) {
+    const br = toRad(bearingDeg);
+    const dr = distKm / EARTH_KM;
+    const la1 = toRad(lat), lo1 = toRad(lng);
+
+    const la2 = Math.asin(Math.sin(la1)*Math.cos(dr) + Math.cos(la1)*Math.sin(dr)*Math.cos(br));
+    const lo2 = lo1 + Math.atan2(
+        Math.sin(br)*Math.sin(dr)*Math.cos(la1),
+        Math.cos(dr)-Math.sin(la1)*Math.sin(la2)
+    );
+
+    return { lat: toDeg(la2), lng: ((toDeg(lo2)+540)%360) - 180 }; // normalize lon
+    }
+
+    function cityFromAddress(addr) {
+    if (addr?.city) return addr.city;
+    const label = addr?.label || '';
+    const parts = label.split(',');
+    return parts.length >= 2 ? parts[parts.length - 2].trim() : 'Unknown';
+    }
+
+    function localityKey(addr) {
+    const city = (cityFromAddress(addr) || '').toLowerCase().trim();
+    const cc   = (addr?.countryCode || '').toLowerCase().trim();
+    return `${city}|${cc}`;
+    }
+
+    function asCandidate(addr, center) {
+    const lat = addr?.lat, lng = addr?.lng;
+    const d = (typeof lat === 'number' && typeof lng === 'number')
+        ? haversineKm(center, {lat, lng}) : 0;
+    return {
+        key: localityKey(addr),
+        city: cityFromAddress(addr),
+        countryCode: addr?.countryCode || '',
+        postalCode: addr?.postalCode || '',
+        label: addr?.label || `${cityFromAddress(addr)}, ${addr?.countryCode || ''}`,
+        lat: addr?.lat, lng: addr?.lng,
+        distanceKm: Math.round(d),
+        selected: false,
+        pinned: false
+    };
+    }
+
+    async function findNearbyLocalities(center, radiusKm, wantCount, apiKey) {
+        // sample 3 rings x 12 bearings = 36 points (fast enough), early exit when we have enough
+        const rings = [0.35, 0.7, 1.0].map(f => Math.max(5, Math.min(radiusKm, Math.round(radiusKm * f))));
+        const bearings = Array.from({length: 12}, (_, i) => i * (360/12));
+        const pts = [];
+        for (const r of rings) for (const b of bearings) pts.push(destPoint(center.lat, center.lng, b, r));
+
+        const seen = new Map(); // key -> candidate
+        const batchSize = 4;
+        for (let i = 0; i < pts.length; i += batchSize) {
+            const chunk = pts.slice(i, i + batchSize);
+            const results = await Promise.all(chunk.map(p => reverseWithFallback(p, apiKey).catch(()=>null)));
+            for (const addr of results) {
+            if (!addr || !addr.countryCode || !addr.postalCode) continue;
+            const k = localityKey(addr);
+            if (!k) continue;
+            if (!seen.has(k)) seen.set(k, asCandidate(addr, center));
+            }
+            // keep a healthy buffer (x3) for unchecks/auto-replace
+            if (seen.size >= wantCount * 3) break;
+        }
+
+        const list = Array.from(seen.values()).sort((a,b) => a.distanceKm - b.distanceKm);
+        return list;
+    }
+
+
 
 
 //   function handleModifyPrefix() {
@@ -896,6 +1009,35 @@ export default function SpotGoPage({ user }) {
         alert("📋 Offer copied into form for submission.");
     }
 
+    function Modal({ open, title, onClose, children }) {
+  if (!open) return null;
+  const backdrop = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+  };
+  const card = {
+    background: '#fff', borderRadius: 8, width: 'min(560px, 92vw)',
+    boxShadow: '0 10px 24px rgba(0,0,0,0.25)', padding: 16
+  };
+  const xBtn = {
+    border: 'none', background: 'transparent', fontSize: 20, lineHeight: 1,
+    cursor: 'pointer', padding: 4, color: '#b91c1c'
+  };
+  return (
+    <div style={backdrop}>
+      <div style={card} role="dialog" aria-modal="true">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <h4 style={{margin:0}}>{title}</h4>
+          {/* ✕ closes AND unchecks */}
+          <button onClick={onClose} aria-label="Close" style={xBtn}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+
     async function handleDeleteOffer(offerId) {
         if (!window.confirm("Are you sure you want to delete this offer?")) return;
 
@@ -1109,8 +1251,226 @@ export default function SpotGoPage({ user }) {
             </label>
           ))}
         </div>
-        <h3>{isEditing ? "Edit Offer" : "New Offer"}</h3>
-        <button type="submit" style={{...buttonInputStyle}}>{isEditing ? "Update Offer" : "Submit Offer"}</button>
+        {/* Action Bar */}
+        <div style={{
+        marginTop: 16,
+        paddingTop: 12,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        flexWrap: 'wrap'
+        }}>
+        {/* Left: title above button */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+        <h3 style={{ margin: 0 }}>{isEditing ? "Edit Offer" : "New Offer"}</h3>
+        <button type="submit" style={{ ...buttonInputStyle }}>
+            {isEditing ? "Update Offer" : "Submit Offer"}
+        </button>
+        </div>
+
+        {/* Post-multiple controls and Preview button */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <input
+            type="checkbox"
+            checked={postMultiple}
+            onChange={e => {
+                const v = e.target.checked;
+                setPostMultiple(v);
+                setShowMultiConfig(v);  // open modal when checked
+            }}
+            />
+            <strong>Post multiple</strong>
+        </label>
+
+        {/* Show Preview only after the modal is saved (checked + modal closed) */}
+        {showPreviewAction && (
+            <button
+            type="button"
+            disabled={!loadingLocation}
+            onClick={async () => {
+                if (!loadingLocation) return;
+                setShowPreview(true);
+                setLoadingPreview(true);
+                setPreviewError('');
+                try {
+                    // 1) pin the original selected place as candidate #1
+                    const pinned = asCandidate(loadingLocation, { lat: loadingLocation.lat, lng: loadingLocation.lng });
+                    pinned.distanceKm = 0;
+                    pinned.pinned = true;
+                    pinned.selected = true; // always included
+
+                    // 2) fetch nearby localities
+                    const near = await findNearbyLocalities(
+                    { lat: loadingLocation.lat, lng: loadingLocation.lng },
+                    clamp(radiusKm, 1, RADIUS_MAX),
+                    clamp(multiCount, MULTI_MIN, MULTI_MAX),
+                    HERE_API_KEY
+                    );
+
+                    // 3) remove any duplicate of the pinned one
+                    const filtered = near.filter(c => c.key !== pinned.key);
+
+                    // 4) preselect the next N-1
+                    const need = clamp(multiCount, MULTI_MIN, MULTI_MAX) - 1;
+                    for (let i = 0; i < filtered.length; i++) filtered[i].selected = i < need;
+
+                    setPreviewItems([pinned, ...filtered]);
+                } catch (e) {
+                    console.error('preview error', e);
+                    setPreviewError('Could not fetch nearby localities. Try a smaller radius or later.');
+                    setPreviewItems([]);
+                } finally {
+                    setLoadingPreview(false);
+                }
+            }}
+
+            style={{ ...buttonInputStyle, opacity: !loadingLocation ? 0.6 : 1 }}
+            title={!loadingLocation ? 'Pick a loading address first' : ''}
+            >
+            Preview
+            </button>
+        )}
+        </div>
+
+        </div>
+
+        <Modal
+        open={showMultiConfig}
+        title="Batch posting settings"
+        onClose={() => { setShowMultiConfig(false); setPostMultiple(false); }}  // ✕ unchecks
+        >
+        {/* Modal body: stacked, always full-width, no focus/blur styling */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+        <div>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
+            Count (2–5):
+            </label>
+            <input
+            type="number"
+            min={MULTI_MIN}
+            max={MULTI_MAX}
+            value={multiCount}
+            onChange={e => setMultiCount(clamp(parseInt(e.target.value || 0, 10), MULTI_MIN, MULTI_MAX))}
+            style={{ ...baseInputStyle, width: '100%' }}   // keep full width all the time
+            />
+        </div>
+
+        <div>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
+            Radius (km, ≤250):
+            </label>
+            <input
+            type="number"
+            min={1}
+            max={RADIUS_MAX}
+            value={radiusKm}
+            onChange={e => setRadiusKm(clamp(parseInt(e.target.value || 0, 10), 1, RADIUS_MAX))}
+            style={{ ...baseInputStyle, width: '100%' }}   // keep full width all the time
+            />
+        </div>
+        </div>
+
+        <div style={{ marginTop: 12, fontSize: 12, color: '#555' }}>
+        Will include the chosen city plus the nearest localities within the radius. Cross-border allowed.
+        </div>
+
+
+        <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            {/* Save closes modal but keeps the checkbox checked */}
+            <button
+            type="button"
+            onClick={() => setShowMultiConfig(false)}
+            style={{ ...buttonInputStyle }}
+            >
+            Save
+            </button>
+        </div>
+        </Modal>
+
+        <Modal
+            open={showPreview}
+            title={`Preview (${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers)`}
+            onClose={() => setShowPreview(false)}
+            >
+            {loadingPreview ? (
+                <div style={{ padding: 12 }}>Loading nearby localities…</div>
+            ) : previewError ? (
+                <div style={{ padding: 12, color: '#b91c1c' }}>{previewError}</div>
+            ) : (
+                <>
+                <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid #eee', borderRadius: 6 }}>
+                    {previewItems.length === 0 && (
+                    <div style={{ padding: 12 }}>No candidates found in this radius.</div>
+                    )}
+                    {previewItems.map((c, i) => (
+                    <label key={c.key || i} style={{
+                        display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
+                        borderBottom:'1px solid #f2f2f2', background: c.pinned ? '#f8fafc' : 'white'
+                    }}>
+                        <input
+                        type="checkbox"
+                        checked={!!c.selected}
+                        disabled={c.pinned}
+                        onChange={e => {
+                            const checked = e.target.checked;
+                            setPreviewItems(prev => {
+                                const maxSel = clamp(multiCount, MULTI_MIN, MULTI_MAX);
+                                const next = prev.map(x => ({ ...x }));
+                                const selectedNow = next.filter(x => x.selected).length;
+
+                                // safety: pinned stays selected
+                                if (next[i].pinned && !checked) return prev;
+
+                                if (checked) {
+                                // don’t allow exceeding the cap
+                                if (selectedNow >= maxSel) return prev; // (optional: flash a message)
+                                next[i].selected = true;
+                                } else {
+                                next[i].selected = false;
+                                }
+                                return next;
+                            });
+                        }}
+                        />
+                        <div style={{ flex:1 }}>
+                        <div style={{ fontWeight: 600 }}>
+                            {c.city} <span style={{ fontWeight: 400 }}>({c.countryCode})</span>
+                            {c.pinned && <span style={{ marginLeft: 8, fontSize: 12, color:'#1e4a7b' }}>• current loading</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color:'#555' }}>
+                            {c.postalCode ? `${c.postalCode} • ` : ''}{Math.max(0, c.distanceKm)} km
+                        </div>
+                        </div>
+                    </label>
+                    ))}
+                </div>
+
+                {/* helper text under the list (optional) */}
+                <div style={{ marginTop: 10, fontSize: 12, color: '#555' }}>
+                Select up to {clamp(multiCount, MULTI_MIN, MULTI_MAX)} locations.
+                </div>
+
+                {/* footer actions */}
+                <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button type="button" onClick={() => setShowPreview(false)} style={{ ...buttonInputStyle, background:'#1e4a7b' }}>
+                    Close
+                </button>
+                <button
+                    type="button"
+                    disabled={previewItems.filter(x => x.selected).length < MULTI_MIN}
+                    onClick={() => alert('Next step: batch post these!')}
+                    style={{ ...buttonInputStyle }}
+                >
+                    Post {previewItems.filter(x => x.selected).length} offers
+                </button>
+                </div>
+                </>
+            )}
+        </Modal>
+
+
       </form>
 
       {/* Submitted Offers */}
