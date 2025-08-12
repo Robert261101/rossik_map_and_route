@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
-
-const HEADER_LOGO = "/Rossik_Tools.png";
+import RossikLogo from '../VektorLogo_Rossik_rot.gif'
 
 export default function ResetPasswordPage() {
   const [newPwd, setNewPwd] = useState('')
@@ -42,7 +41,7 @@ export default function ResetPasswordPage() {
                     dark:from-gray-800 dark:via-gray-900 dark:to-black
                     transition-colors">
       <div className="fixed top-0 right-0 px-6 py-5">
-        <img src={HEADER_LOGO} alt="Rossik Logo" className="h-12 object-contain" />
+        <img src={RossikLogo} alt="Rossik Logo" className="h-16 object-contain" />
       </div>
       <div className="w-full max-w-md bg-white/90 dark:bg-gray-800/80
                       backdrop-blur-md shadow-xl rounded-2xl px-8 py-10">

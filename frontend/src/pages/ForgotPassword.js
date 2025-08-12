@@ -1,9 +1,7 @@
 // src/ForgotPassword.js
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-
-const HEADER_LOGO = "/Rossik_Tools.png";
-
+import RossikLogo from '../VektorLogo_Rossik_rot.gif';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -33,7 +31,7 @@ export default function ForgotPasswordPage() {
                     dark:from-gray-800 dark:via-gray-900 dark:to-black
                     transition-colors">
       <div className="fixed top-0 right-0 px-6 py-5">
-        <img src={HEADER_LOGO} alt="Rossik Logo" className="h-12 object-contain" />
+        <img src={RossikLogo} alt="Rossik Logo" className="h-16 object-contain" />
       </div>
 
       <div className="w-full max-w-md bg-white/90 dark:bg-gray-800/80

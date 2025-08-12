@@ -2,8 +2,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-
-const HEADER_LOGO = "/Rossik_Tools.png";
+import RossikLogo from '../VektorLogo_Rossik_rot.gif'; 
 
 
 export default function LoginPage() {
@@ -31,9 +30,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-600 via-white to-gray-300 dark:from-gray-800 dark:via-gray-900 dark:to-black transition-colors">
       <div className="fixed top-0 right-0 px-6 py-5">
         <img
-          src={HEADER_LOGO}
+          src={RossikLogo}
           alt="Rossik Logo"
-          className="h-12 object-contain"
+          className="h-16 object-contain"
         />
       </div>
 

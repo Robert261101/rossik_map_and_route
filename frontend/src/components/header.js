@@ -15,7 +15,7 @@ function cn(...xs) {
   return xs.filter(Boolean).join(" ");
 }
 
-const HEADER_LOGO = "/Rossik_Tools.png";
+const HEADER_LOGO = "/Rossik_Tools-removebg-preview.png";
 
 // Accente vizuale per pagină/route
 const PAGE_ACCENTS = {
@@ -136,18 +136,13 @@ export default function Header({ user }) {
             <div className="flex items-center justify-between gap-3">
               {/* LEFT: Logo (hidden on landing) */}
               <div className="flex items-center gap-30 min-w-0">
-                {isLanding ? (
-                  // spacer so the right-side buttons stay aligned
-                  <div className="h-10 md:h-15 w-36 md:w-44" aria-hidden />
-                ) : (
                   <Link to="/" className="shrink-0">
                     <img
                       src={HEADER_LOGO}
                       alt="Rossik Tools"
-                      className="h-10 md:h-12 object-contain drop-shadow cursor-pointer"
+                      className="h-10 md:h-16 object-contain drop-shadow cursor-pointer"
                     />
                   </Link>
-                )}
               </div>
 
 

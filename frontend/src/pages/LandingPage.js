@@ -2,8 +2,6 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/header';
 
-const logoSrc = "/Rossik_Tools.png";
-
 const tiles = [
   { label: 'Map & Guide', to: '/map-and-guide', img: '/Map_and_Guide_Logo.png', alt: 'Map & Guide' },
   { label: 'SpotGo',      to: '/spotgo',        img: '/Spot_Go_Logo.png',       alt: 'SpotGo' },
@@ -47,10 +45,6 @@ export default function RossikTools({ user }) {
       <Header user={user} />
       <main className="py-12 px-6 max-w-7xl mx-auto">
         <h1 className="sr-only">Rossik Tools</h1>
-
-        <div className="mb-10 flex justify-center">
-          <img src={logoSrc} alt="Rossik Tools" className="h-16 md:h-20 w-auto drop-shadow" />
-        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
           {tiles.map(t => <Box key={t.to} {...t} />)}
