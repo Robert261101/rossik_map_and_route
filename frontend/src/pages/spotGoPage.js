@@ -165,7 +165,18 @@ export default function SpotGoPage({ user }) {
     const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
     const [batchLog, setBatchLog] = useState([]); // [{city, ok, id?, error?}]
 
-    const showPreviewAction = postMultiple && !showMultiConfig; // appears after Save
+    // which side to expand (null | 'loading' | 'unloading')
+    const [batchTarget, setBatchTarget] = useState(null);
+
+    // first modal: target picker
+    const [showTargetPicker, setShowTargetPicker] = useState(false);
+    const [targetDraft, setTargetDraft] = useState({ loading: false, unloading: false });
+
+
+    const showPreviewAction = postMultiple && !showTargetPicker && !showMultiConfig;
+    const needAddressPicked =
+        batchTarget === 'unloading' ? !!unloadingLocation : !!loadingLocation;
+
 
     const navigate = useNavigate()
 
@@ -1154,7 +1165,11 @@ export default function SpotGoPage({ user }) {
             for (const c of selected) {
             try {
                 const bodyToSend = JSON.parse(JSON.stringify(base));
-                bodyToSend.locations[0].address = toSpotgoAddr(c);
+                if (batchTarget === 'loading') {
+                  bodyToSend.locations[0].address = toSpotgoAddr(c);
+                } else {
+                  bodyToSend.locations[1].address = toSpotgoAddr(c);
+                }
 
                 const res = await fetch(`${API_BASE}/api/spotgo/submit`, {
                 method: 'POST',
@@ -1173,23 +1188,27 @@ export default function SpotGoPage({ user }) {
                 const result = raw ? JSON.parse(raw) : {};
                 const offerId = result.id || null;
 
+                const loadAddr   = batchTarget === 'loading'   ? c : loadingLocation;
+                const unloadAddr = batchTarget === 'unloading' ? c : unloadingLocation;
+
+
                 // mirror to Supabase
                 await supabase.from('submitted_offers').insert([{
                 offer_id: offerId,
                 external_number: formatName(userEmail),
-                loading_address: c.label || '',
-                unloading_address: unloadingLocation?.label || '',
+                loading_address: loadAddr?.label || '',
+                unloading_address: unloadAddr?.label || '',
                 updated_at: new Date().toISOString(),
 
-                loading_country_code: c.countryCode || null,
-                loading_postal_code:  c.postalCode  || null,
-                loading_lat:          c.lat || null,
-                loading_lng:          c.lng || null,
+                loading_country_code: loadAddr?.countryCode || null,
+                loading_postal_code:  loadAddr?.postalCode  || null,
+                loading_lat:          loadAddr?.lat || null,
+                loading_lng:          loadAddr?.lng || null,
 
-                unloading_country_code: unloadingLocation?.countryCode || null,
-                unloading_postal_code:  unloadingLocation?.postalCode  || null,
-                unloading_lat:          unloadingLocation?.lat || null,
-                unloading_lng:          unloadingLocation?.lng || null,
+                unloading_country_code: unloadAddr?.countryCode || null,
+                unloading_postal_code:  unloadAddr?.postalCode  || null,
+                unloading_lat:          unloadAddr?.lat || null,
+                unloading_lng:          unloadAddr?.lng || null,
 
                 loading_start_time:  `${loadStartDate}T${loadStartTime}:00`,
                 loading_end_time:    `${loadEndDate}T${loadEndTime}:00`,
@@ -1218,6 +1237,11 @@ export default function SpotGoPage({ user }) {
             }
 
             await refreshSubmittedOffers();
+            setShowPreview(false);
+            setPreviewItems([]);
+            setIsBatchPosting(false);
+            resetForm()
+
         } finally {
             setIsBatchPosting(false);
         }
@@ -1464,7 +1488,8 @@ export default function SpotGoPage({ user }) {
             onChange={e => {
                 const v = e.target.checked;
                 setPostMultiple(v);
-                setShowMultiConfig(v);  // open modal when checked
+                setShowTargetPicker(v);      // step 1: choose side
+                setShowMultiConfig(false);   // wait for step 2
             }}
             />
             <strong>Post multiple</strong>
@@ -1473,29 +1498,32 @@ export default function SpotGoPage({ user }) {
         {/* Show Preview only after the modal is saved (checked + modal closed) */}
         {showPreviewAction && (
             <button
-            type="button"
-            disabled={!loadingLocation}
-            onClick={async () => {
-                if (!loadingLocation) return;
+                type="button"
+                disabled={!needAddressPicked}
+                onClick={async () => {
+                const centerLoc = batchTarget === 'unloading' ? unloadingLocation : loadingLocation;
+                if (!centerLoc) return;
+
                 setShowPreview(true);
                 setLoadingPreview(true);
                 setPreviewError('');
                 try {
-                    // 1) pin the original selected place as candidate #1
-                    const pinned = asCandidate(loadingLocation, { lat: loadingLocation.lat, lng: loadingLocation.lng });
+                    // 1) pin the base place
+                    const pinned = asCandidate(centerLoc, { lat: centerLoc.lat, lng: centerLoc.lng });
                     pinned.distanceKm = 0;
                     pinned.pinned = true;
                     pinned.selected = true; // always included
+                    pinned._pinNote = batchTarget === 'unloading' ? '• current unloading' : '• current loading';
 
-                    // 2) fetch nearby localities
+                    // 2) fetch nearby localities around that side
                     const near = await findNearbyLocalities(
-                    { lat: loadingLocation.lat, lng: loadingLocation.lng },
+                    { lat: centerLoc.lat, lng: centerLoc.lng },
                     clamp(radiusKm, 1, RADIUS_MAX),
                     clamp(multiCount, MULTI_MIN, MULTI_MAX),
                     HERE_API_KEY
                     );
 
-                    // 3) remove any duplicate of the pinned one
+                    // 3) remove duplicate of the pinned one
                     const filtered = near.filter(c => c.key !== pinned.key);
 
                     // 4) preselect the next N-1
@@ -1510,17 +1538,89 @@ export default function SpotGoPage({ user }) {
                 } finally {
                     setLoadingPreview(false);
                 }
-            }}
-
-            style={{ ...buttonInputStyle, opacity: !loadingLocation ? 0.6 : 1 }}
-            title={!loadingLocation ? 'Pick a loading address first' : ''}
+                }}
+                style={{ ...buttonInputStyle, opacity: !needAddressPicked ? 0.6 : 1 }}
+                title={
+                needAddressPicked ? '' :
+                batchTarget === 'unloading' ? 'Pick an unloading address first' : 'Pick a loading address first'
+                }
             >
-            Preview
+                Preview
             </button>
         )}
+
         </div>
 
         </div>
+
+        {/* === Target Picker (step 1) === */}
+        <Modal
+        open={showTargetPicker}
+        title="Expand which address?"
+        onClose={() => {
+            // X cancels and unchecks, per spec
+            setShowTargetPicker(false);
+            setPostMultiple(false);
+            setTargetDraft({ loading: false, unloading: false });
+            setBatchTarget(null);
+        }}
+        >
+        <div style={{ display:'grid', gap:12 }}>
+            <label style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <input
+                type="checkbox"
+                checked={targetDraft.loading}
+                onChange={e => setTargetDraft(p => ({ ...p, loading: e.target.checked }))}
+            />
+            <strong>Loading address</strong>
+            </label>
+
+            <label style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <input
+                type="checkbox"
+                checked={targetDraft.unloading}
+                onChange={e => setTargetDraft(p => ({ ...p, unloading: e.target.checked }))}
+            />
+            <strong>Unloading address</strong>
+            </label>
+
+            <div style={{ fontSize:12, color:'#555' }}>
+            Select <em>exactly one</em> for now — both at once coming later.
+            </div>
+
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+            <button
+                type="button"
+                onClick={() => {
+                setShowTargetPicker(false);
+                setPostMultiple(false);
+                setTargetDraft({ loading:false, unloading:false });
+                setBatchTarget(null);
+                }}
+                style={{ ...buttonInputStyle, background:'#9CA3AF' }}
+            >
+                Cancel
+            </button>
+            <button
+                type="button"
+                disabled={!(targetDraft.loading ^ targetDraft.unloading)} // exactly one
+                onClick={() => {
+                const chosen = targetDraft.loading ? 'loading' : 'unloading';
+                setBatchTarget(chosen);
+                setShowTargetPicker(false);   // step 1 done
+                setShowMultiConfig(true);     // step 2: count/radius
+                }}
+                style={{
+                ...buttonInputStyle,
+                opacity: (targetDraft.loading ^ targetDraft.unloading) ? 1 : 0.6
+                }}
+            >
+                Continue
+            </button>
+            </div>
+        </div>
+        </Modal>
+
 
         <Modal
         open={showMultiConfig}
@@ -1587,9 +1687,10 @@ export default function SpotGoPage({ user }) {
 
         <Modal
             open={showPreview}
-            title={`Preview (${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers)`}
+            title={`Preview (${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers) — ${batchTarget === 'unloading' ? 'unloading' : 'loading'}`}
             onClose={() => { if (!isBatchPosting) setShowPreview(false); }}
             >
+
             {loadingPreview ? (
                 <div style={{ padding: 12 }}>Loading nearby localities…</div>
             ) : previewError ? (
@@ -1668,7 +1769,11 @@ export default function SpotGoPage({ user }) {
                         <div style={{ flex:1 }}>
                         <div style={{ fontWeight: 600 }}>
                             {c.city} <span style={{ fontWeight: 400 }}>({c.countryCode})</span>
-                            {c.pinned && <span style={{ marginLeft: 8, fontSize: 12, color:'#1e4a7b' }}>• current loading</span>}
+                            {c.pinned && (
+                            <span style={{ marginLeft: 8, fontSize: 12, color:'#1e4a7b' }}>
+                                {c._pinNote || '• current'}
+                            </span>
+                            )}
                         </div>
                         <div style={{ fontSize: 12, color:'#555' }}>
                             {c.postalCode ? `${c.postalCode} • ` : ''}{Math.max(0, c.distanceKm)} km
@@ -1788,3 +1893,9 @@ export default function SpotGoPage({ user }) {
 );
 
 }
+
+
+//TODO: add both at once functionality. you go from A to B, post multiple for both works like -> A-B, A1-B1, A2-B2, etc
+
+//TODO later: batch delete for batch post.
+
