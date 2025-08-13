@@ -1,5 +1,5 @@
 // pages/spotGoPage.js
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, memo } from "react";
 import AutoCompleteInput from "../AutoCompleteInput";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
@@ -72,6 +72,41 @@ const bodyTypes = {
 //   19: "Any" // Low Loader
 // };
 
+const Modal = memo(function Modal({ open, title, onClose, children }) {
+  if (!open) return null;
+
+  const backdrop = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+  };
+  const card = {
+    background: '#fff', borderRadius: 8, width: 'min(560px, 92vw)',
+    boxShadow: '0 10px 24px rgba(0,0,0,0.25)', padding: 16
+  };
+  const xBtn = {
+    border: 'none', background: 'transparent', fontSize: 20, lineHeight: 1,
+    cursor: 'pointer', padding: 4, color: '#b91c1c'
+  };
+
+  return (
+    <div style={backdrop} onMouseDown={onClose}>
+      <div
+        style={card}
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={e => e.stopPropagation()} // keep clicks inside from closing
+      >
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <h4 style={{margin:0}}>{title}</h4>
+          <button type="button" onClick={onClose} aria-label="Close" style={xBtn}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+});
+
+
 export default function SpotGoPage({ user }) {
 
     const [hideLocations, setHideLocations] = useState(false);
@@ -113,7 +148,6 @@ export default function SpotGoPage({ user }) {
     const [showPreview, setShowPreview] = useState(false);
     const [previewCandidates, setPreviewCandidates] = useState([]); // list of proposed cities
 
-
     const formRef = useRef(null);
     const [listMaxH, setListMaxH] = useState(0);
 
@@ -123,10 +157,15 @@ export default function SpotGoPage({ user }) {
     const [previewError, setPreviewError] = useState('');
     const [previewItems, setPreviewItems] = useState([]); // enriched candidates including selection
 
+    const [countDraft, setCountDraft]   = useState(String(multiCount));
+    const [radiusDraft, setRadiusDraft] = useState(String(radiusKm));
+
+    // batch-posting state
+    const [isBatchPosting, setIsBatchPosting] = useState(false);
+    const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
+    const [batchLog, setBatchLog] = useState([]); // [{city, ok, id?, error?}]
 
     const showPreviewAction = postMultiple && !showMultiConfig; // appears after Save
-
-
 
     const navigate = useNavigate()
 
@@ -1009,34 +1048,180 @@ export default function SpotGoPage({ user }) {
         alert("📋 Offer copied into form for submission.");
     }
 
-    function Modal({ open, title, onClose, children }) {
-  if (!open) return null;
-  const backdrop = {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-  };
-  const card = {
-    background: '#fff', borderRadius: 8, width: 'min(560px, 92vw)',
-    boxShadow: '0 10px 24px rgba(0,0,0,0.25)', padding: 16
-  };
-  const xBtn = {
-    border: 'none', background: 'transparent', fontSize: 20, lineHeight: 1,
-    cursor: 'pointer', padding: 4, color: '#b91c1c'
-  };
-  return (
-    <div style={backdrop}>
-      <div style={card} role="dialog" aria-modal="true">
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-          <h4 style={{margin:0}}>{title}</h4>
-          {/* ✕ closes AND unchecks */}
-          <button onClick={onClose} aria-label="Close" style={xBtn}>✕</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
+    // load saved config on mount
+    useEffect(() => {
+    try {
+        const raw = localStorage.getItem('spotgo_batch_cfg');
+        if (!raw) return;
+        const cfg = JSON.parse(raw);
+        if (cfg.multiCount) setMultiCount(clamp(cfg.multiCount, MULTI_MIN, MULTI_MAX));
+        if (cfg.radiusKm)   setRadiusKm  (clamp(cfg.radiusKm,   1,          RADIUS_MAX));
+    } catch {}
+    }, []);
 
+    // save whenever they change
+    useEffect(() => {
+    localStorage.setItem('spotgo_batch_cfg', JSON.stringify({ multiCount, radiusKm }));
+    }, [multiCount, radiusKm]);
+
+
+    useEffect(() => {
+        if (showMultiConfig) {
+            setCountDraft(String(multiCount));
+            setRadiusDraft(String(radiusKm));
+        }
+    }, [showMultiConfig]);
+
+    const toSpotgoAddr = (c) => ({
+        countryCode: c.countryCode,
+        postalCode:  c.postalCode,
+        city:        c.city,
+        coordinates: { latitude: c.lat, longitude: c.lng }
+    });
+
+    async function handleBatchPost() {
+        const selected = previewItems.filter(x => x.selected);
+        if (selected.length < MULTI_MIN) return;
+
+        setIsBatchPosting(true);
+        setBatchLog([]);
+        setBatchProgress({ done: 0, total: selected.length });
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) { alert('Please sign in first.'); setIsBatchPosting(false); return; }
+            const token = session.access_token;
+            const userEmail = session.user.email;
+
+            // build a base payload from the current form (we’ll swap loading address per item)
+            const base = (() => {
+            const extractCity = (label='') => (label.split(',').slice(-2, -1)[0] || 'Unknown').trim();
+            const cleanAddress = raw => ({
+                countryCode: raw.countryCode,
+                postalCode:  raw.postalCode,
+                city:        raw.city || extractCity(raw.label),
+                coordinates: { latitude: raw.lat, longitude: raw.lng }
+            });
+
+            const body = {
+                type: "Spot",
+                externalNumber: shortCodeFor(userEmail),
+                sources: ["1","2","3","4","8","9","12","14","16"],
+                useAlternativeLocations: hideLocations,
+                locations: [
+                {
+                    sequence: 1, type: "Loading",
+                    address: cleanAddress(loadingLocation), // will be replaced per selected item
+                    period: {
+                    startDate: `${loadStartDate}T${loadStartTime}:00Z`,
+                    endDate:   `${loadEndDate}T${loadEndTime}:00Z`
+                    }
+                },
+                {
+                    sequence: 2, type: "Unloading",
+                    address: cleanAddress(unloadingLocation),
+                    period: {
+                    startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
+                    endDate:   `${unloadEndDate}T${unloadEndTime}:00Z`
+                    }
+                }
+                ],
+                requirements: {
+                capacity: parseFloat(weightT),
+                ldm: parseFloat(lengthM),
+                pallets: 33,
+                loadingSide: "All",
+                palletsExchange,
+                vehicleTypes: selectedVehicles,
+                trailerTypes: selectedBodies,
+                ftl: parseFloat(lengthM) >= 13.6
+                },
+                comments: [shortCodeFor(userEmail), externalComment].filter(Boolean).join(" - "),
+                internalComments: hideLocations ? "Locations hidden." : "Load/Unload points visible."
+            };
+
+            if (freightCharge || currency || paymentDue) {
+                const pay = {};
+                if (freightCharge) pay.from = parseFloat(freightCharge) || 0;
+                if (currency)      pay.currency = currency;
+                if (paymentDue)    pay.dueDate  = new Date(paymentDue).toISOString().split('T')[0];
+                body.payment = pay;
+            }
+            return body;
+            })();
+
+            // sequential submit
+            for (const c of selected) {
+            try {
+                const bodyToSend = JSON.parse(JSON.stringify(base));
+                bodyToSend.locations[0].address = toSpotgoAddr(c);
+
+                const res = await fetch(`${API_BASE}/api/spotgo/submit`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'authorization-email': userEmail,
+                    'Content-Type': 'application/json',
+                    'x-api-version': '1.0'
+                },
+                body: JSON.stringify(bodyToSend)
+                });
+
+                const raw = await res.text();
+                if (!res.ok) throw new Error(raw || 'Submit failed');
+
+                const result = raw ? JSON.parse(raw) : {};
+                const offerId = result.id || null;
+
+                // mirror to Supabase
+                await supabase.from('submitted_offers').insert([{
+                offer_id: offerId,
+                external_number: formatName(userEmail),
+                loading_address: c.label || '',
+                unloading_address: unloadingLocation?.label || '',
+                updated_at: new Date().toISOString(),
+
+                loading_country_code: c.countryCode || null,
+                loading_postal_code:  c.postalCode  || null,
+                loading_lat:          c.lat || null,
+                loading_lng:          c.lng || null,
+
+                unloading_country_code: unloadingLocation?.countryCode || null,
+                unloading_postal_code:  unloadingLocation?.postalCode  || null,
+                unloading_lat:          unloadingLocation?.lat || null,
+                unloading_lng:          unloadingLocation?.lng || null,
+
+                loading_start_time:  `${loadStartDate}T${loadStartTime}:00`,
+                loading_end_time:    `${loadEndDate}T${loadEndTime}:00`,
+                unloading_start_time:`${unloadStartDate}T${unloadStartTime}:00`,
+                unloading_end_time:  `${unloadEndDate}T${unloadEndTime}:00`,
+
+                external_comment: externalComment || null,
+                hide_locations: hideLocations,
+                pallets_exchange: palletsExchange,
+                vehicle_types: selectedVehicles.length ? selectedVehicles : null,
+                body_types:     selectedBodies.length   ? selectedBodies   : null,
+                freight_charge: freightCharge ? parseFloat(freightCharge) : null,
+                currency: currency || null,
+                payment_due: paymentDue || null,
+                length_m: lengthM ? parseFloat(lengthM) : null,
+                weight_t: weightT ? parseFloat(weightT) : null,
+                submitted_by_email: userEmail
+                }]);
+
+                setBatchLog(l => [...l, { city: c.city, ok: true, id: offerId }]);
+            } catch (err) {
+                setBatchLog(l => [...l, { city: c.city, ok: false, error: String(err.message || err) }]);
+            } finally {
+                setBatchProgress(p => ({ ...p, done: p.done + 1 }));
+            }
+            }
+
+            await refreshSubmittedOffers();
+        } finally {
+            setIsBatchPosting(false);
+        }
+    }
 
     async function handleDeleteOffer(offerId) {
         if (!window.confirm("Are you sure you want to delete this offer?")) return;
@@ -1106,11 +1291,12 @@ export default function SpotGoPage({ user }) {
     const handleFocus = e => Object.assign(e.target.style, { ...baseInputStyle, ...highlightStyle });
     const handleBlur = e => Object.assign(e.target.style, baseInputStyle);
 
+    const selectedCount = previewItems.filter(x => x.selected).length;
+
+
   return (
-  <div style={{ padding: '30px', background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
-    <div style={{ marginBottom: '20px' }}>
+  <div style={{ background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
     <Header user = {user} />
-    </div>
     {/* Offer Prefix Section */}
      {/* <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={{ fontWeight: 'bold', marginRight: '10px' }}>Offer Prefix:</label>
@@ -1120,7 +1306,7 @@ export default function SpotGoPage({ user }) {
                 onChange={e => setPrefix(e.target.value)} 
                 onFocus={handleFocus}
                 onBlur={handleBlur}
-                disabled={!prefixEditEnabled} 
+                disabled={!prefixEditEnabled
                 style={{...baseInputStyle, width:'200px'}} 
             />
             <button type="button" onClick={handleModifyPrefix} style={{ ...buttonInputStyle, padding: '5px 10px' }}>Modify Prefix</button>
@@ -1345,31 +1531,37 @@ export default function SpotGoPage({ user }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
         <div>
             <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
-            Count (2–5):
+                Count (2–5):
             </label>
             <input
-            type="number"
-            min={MULTI_MIN}
-            max={MULTI_MAX}
-            value={multiCount}
-            onChange={e => setMultiCount(clamp(parseInt(e.target.value || 0, 10), MULTI_MIN, MULTI_MAX))}
-            style={{ ...baseInputStyle, width: '100%' }}   // keep full width all the time
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder={`${MULTI_MIN}–${MULTI_MAX}`}
+                value={countDraft}
+                onChange={e => setCountDraft(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                style={{ ...baseInputStyle, width: '100%' }}
             />
         </div>
 
         <div>
             <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
-            Radius (km, ≤250):
+                Radius (km, ≤250):
             </label>
             <input
-            type="number"
-            min={1}
-            max={RADIUS_MAX}
-            value={radiusKm}
-            onChange={e => setRadiusKm(clamp(parseInt(e.target.value || 0, 10), 1, RADIUS_MAX))}
-            style={{ ...baseInputStyle, width: '100%' }}   // keep full width all the time
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder={`1–${RADIUS_MAX}`}
+                value={radiusDraft}
+                onChange={e => setRadiusDraft(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                style={{ ...baseInputStyle, width: '100%' }}
             />
         </div>
+
+
         </div>
 
         <div style={{ marginTop: 12, fontSize: 12, color: '#555' }}>
@@ -1377,22 +1569,26 @@ export default function SpotGoPage({ user }) {
         </div>
 
 
-        <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            {/* Save closes modal but keeps the checkbox checked */}
-            <button
+        <button
             type="button"
-            onClick={() => setShowMultiConfig(false)}
+            onClick={() => {
+                const parsedCount  = clamp(parseInt(countDraft, 10)  || MULTI_MIN, MULTI_MIN, MULTI_MAX);
+                const parsedRadius = clamp(parseInt(radiusDraft, 10) || 1,          1,          RADIUS_MAX);
+                setMultiCount(parsedCount);
+                setRadiusKm(parsedRadius);
+                setShowMultiConfig(false);
+            }}
             style={{ ...buttonInputStyle }}
             >
             Save
-            </button>
-        </div>
+        </button>
+
         </Modal>
 
         <Modal
             open={showPreview}
             title={`Preview (${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers)`}
-            onClose={() => setShowPreview(false)}
+            onClose={() => { if (!isBatchPosting) setShowPreview(false); }}
             >
             {loadingPreview ? (
                 <div style={{ padding: 12 }}>Loading nearby localities…</div>
@@ -1400,6 +1596,41 @@ export default function SpotGoPage({ user }) {
                 <div style={{ padding: 12, color: '#b91c1c' }}>{previewError}</div>
             ) : (
                 <>
+                {/* quick-selects */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 13, color:'#555' }}>
+                    Selected: {selectedCount} / {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
+                </div>
+                <div style={{ display:'flex', gap: 8 }}>
+                    <button
+                    type="button"
+                    onClick={() => {
+                        setPreviewItems(prev => {
+                        const cap = clamp(multiCount, MULTI_MIN, MULTI_MAX);
+                        let used = 0;
+                        return prev.map(item => {
+                            if (item.pinned) { used++; return { ...item, selected: true }; }
+                            if (used < cap)   { used++; return { ...item, selected: true }; }
+                            return { ...item, selected: false };
+                        });
+                        });
+                    }}
+                    style={{ ...buttonInputStyle, padding: '6px 10px' }}
+                    >
+                    Nearest {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
+                    </button>
+                    <button
+                    type="button"
+                    onClick={() => {
+                        setPreviewItems(prev => prev.map(it => ({ ...it, selected: !!it.pinned })));
+                    }}
+                    style={{ ...buttonInputStyle, padding: '6px 10px', background:'#9CA3AF' }}
+                    >
+                    Select none
+                    </button>
+                </div>
+                </div>
+
                 <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid #eee', borderRadius: 6 }}>
                     {previewItems.length === 0 && (
                     <div style={{ padding: 12 }}>No candidates found in this radius.</div>
@@ -1452,20 +1683,45 @@ export default function SpotGoPage({ user }) {
                 Select up to {clamp(multiCount, MULTI_MIN, MULTI_MAX)} locations.
                 </div>
 
-                {/* footer actions */}
-                <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button type="button" onClick={() => setShowPreview(false)} style={{ ...buttonInputStyle, background:'#1e4a7b' }}>
-                    Close
-                </button>
-                <button
-                    type="button"
-                    disabled={previewItems.filter(x => x.selected).length < MULTI_MIN}
-                    onClick={() => alert('Next step: batch post these!')}
-                    style={{ ...buttonInputStyle }}
-                >
-                    Post {previewItems.filter(x => x.selected).length} offers
-                </button>
+                <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems:'center', gap: 8 }}>
+                <div style={{ fontSize: 12, color:'#555' }}>
+                    {isBatchPosting
+                    ? `Posting ${batchProgress.done}/${batchProgress.total}…`
+                    : 'Ready to post the selected locations.'}
                 </div>
+                <div style={{ display:'flex', gap: 8 }}>
+                    <button
+                    type="button"
+                    onClick={() => !isBatchPosting && setShowPreview(false)}
+                    disabled={isBatchPosting}
+                    style={{ ...buttonInputStyle, background:'#1e4a7b', opacity: isBatchPosting ? 0.6 : 1 }}
+                    >
+                    {isBatchPosting ? 'Working…' : 'Close'}
+                    </button>
+                    <button
+                    type="button"
+                    disabled={isBatchPosting || selectedCount < MULTI_MIN}
+                    onClick={handleBatchPost}
+                    style={{ ...buttonInputStyle, opacity: (isBatchPosting || selectedCount < MULTI_MIN) ? 0.6 : 1 }}
+                    title={selectedCount < MULTI_MIN ? `Pick at least ${MULTI_MIN}` : ''}
+                    >
+                    {isBatchPosting
+                        ? `Posting ${batchProgress.done}/${batchProgress.total}…`
+                        : `Post ${selectedCount} offers`}
+                    </button>
+                </div>
+                </div>
+
+                {batchLog.length > 0 && (
+                <div style={{ marginTop: 12, fontSize: 12 }}>
+                    {batchLog.map((r, i) =>
+                    <div key={i}>
+                        {r.ok ? `✅ ${r.city} — created ${r.id || 'OK'}` : `❌ ${r.city} — ${r.error}`}
+                    </div>
+                    )}
+                </div>
+                )}
+
                 </>
             )}
         </Modal>
