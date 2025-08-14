@@ -1,7 +1,6 @@
 // pages/spotGoPage.js
 import React, { useEffect, useState, useRef, memo } from "react";
 import AutoCompleteInput from "../AutoCompleteInput";
-import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
 import countries from "i18n-iso-countries";
 import enLocale  from "i18n-iso-countries/langs/en.json";
@@ -9,10 +8,6 @@ import Header from '../components/header';
 import { shortCodeFor, fullNameForShortCode } from "../utils/userShortCodes";
 
 countries.registerLocale(enLocale);
-
-
-const PREFIX_PASSWORD = "parola_ta_secreta";
-const DEFAULT_PREFIX = "APP-OFFER-";
 
 const MULTI_MIN = 2;
 const MULTI_MAX = 5;
@@ -139,13 +134,11 @@ export default function SpotGoPage({ user }) {
     const [editingOfferId, setEditingOfferId] = useState(null);
     const [resetKey, setResetKey] = useState(0);
 
-    const [postMultiple, setPostMultiple] = useState(false);
     const [multiCount, setMultiCount] = useState(3);   // default inside [2..5]
     const [radiusKm, setRadiusKm] = useState(150);     // default, max 250
 
     // (for next steps)
     const [showPreview, setShowPreview] = useState(false);
-    const [previewCandidates, setPreviewCandidates] = useState([]); // list of proposed cities
 
     const formRef = useRef(null);
     const [listMaxH, setListMaxH] = useState(0);
@@ -154,7 +147,6 @@ export default function SpotGoPage({ user }) {
 
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [previewError, setPreviewError] = useState('');
-    const [previewItems, setPreviewItems] = useState([]); // enriched candidates including selection
 
     const [countDraft, setCountDraft]   = useState(String(multiCount));
     const [radiusDraft, setRadiusDraft] = useState(String(radiusKm));
@@ -164,10 +156,29 @@ export default function SpotGoPage({ user }) {
     const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
     const [batchLog, setBatchLog] = useState([]); // [{city, ok, id?, error?}]
 
-    const [batchTarget, setBatchTarget] = useState(null); // 'loading' | 'unloading' | null
+    const [multiLoading, setMultiLoading] = useState(false);
+    const [multiUnloading, setMultiUnloading] = useState(false);
+    const [batchCfgReady, setBatchCfgReady] = useState(false); // once you hit Save in the config
+
+    // two-step preview
+    const [previewStep, setPreviewStep] = useState(null); // 'loading' | 'unloading' | null
+    const [previewItemsLoading, setPreviewItemsLoading] = useState([]);
+    const [previewItemsUnloading, setPreviewItemsUnloading] = useState([]);
+
     const [expandedGroups, setExpandedGroups] = useState(new Set()); // which groups are expanded
 
     const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+    const wantBoth = multiLoading && multiUnloading;
+    const canOpenPreview =
+        wantBoth
+            ? !!loadingLocation && !!unloadingLocation
+            : (multiLoading ? !!loadingLocation : !!unloadingLocation);
+
+    const selectedCountLoading   = previewItemsLoading.filter(x => x.selected).length;
+    const selectedCountUnloading = previewItemsUnloading.filter(x => x.selected).length;
+    const selectedCountCurrent   = (previewStep === 'loading' ? selectedCountLoading : selectedCountUnloading);
+
 
     const toggleGroup = (groupId) => {
         setExpandedGroups(prev => {
@@ -177,17 +188,6 @@ export default function SpotGoPage({ user }) {
             return next;
         });
     };
-
-
-
-    const showPreviewAction = postMultiple && !showMultiConfig;
-    const needAddressPicked =
-        batchTarget === 'unloading' ? !!unloadingLocation : !!loadingLocation;
-
-    const postMultipleLoading    = postMultiple && batchTarget === 'loading';
-    const postMultipleUnloading  = postMultiple && batchTarget === 'unloading';
-
-    const navigate = useNavigate()
 
     const HERE_API_KEY = process.env.REACT_APP_HERE_API_KEY;  // pulled at build time
 
@@ -214,6 +214,374 @@ export default function SpotGoPage({ user }) {
     const parseDbHHMM = s => s?.slice(11,16) ?? "08:00";
 
     const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+    async function buildPreviewFor(side) {
+        const centerLoc = side === 'unloading' ? unloadingLocation : loadingLocation;
+        if (!centerLoc) return [];
+
+        const pinned = asCandidate(centerLoc, { lat: centerLoc.lat, lng: centerLoc.lng });
+        pinned.distanceKm = 0;
+        pinned.pinned = true;
+        pinned.selected = true; // always included
+        pinned._pinNote = side === 'unloading' ? '• current unloading' : '• current loading';
+
+        const near = await findNearbyLocalities(
+            { lat: centerLoc.lat, lng: centerLoc.lng },
+            clamp(radiusKm, 1, RADIUS_MAX),
+            clamp(multiCount, MULTI_MIN, MULTI_MAX),
+            HERE_API_KEY
+        );
+
+        const filtered = near.filter(c => c.key !== pinned.key);
+        const need = clamp(multiCount, MULTI_MIN, MULTI_MAX) - 1;
+        for (let i = 0; i < filtered.length; i++) filtered[i].selected = i < need;
+
+        return [pinned, ...filtered];
+    }
+
+    async function openPreview() {
+        try {
+            setPreviewError('');
+            setShowPreview(true);
+            setLoadingPreview(true);
+
+            if (wantBoth) {
+            setPreviewStep('loading');
+            const itemsL = await buildPreviewFor('loading');
+            setPreviewItemsLoading(itemsL);
+            } else if (multiLoading) {
+            setPreviewStep('loading');
+            const itemsL = await buildPreviewFor('loading');
+            setPreviewItemsLoading(itemsL);
+            } else {
+            setPreviewStep('unloading');
+            const itemsU = await buildPreviewFor('unloading');
+            setPreviewItemsUnloading(itemsU);
+            }
+        } catch (e) {
+            console.error('preview error', e);
+            setPreviewError('Could not fetch nearby localities. Try a smaller radius or later.');
+        } finally {
+            setLoadingPreview(false);
+        }
+    }
+    async function handleBatchPostSingle(side) {
+        const items = (side === 'loading') ? previewItemsLoading : previewItemsUnloading;
+        const selected = items.filter(x => x.selected);
+        if (selected.length < MULTI_MIN) return;
+
+        setIsBatchPosting(true);
+        setBatchLog([]);
+        setBatchProgress({ done: 0, total: selected.length });
+
+        const groupId =
+            (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+
+        let parentOfferId = null;
+        let orderIdx = 0;
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) { alert('Please sign in first.'); setIsBatchPosting(false); return; }
+            const token = session.access_token;
+            const userEmail = session.user.email;
+
+            // build base payload (same as your current `base` builder)
+            const base = (() => {
+            const extractCity = (label='') => (label.split(',').slice(-2, -1)[0] || 'Unknown').trim();
+            const cleanAddress = raw => ({
+                countryCode: raw.countryCode,
+                postalCode:  raw.postalCode,
+                city:        raw.city || extractCity(raw.label),
+                coordinates: { latitude: raw.lat, longitude: raw.lng }
+            });
+
+            const body = {
+                type: "Spot",
+                externalNumber: shortCodeFor(userEmail),
+                sources: ["1","2","3","4","8","9","12","14","16"],
+                useAlternativeLocations: hideLocations,
+                locations: [
+                {
+                    sequence: 1, type: "Loading",
+                    address: cleanAddress(loadingLocation),
+                    period: { startDate: `${loadStartDate}T${loadStartTime}:00Z`, endDate: `${loadEndDate}T${loadEndTime}:00Z` }
+                },
+                {
+                    sequence: 2, type: "Unloading",
+                    address: cleanAddress(unloadingLocation),
+                    period: { startDate: `${unloadStartDate}T${unloadStartTime}:00Z`, endDate: `${unloadEndDate}T${unloadEndTime}:00Z` }
+                }
+                ],
+                requirements: {
+                capacity: parseFloat(weightT), ldm: parseFloat(lengthM), pallets: 33, loadingSide: "All",
+                palletsExchange, vehicleTypes: selectedVehicles, trailerTypes: selectedBodies, ftl: parseFloat(lengthM) >= 13.6
+                },
+                comments: [shortCodeFor(userEmail), externalComment].filter(Boolean).join(" - "),
+                internalComments: hideLocations ? "Locations hidden." : "Load/Unload points visible."
+            };
+            if (freightCharge || currency || paymentDue) {
+                const pay = {};
+                if (freightCharge) pay.from = parseFloat(freightCharge) || 0;
+                if (currency)      pay.currency = currency;
+                if (paymentDue)    pay.dueDate  = new Date(paymentDue).toISOString().split('T')[0];
+                body.payment = pay;
+            }
+            return body;
+            })();
+
+            for (const c of selected) {
+            try {
+                const bodyToSend = JSON.parse(JSON.stringify(base));
+                if (side === 'loading') bodyToSend.locations[0].address = toSpotgoAddr(c);
+                else                    bodyToSend.locations[1].address = toSpotgoAddr(c);
+
+                const res = await fetch(`${API_BASE}/api/spotgo/submit`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'authorization-email': userEmail,
+                    'Content-Type': 'application/json',
+                    'x-api-version': '1.0'
+                },
+                body: JSON.stringify(bodyToSend)
+                });
+
+                const raw = await res.text();
+                if (!res.ok) throw new Error(raw || 'Submit failed');
+                const result = raw ? JSON.parse(raw) : {};
+                const offerId = result.id || null;
+
+                if (parentOfferId == null) parentOfferId = offerId;
+
+                const loadAddr   = side === 'loading'   ? c : loadingLocation;
+                const unloadAddr = side === 'unloading' ? c : unloadingLocation;
+
+                await supabase.from('submitted_offers').insert([{
+                offer_id: offerId,
+                external_number: formatName(userEmail),
+                loading_address: loadAddr?.label || '',
+                unloading_address: unloadAddr?.label || '',
+                updated_at: new Date().toISOString(),
+                loading_country_code:   loadAddr?.countryCode || null,
+                loading_postal_code:    loadAddr?.postalCode  || null,
+                loading_lat:            loadAddr?.lat || null,
+                loading_lng:            loadAddr?.lng || null,
+                unloading_country_code: unloadAddr?.countryCode || null,
+                unloading_postal_code:  unloadAddr?.postalCode  || null,
+                unloading_lat:          unloadAddr?.lat || null,
+                unloading_lng:          unloadAddr?.lng || null,
+                loading_start_time:  `${loadStartDate}T${loadStartTime}:00`,
+                loading_end_time:    `${loadEndDate}T${loadEndTime}:00`,
+                unloading_start_time:`${unloadStartDate}T${unloadStartTime}:00`,
+                unloading_end_time:  `${unloadEndDate}T${unloadEndTime}:00`,
+                external_comment: externalComment || null,
+                hide_locations: hideLocations,
+                pallets_exchange: palletsExchange,
+                vehicle_types: selectedVehicles.length ? selectedVehicles : null,
+                body_types:     selectedBodies.length   ? selectedBodies   : null,
+                freight_charge: freightCharge ? parseFloat(freightCharge) : null,
+                currency: currency || null,
+                payment_due: paymentDue || null,
+                length_m: lengthM ? parseFloat(lengthM) : null,
+                weight_t: weightT ? parseFloat(weightT) : null,
+                submitted_by_email: userEmail,
+                batch_group_id: groupId,
+                batch_parent_id: parentOfferId,
+                batch_target: side,               // 'loading' or 'unloading'
+                batch_order: orderIdx
+                }]);
+
+                orderIdx++;
+                setBatchLog(l => [...l, { city: c.city, ok: true, id: offerId }]);
+            } catch (err) {
+                setBatchLog(l => [...l, { city: c.city, ok: false, error: String(err.message || err) }]);
+            } finally {
+                setBatchProgress(p => ({ ...p, done: p.done + 1 }));
+            }
+            }
+
+            await refreshSubmittedOffers();
+            setShowPreview(false);
+            setPreviewItemsLoading([]);
+            setPreviewItemsUnloading([]);
+            setIsBatchPosting(false);
+            resetForm();
+            setMultiLoading(false);
+            setMultiUnloading(false);
+        } finally {
+            setIsBatchPosting(false);
+        }
+    }
+
+    async function handleBatchPostBoth() {
+        const need = clamp(multiCount, MULTI_MIN, MULTI_MAX);
+
+        const L = previewItemsLoading.filter(x => x.selected).slice(0, need);
+        const U = previewItemsUnloading.filter(x => x.selected).slice(0, need);
+
+        if (L.length !== need || U.length !== need) {
+            alert(`Please select ${need} locations on both sides.`);
+            return;
+        }
+
+        setIsBatchPosting(true);
+        setBatchLog([]);
+        setBatchProgress({ done: 0, total: need });
+
+        const groupId =
+            (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+
+        let parentOfferId = null;
+        let orderIdx = 0;
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) { alert('Please sign in first.'); setIsBatchPosting(false); return; }
+            const token = session.access_token;
+            const userEmail = session.user.email;
+
+            // base payload (same as in Single)
+            const base = (() => {
+            const extractCity = (label='') => (label.split(',').slice(-2, -1)[0] || 'Unknown').trim();
+            const cleanAddress = raw => ({
+                countryCode: raw.countryCode,
+                postalCode:  raw.postalCode,
+                city:        raw.city || extractCity(raw.label),
+                coordinates: { latitude: raw.lat, longitude: raw.lng }
+            });
+
+            const body = {
+                type: "Spot",
+                externalNumber: shortCodeFor(userEmail),
+                sources: ["1","2","3","4","8","9","12","14","16"],
+                useAlternativeLocations: hideLocations,
+                locations: [
+                {
+                    sequence: 1, type: "Loading",
+                    address: cleanAddress(loadingLocation),
+                    period: { startDate: `${loadStartDate}T${loadStartTime}:00Z`, endDate: `${loadEndDate}T${loadEndTime}:00Z` }
+                },
+                {
+                    sequence: 2, type: "Unloading",
+                    address: cleanAddress(unloadingLocation),
+                    period: { startDate: `${unloadStartDate}T${unloadStartTime}:00Z`, endDate: `${unloadEndDate}T${unloadEndTime}:00Z` }
+                }
+                ],
+                requirements: {
+                capacity: parseFloat(weightT), ldm: parseFloat(lengthM), pallets: 33, loadingSide: "All",
+                palletsExchange, vehicleTypes: selectedVehicles, trailerTypes: selectedBodies, ftl: parseFloat(lengthM) >= 13.6
+                },
+                comments: [shortCodeFor(userEmail), externalComment].filter(Boolean).join(" - "),
+                internalComments: hideLocations ? "Locations hidden." : "Load/Unload points visible."
+            };
+            if (freightCharge || currency || paymentDue) {
+                const pay = {};
+                if (freightCharge) pay.from = parseFloat(freightCharge) || 0;
+                if (currency)      pay.currency = currency;
+                if (paymentDue)    pay.dueDate  = new Date(paymentDue).toISOString().split('T')[0];
+                body.payment = pay;
+            }
+            return body;
+            })();
+
+            // pair 0..need-1 : L[i] with U[i]
+            for (let i = 0; i < need; i++) {
+            const loadC = L[i];
+            const unloadC = U[i];
+
+            try {
+                const bodyToSend = JSON.parse(JSON.stringify(base));
+                bodyToSend.locations[0].address = toSpotgoAddr(loadC);
+                bodyToSend.locations[1].address = toSpotgoAddr(unloadC);
+
+                const res = await fetch(`${API_BASE}/api/spotgo/submit`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'authorization-email': userEmail,
+                    'Content-Type': 'application/json',
+                    'x-api-version': '1.0'
+                },
+                body: JSON.stringify(bodyToSend)
+                });
+
+                const raw = await res.text();
+                if (!res.ok) throw new Error(raw || 'Submit failed');
+                const result = raw ? JSON.parse(raw) : {};
+                const offerId = result.id || null;
+
+                if (parentOfferId == null) parentOfferId = offerId;
+
+                await supabase.from('submitted_offers').insert([{
+                offer_id: offerId,
+                external_number: formatName(userEmail),
+                loading_address: loadC?.label || '',
+                unloading_address: unloadC?.label || '',
+                updated_at: new Date().toISOString(),
+                loading_country_code:   loadC?.countryCode || null,
+                loading_postal_code:    loadC?.postalCode  || null,
+                loading_lat:            loadC?.lat || null,
+                loading_lng:            loadC?.lng || null,
+                unloading_country_code: unloadC?.countryCode || null,
+                unloading_postal_code:  unloadC?.postalCode  || null,
+                unloading_lat:          unloadC?.lat || null,
+                unloading_lng:          unloadC?.lng || null,
+                loading_start_time:  `${loadStartDate}T${loadStartTime}:00`,
+                loading_end_time:    `${loadEndDate}T${loadEndTime}:00`,
+                unloading_start_time:`${unloadStartDate}T${unloadStartTime}:00`,
+                unloading_end_time:  `${unloadEndDate}T${unloadEndTime}:00`,
+                external_comment: externalComment || null,
+                hide_locations: hideLocations,
+                pallets_exchange: palletsExchange,
+                vehicle_types: selectedVehicles.length ? selectedVehicles : null,
+                body_types:     selectedBodies.length   ? selectedBodies   : null,
+                freight_charge: freightCharge ? parseFloat(freightCharge) : null,
+                currency: currency || null,
+                payment_due: paymentDue || null,
+                length_m: lengthM ? parseFloat(lengthM) : null,
+                weight_t: weightT ? parseFloat(weightT) : null,
+                submitted_by_email: userEmail,
+                batch_group_id: groupId,
+                batch_parent_id: parentOfferId,
+                batch_target: 'both',         // NEW marker
+                batch_order: orderIdx
+                }]);
+
+                orderIdx++;
+                setBatchLog(l => [...l, { city: `${loadC.city} → ${unloadC.city}`, ok: true, id: offerId }]);
+            } catch (err) {
+                setBatchLog(l => [...l, { city: `${loadC?.city} → ${unloadC?.city}`, ok: false, error: String(err.message || err) }]);
+            } finally {
+                setBatchProgress(p => ({ ...p, done: p.done + 1 }));
+            }
+            }
+
+            await refreshSubmittedOffers();
+            setShowPreview(false);
+            setPreviewItemsLoading([]);
+            setPreviewItemsUnloading([]);
+            setIsBatchPosting(false);
+            resetForm();
+            setMultiLoading(false);
+            setMultiUnloading(false);
+        } finally {
+            setIsBatchPosting(false);
+        }
+    }
+
+    // small setter to mutate the *current* step’s list
+    function updateCurrentPreview(updater) {
+        if (previewStep === 'loading') {
+            setPreviewItemsLoading(prev => updater(prev));
+        } else if (previewStep === 'unloading') {
+            setPreviewItemsUnloading(prev => updater(prev));
+        }
+    }
 
     async function handleDeleteBatch(rootOffer) {
         const groupId = rootOffer?.batchGroupId;
@@ -320,11 +688,16 @@ export default function SpotGoPage({ user }) {
         setPalletsExchange(false);
         setSelectedVehicles([]);
         setSelectedBodies([]);
-        setPostMultiple(false);
-        setBatchTarget(null);
+        setMultiLoading(false);
+        setMultiUnloading(false);
         setShowMultiConfig(false);
         setShowPreview(false);
-        setPreviewItems([]);
+        setPreviewItemsLoading([]);
+        setPreviewItemsUnloading([]);
+        setPreviewStep(null);
+        setMultiCount(3);
+        setRadiusKm(150);
+        setBatchCfgReady(false);
     }
 
     
@@ -473,21 +846,11 @@ export default function SpotGoPage({ user }) {
     }, [unloadEndDate]);
 
     useEffect(() => {
-        if (!loadingLocation && batchTarget === 'loading') {
-            setPostMultiple(false);
-            setShowPreview(false);
-            setShowMultiConfig(false);
-            setBatchTarget(null);
-        }
+        if (!loadingLocation) setMultiLoading(false);
     }, [loadingLocation]);
 
     useEffect(() => {
-        if (!unloadingLocation && batchTarget === 'unloading') {
-            setPostMultiple(false);
-            setShowPreview(false);
-            setShowMultiConfig(false);
-            setBatchTarget(null);
-        }
+        if (!unloadingLocation) setMultiUnloading(false);
     }, [unloadingLocation]);
 
 /**
@@ -498,8 +861,6 @@ export default function SpotGoPage({ user }) {
     const radii = [0, 100, 500, 1000, 5000];
     let lastAddr = null;
     const base   = "https://revgeocode.search.hereapi.com/v1/revgeocode";
-    // note the correct `lang=` here
-    const common = `?at=${loc.lat},${loc.lng}&lang=en-US&limit=1&apiKey=${apiKey}`;
 
     // 1) Spiral‑out reverse‑geocoding
     for (const r of radii) {
@@ -512,7 +873,12 @@ export default function SpotGoPage({ user }) {
         if (!resp.ok) continue;
 
         const { items = [] } = await resp.json();
-        const addr = items[0]?.address;
+        const item = items[0];
+        const pos  = item?.position || item?.access?.[0]?.position; // HERE sometimes puts coords under access[0]
+        const addr = item?.address
+            ? { ...item.address, lat: pos?.lat, lng: pos?.lng }
+            : null;
+
         if (!addr) continue;
 
         // normalize CC
@@ -541,14 +907,21 @@ export default function SpotGoPage({ user }) {
             const gr = await fetch(geoUrl);
             if (gr.ok) {
                 const { items = [] } = await gr.json();
-                const fwd = items[0]?.address;
+                const it2 = items[0];
+                const fwd = it2?.address;
+                const pos2 = it2?.position || it2?.access?.[0]?.position;
+
                 if (fwd?.postalCode) {
-                lastAddr.postalCode = fwd.postalCode;
-                const rawCC2 = fwd.countryCode || "";
-                lastAddr.countryCode = 
-                    countries.alpha3ToAlpha2(rawCC2) 
-                    || (rawCC2.length === 2 && rawCC2) 
-                    || lastAddr.countryCode;
+                    lastAddr.postalCode = fwd.postalCode;
+                    const rawCC2 = fwd.countryCode || "";
+                    lastAddr.countryCode = 
+                        countries.alpha3ToAlpha2(rawCC2) 
+                        || (rawCC2.length === 2 && rawCC2) 
+                        || lastAddr.countryCode;
+                    if (pos2) {
+                        lastAddr.lat = pos2.lat;
+                        lastAddr.lng = pos2.lng;
+                    }
                 }
             }
             } catch (e) {
@@ -885,14 +1258,6 @@ export default function SpotGoPage({ user }) {
             const token = session.access_token;
             const userEmail = session.user.email;
 
-            const headers = {
-            'Content-Type': 'application/json',
-            'x-api-version': '1.0',
-            'authorization-email': userEmail,
-            'Authorization': `Bearer ${token}`,
-            };
-
-
             const res = await fetch(endpoint, {
                 method,
                 headers: {
@@ -1166,20 +1531,20 @@ export default function SpotGoPage({ user }) {
     }
 
     // load saved config on mount
-    useEffect(() => {
-    try {
-        const raw = localStorage.getItem('spotgo_batch_cfg');
-        if (!raw) return;
-        const cfg = JSON.parse(raw);
-        if (cfg.multiCount) setMultiCount(clamp(cfg.multiCount, MULTI_MIN, MULTI_MAX));
-        if (cfg.radiusKm)   setRadiusKm  (clamp(cfg.radiusKm,   1,          RADIUS_MAX));
-    } catch {}
-    }, []);
+    // useEffect(() => {
+    // try {
+    //     const raw = localStorage.getItem('spotgo_batch_cfg');
+    //     if (!raw) return;
+    //     const cfg = JSON.parse(raw);
+    //     if (cfg.multiCount) setMultiCount(clamp(cfg.multiCount, MULTI_MIN, MULTI_MAX));
+    //     if (cfg.radiusKm)   setRadiusKm  (clamp(cfg.radiusKm,   1,          RADIUS_MAX));
+    // } catch {}
+    // }, []);
 
-    // save whenever they change
-    useEffect(() => {
-    localStorage.setItem('spotgo_batch_cfg', JSON.stringify({ multiCount, radiusKm }));
-    }, [multiCount, radiusKm]);
+    // // save whenever they change
+    // useEffect(() => {
+    // localStorage.setItem('spotgo_batch_cfg', JSON.stringify({ multiCount, radiusKm }));
+    // }, [multiCount, radiusKm]);
 
 
     useEffect(() => {
@@ -1195,183 +1560,6 @@ export default function SpotGoPage({ user }) {
         city:        c.city,
         coordinates: { latitude: c.lat, longitude: c.lng }
     });
-
-    async function handleBatchPost() {
-        const selected = previewItems.filter(x => x.selected);
-        if (selected.length < MULTI_MIN) return;
-
-        setIsBatchPosting(true);
-        setBatchLog([]);
-        setBatchProgress({ done: 0, total: selected.length });
-
-        const groupId =
-            (typeof crypto !== 'undefined' && crypto.randomUUID)
-                ? crypto.randomUUID()
-                : `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-
-        let parentOfferId = null;
-        let orderIdx = 0;
-
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.access_token) { alert('Please sign in first.'); setIsBatchPosting(false); return; }
-            const token = session.access_token;
-            const userEmail = session.user.email;
-
-            // build a base payload from the current form (we’ll swap loading address per item)
-            const base = (() => {
-            const extractCity = (label='') => (label.split(',').slice(-2, -1)[0] || 'Unknown').trim();
-            const cleanAddress = raw => ({
-                countryCode: raw.countryCode,
-                postalCode:  raw.postalCode,
-                city:        raw.city || extractCity(raw.label),
-                coordinates: { latitude: raw.lat, longitude: raw.lng }
-            });
-
-            const body = {
-                type: "Spot",
-                externalNumber: shortCodeFor(userEmail),
-                sources: ["1","2","3","4","8","9","12","14","16"],
-                useAlternativeLocations: hideLocations,
-                locations: [
-                {
-                    sequence: 1, type: "Loading",
-                    address: cleanAddress(loadingLocation), // will be replaced per selected item
-                    period: {
-                    startDate: `${loadStartDate}T${loadStartTime}:00Z`,
-                    endDate:   `${loadEndDate}T${loadEndTime}:00Z`
-                    }
-                },
-                {
-                    sequence: 2, type: "Unloading",
-                    address: cleanAddress(unloadingLocation),
-                    period: {
-                    startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
-                    endDate:   `${unloadEndDate}T${unloadEndTime}:00Z`
-                    }
-                }
-                ],
-                requirements: {
-                capacity: parseFloat(weightT),
-                ldm: parseFloat(lengthM),
-                pallets: 33,
-                loadingSide: "All",
-                palletsExchange,
-                vehicleTypes: selectedVehicles,
-                trailerTypes: selectedBodies,
-                ftl: parseFloat(lengthM) >= 13.6
-                },
-                comments: [shortCodeFor(userEmail), externalComment].filter(Boolean).join(" - "),
-                internalComments: hideLocations ? "Locations hidden." : "Load/Unload points visible."
-            };
-
-            if (freightCharge || currency || paymentDue) {
-                const pay = {};
-                if (freightCharge) pay.from = parseFloat(freightCharge) || 0;
-                if (currency)      pay.currency = currency;
-                if (paymentDue)    pay.dueDate  = new Date(paymentDue).toISOString().split('T')[0];
-                body.payment = pay;
-            }
-            return body;
-            })();
-
-            // sequential submit
-            for (const c of selected) {
-            try {
-                const bodyToSend = JSON.parse(JSON.stringify(base));
-                if (batchTarget === 'loading') {
-                  bodyToSend.locations[0].address = toSpotgoAddr(c);
-                } else {
-                  bodyToSend.locations[1].address = toSpotgoAddr(c);
-                }
-
-                const res = await fetch(`${API_BASE}/api/spotgo/submit`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'authorization-email': userEmail,
-                    'Content-Type': 'application/json',
-                    'x-api-version': '1.0'
-                },
-                body: JSON.stringify(bodyToSend)
-                });
-
-                const raw = await res.text();
-                if (!res.ok) throw new Error(raw || 'Submit failed');
-
-                const result = raw ? JSON.parse(raw) : {};
-                const offerId = result.id || null;
-
-                // establish parent (first posted is root)
-                if (parentOfferId == null) parentOfferId = offerId;
-
-
-                const loadAddr   = batchTarget === 'loading'   ? c : loadingLocation;
-                const unloadAddr = batchTarget === 'unloading' ? c : unloadingLocation;
-
-
-                // mirror to Supabase
-                await supabase.from('submitted_offers').insert([{
-                    offer_id: offerId,
-                    external_number: formatName(userEmail),
-                    loading_address: loadAddr?.label || '',
-                    unloading_address: unloadAddr?.label || '',
-                    updated_at: new Date().toISOString(),
-
-                    loading_country_code: loadAddr?.countryCode || null,
-                    loading_postal_code:  loadAddr?.postalCode  || null,
-                    loading_lat:          loadAddr?.lat || null,
-                    loading_lng:          loadAddr?.lng || null,
-
-                    unloading_country_code: unloadAddr?.countryCode || null,
-                    unloading_postal_code:  unloadAddr?.postalCode  || null,
-                    unloading_lat:          unloadAddr?.lat || null,
-                    unloading_lng:          unloadAddr?.lng || null,
-
-                    loading_start_time:  `${loadStartDate}T${loadStartTime}:00`,
-                    loading_end_time:    `${loadEndDate}T${loadEndTime}:00`,
-                    unloading_start_time:`${unloadStartDate}T${unloadStartTime}:00`,
-                    unloading_end_time:  `${unloadEndDate}T${unloadEndTime}:00`,
-
-                    external_comment: externalComment || null,
-                    hide_locations: hideLocations,
-                    pallets_exchange: palletsExchange,
-                    vehicle_types: selectedVehicles.length ? selectedVehicles : null,
-                    body_types:     selectedBodies.length   ? selectedBodies   : null,
-                    freight_charge: freightCharge ? parseFloat(freightCharge) : null,
-                    currency: currency || null,
-                    payment_due: paymentDue || null,
-                    length_m: lengthM ? parseFloat(lengthM) : null,
-                    weight_t: weightT ? parseFloat(weightT) : null,
-                    submitted_by_email: userEmail,
-
-                    // NEW
-                    batch_group_id: groupId,
-                    batch_parent_id: parentOfferId,      // root points to itself; children point to root
-                    batch_target: batchTarget,           // 'loading' | 'unloading'
-                    batch_order: orderIdx                // 0 for root, 1.. for children
-                }]);
-
-                orderIdx++;
-
-                setBatchLog(l => [...l, { city: c.city, ok: true, id: offerId }]);
-            } catch (err) {
-                setBatchLog(l => [...l, { city: c.city, ok: false, error: String(err.message || err) }]);
-            } finally {
-                setBatchProgress(p => ({ ...p, done: p.done + 1 }));
-            }
-            }
-
-            await refreshSubmittedOffers();
-            setShowPreview(false);
-            setPreviewItems([]);
-            setIsBatchPosting(false);
-            resetForm()
-
-        } finally {
-            setIsBatchPosting(false);
-        }
-    }
 
     async function handleDeleteOffer(offerId) {
         if (!window.confirm("Are you sure you want to delete this offer?")) return;
@@ -1441,9 +1629,6 @@ export default function SpotGoPage({ user }) {
     const handleFocus = e => Object.assign(e.target.style, { ...baseInputStyle, ...highlightStyle });
     const handleBlur = e => Object.assign(e.target.style, baseInputStyle);
 
-    const selectedCount = previewItems.filter(x => x.selected).length;
-
-
   return (
   <div style={{ background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
     <Header user = {user} />
@@ -1477,21 +1662,15 @@ export default function SpotGoPage({ user }) {
             <div style={{ marginTop: 8 }}>
                 <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
                     <input
-                            type="checkbox"
-                        checked={postMultipleLoading}
-                        disabled={postMultipleUnloading}   // keep “only one” rule
+                        type="checkbox"
+                        checked={multiLoading}
+                        // disabled={postMultipleUnloading}   // keep “only one” rule
                         onChange={e => {
-                        const on = e.target.checked;
-                        if (on) {
-                            setBatchTarget('loading');
-                            setPostMultiple(true);
-                            setShowMultiConfig(true);   // jump straight to count/radius
-                            setShowPreview(false);
-                        } else {
-                            setPostMultiple(false);
-                            setBatchTarget(null);
-                            setShowPreview(false);
-                        }
+                            const on = e.target.checked;
+                            setMultiLoading(on);
+                            if (on && !batchCfgReady) {
+                                setShowMultiConfig(true); // open once; after Save we won’t open again
+                            }
                         }}
                     />
                     <strong>Post multiple</strong>
@@ -1508,20 +1687,14 @@ export default function SpotGoPage({ user }) {
                 <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
                     <input
                         type="checkbox"
-                        checked={postMultipleUnloading}
-                        disabled={postMultipleLoading}    // keep “only one” rule
+                        checked={multiUnloading}
+                        // disabled={postMultipleLoading}    // keep “only one” rule
                         onChange={e => {
-                        const on = e.target.checked;
-                        if (on) {
-                            setBatchTarget('unloading');
-                            setPostMultiple(true);
-                            setShowMultiConfig(true);
-                                        setShowPreview(false);
-                        } else {
-                            setPostMultiple(false);
-                            setBatchTarget(null);
-                            setShowPreview(false);
-                        }
+                            const on = e.target.checked;
+                            setMultiUnloading(on);
+                            if (on && !batchCfgReady) {
+                                setShowMultiConfig(true);
+                            }
                         }}
                     />
                     <strong>Post multiple</strong>
@@ -1648,19 +1821,36 @@ export default function SpotGoPage({ user }) {
         gap: 12,
         flexWrap: 'wrap'
         }}>
-        {/* Left: title above button */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
-        <h3 style={{ margin: 0 }}>{isEditing ? "Edit Offer" : "New Offer"}</h3>
-        <button type="submit" style={{ ...buttonInputStyle }}>
-            {isEditing ? "Update Offer" : "Submit Offer"}
-        </button>
+            <h3 style={{ margin: 0 }}>{isEditing ? "Edit Offer" : "New Offer"}</h3>
+            {(multiLoading || multiUnloading) ? (
+            <button
+                type="button"
+                onClick={openPreview}                 // defined below
+                disabled={!canOpenPreview || showMultiConfig}
+                style={{ ...buttonInputStyle, opacity: (!canOpenPreview || showMultiConfig) ? 0.6 : 1 }}
+                title={
+                showMultiConfig
+                    ? "Save batch settings first"
+                    : (!canOpenPreview
+                        ? (wantBoth ? 'Pick both addresses first' : (multiLoading ? 'Pick a loading address first' : 'Pick an unloading address first'))
+                        : '')
+                }
+            >
+                Preview
+            </button>
+            ) : (
+            <button type="submit" style={{ ...buttonInputStyle }}>
+                {isEditing ? "Update Offer" : "Submit Offer"}
+            </button>
+            )}
         </div>
 
         {/* Post-multiple controls and Preview button */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
 
         {/* Show Preview only after the modal is saved (checked + modal closed) */}
-        {showPreviewAction && (
+        {/* {showPreviewAction && (
             <button
                 type="button"
                 disabled={!needAddressPicked}
@@ -1711,7 +1901,7 @@ export default function SpotGoPage({ user }) {
             >
                 Preview
             </button>
-        )}
+        )} */}
 
         </div>
 
@@ -1719,7 +1909,7 @@ export default function SpotGoPage({ user }) {
         <Modal
         open={showMultiConfig}
         title="Batch posting settings"
-        onClose={() => { setShowMultiConfig(false); setPostMultiple(false); setBatchTarget(null); }}  // ✕ unchecks
+        onClose={() => { setShowMultiConfig(false); }}
         >
         {/* Modal body: stacked, always full-width, no focus/blur styling */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
@@ -1770,6 +1960,7 @@ export default function SpotGoPage({ user }) {
                 const parsedRadius = clamp(parseInt(radiusDraft, 10) || 1,          1,          RADIUS_MAX);
                 setMultiCount(parsedCount);
                 setRadiusKm(parsedRadius);
+                setBatchCfgReady(true);
                 setShowMultiConfig(false);
             }}
             style={{ ...buttonInputStyle }}
@@ -1781,56 +1972,57 @@ export default function SpotGoPage({ user }) {
 
         <Modal
             open={showPreview}
-            title={`Preview (${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers) — ${batchTarget === 'unloading' ? 'unloading' : 'loading'}`}
+            title={`Preview (${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers) — ${previewStep || ''}`}
             onClose={() => { if (!isBatchPosting) setShowPreview(false); }}
             >
-
             {loadingPreview ? (
                 <div style={{ padding: 12 }}>Loading nearby localities…</div>
             ) : previewError ? (
                 <div style={{ padding: 12, color: '#b91c1c' }}>{previewError}</div>
             ) : (
                 <>
-                {/* quick-selects */}
+                {/* header status + quick selects */}
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8 }}>
-                <div style={{ fontSize: 13, color:'#555' }}>
-                    Selected: {selectedCount} / {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
-                </div>
-                <div style={{ display:'flex', gap: 8 }}>
+                    <div style={{ fontSize: 13, color:'#555' }}>
+                    Selected: {selectedCountCurrent} / {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
+                    </div>
+                    <div style={{ display:'flex', gap: 8 }}>
                     <button
-                    type="button"
-                    onClick={() => {
-                        setPreviewItems(prev => {
-                        const cap = clamp(multiCount, MULTI_MIN, MULTI_MAX);
-                        let used = 0;
-                        return prev.map(item => {
+                        type="button"
+                        onClick={() => {
+                        updateCurrentPreview(prev => {
+                            const cap = clamp(multiCount, MULTI_MIN, MULTI_MAX);
+                            let used = 0;
+                            return prev.map(item => {
                             if (item.pinned) { used++; return { ...item, selected: true }; }
                             if (used < cap)   { used++; return { ...item, selected: true }; }
                             return { ...item, selected: false };
+                            });
                         });
-                        });
-                    }}
-                    style={{ ...buttonInputStyle, padding: '6px 10px' }}
+                        }}
+                        style={{ ...buttonInputStyle, padding: '6px 10px' }}
                     >
-                    Nearest {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
+                        Nearest {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
                     </button>
                     <button
-                    type="button"
-                    onClick={() => {
-                        setPreviewItems(prev => prev.map(it => ({ ...it, selected: !!it.pinned })));
-                    }}
-                    style={{ ...buttonInputStyle, padding: '6px 10px', background:'#9CA3AF' }}
+                        type="button"
+                        onClick={() => {
+                        updateCurrentPreview(prev => prev.map(it => ({ ...it, selected: !!it.pinned })));
+                        }}
+                        style={{ ...buttonInputStyle, padding: '6px 10px', background:'#9CA3AF' }}
                     >
-                    Select none
+                        Select none
                     </button>
-                </div>
+                    </div>
                 </div>
 
+                {/* list */}
                 <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid #eee', borderRadius: 6 }}>
-                    {previewItems.length === 0 && (
+                    {(previewStep === 'loading' ? previewItemsLoading : previewItemsUnloading).length === 0 && (
                     <div style={{ padding: 12 }}>No candidates found in this radius.</div>
                     )}
-                    {previewItems.map((c, i) => (
+
+                    {(previewStep === 'loading' ? previewItemsLoading : previewItemsUnloading).map((c, i) => (
                     <label key={c.key || i} style={{
                         display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
                         borderBottom:'1px solid #f2f2f2', background: c.pinned ? '#f8fafc' : 'white'
@@ -1841,22 +2033,18 @@ export default function SpotGoPage({ user }) {
                         disabled={c.pinned}
                         onChange={e => {
                             const checked = e.target.checked;
-                            setPreviewItems(prev => {
-                                const maxSel = clamp(multiCount, MULTI_MIN, MULTI_MAX);
-                                const next = prev.map(x => ({ ...x }));
-                                const selectedNow = next.filter(x => x.selected).length;
-
-                                // safety: pinned stays selected
-                                if (next[i].pinned && !checked) return prev;
-
-                                if (checked) {
-                                // don’t allow exceeding the cap
-                                if (selectedNow >= maxSel) return prev; // (optional: flash a message)
+                            updateCurrentPreview(prev => {
+                            const maxSel = clamp(multiCount, MULTI_MIN, MULTI_MAX);
+                            const next = prev.map(x => ({ ...x }));
+                            const selectedNow = next.filter(x => x.selected).length;
+                            if (next[i].pinned && !checked) return prev;
+                            if (checked) {
+                                if (selectedNow >= maxSel) return prev;
                                 next[i].selected = true;
-                                } else {
+                            } else {
                                 next[i].selected = false;
-                                }
-                                return next;
+                            }
+                            return next;
                             });
                         }}
                         />
@@ -1877,50 +2065,84 @@ export default function SpotGoPage({ user }) {
                     ))}
                 </div>
 
-                {/* helper text under the list (optional) */}
-                <div style={{ marginTop: 10, fontSize: 12, color: '#555' }}>
-                Select up to {clamp(multiCount, MULTI_MIN, MULTI_MAX)} locations.
-                </div>
-
                 <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems:'center', gap: 8 }}>
-                <div style={{ fontSize: 12, color:'#555' }}>
-                    {isBatchPosting
-                    ? `Posting ${batchProgress.done}/${batchProgress.total}…`
-                    : 'Ready to post the selected locations.'}
-                </div>
-                <div style={{ display:'flex', gap: 8 }}>
-                    <button
-                    type="button"
-                    onClick={() => !isBatchPosting && setShowPreview(false)}
-                    disabled={isBatchPosting}
-                    style={{ ...buttonInputStyle, background:'#1e4a7b', opacity: isBatchPosting ? 0.6 : 1 }}
-                    >
-                    {isBatchPosting ? 'Working…' : 'Close'}
-                    </button>
-                    <button
-                    type="button"
-                    disabled={isBatchPosting || selectedCount < MULTI_MIN}
-                    onClick={handleBatchPost}
-                    style={{ ...buttonInputStyle, opacity: (isBatchPosting || selectedCount < MULTI_MIN) ? 0.6 : 1 }}
-                    title={selectedCount < MULTI_MIN ? `Pick at least ${MULTI_MIN}` : ''}
-                    >
+                    <div style={{ fontSize: 12, color:'#555' }}>
                     {isBatchPosting
                         ? `Posting ${batchProgress.done}/${batchProgress.total}…`
-                        : `Post ${selectedCount} offers`}
-                    </button>
-                </div>
-                </div>
-
-                {batchLog.length > 0 && (
-                <div style={{ marginTop: 12, fontSize: 12 }}>
-                    {batchLog.map((r, i) =>
-                    <div key={i}>
-                        {r.ok ? `✅ ${r.city} — created ${r.id || 'OK'}` : `❌ ${r.city} — ${r.error}`}
+                        : (wantBoth
+                            ? (previewStep === 'loading'
+                                ? 'Choose loading locations, then Next'
+                                : 'Choose unloading locations, then Post')
+                            : 'Ready to post the selected locations.')}
                     </div>
-                    )}
-                </div>
-                )}
 
+                    <div style={{ display:'flex', gap: 8 }}>
+                    <button
+                        type="button"
+                        onClick={() => !isBatchPosting && setShowPreview(false)}
+                        disabled={isBatchPosting}
+                        style={{ ...buttonInputStyle, background:'#1e4a7b', opacity: isBatchPosting ? 0.6 : 1 }}
+                    >
+                        {isBatchPosting ? 'Working…' : 'Close'}
+                    </button>
+
+                    {wantBoth && previewStep === 'loading' ? (
+                        <button
+                        type="button"
+                        onClick={async () => {
+                            // go to unloading step
+                            setLoadingPreview(true);
+                            try {
+                            setPreviewStep('unloading');
+                            // only (re)build if empty (keeps user edits if they come back)
+                            if (previewItemsUnloading.length === 0) {
+                                const itemsU = await buildPreviewFor('unloading');
+                                setPreviewItemsUnloading(itemsU);
+                            }
+                            } finally {
+                            setLoadingPreview(false);
+                            }
+                        }}
+                        disabled={selectedCountLoading < clamp(multiCount, MULTI_MIN, MULTI_MAX)}
+                        style={{ ...buttonInputStyle, opacity: (selectedCountLoading < clamp(multiCount, MULTI_MIN, MULTI_MAX)) ? 0.6 : 1 }}
+                        title={selectedCountLoading < clamp(multiCount, MULTI_MIN, MULTI_MAX) ? `Pick ${clamp(multiCount, MULTI_MIN, MULTI_MAX)} loading locations first` : ''}
+                        >
+                        Next
+                        </button>
+                    ) : (
+                        <button
+                        type="button"
+                        disabled={
+                            isBatchPosting ||
+                            (wantBoth
+                            ? (selectedCountLoading   < clamp(multiCount, MULTI_MIN, MULTI_MAX) ||
+                                selectedCountUnloading < clamp(multiCount, MULTI_MIN, MULTI_MAX))
+                            : (selectedCountCurrent   < MULTI_MIN))
+                        }
+                        onClick={() => wantBoth ? handleBatchPostBoth()
+                                                : handleBatchPostSingle(previewStep)}
+                        style={{ ...buttonInputStyle,
+                                opacity: (isBatchPosting ||
+                                    (wantBoth
+                                    ? (selectedCountLoading   < clamp(multiCount, MULTI_MIN, MULTI_MAX) ||
+                                        selectedCountUnloading < clamp(multiCount, MULTI_MIN, MULTI_MAX))
+                                    : (selectedCountCurrent < MULTI_MIN))) ? 0.6 : 1 }}
+                        title={
+                            wantBoth
+                            ? (selectedCountLoading   < clamp(multiCount, MULTI_MIN, MULTI_MAX) ? 'Select enough loading locations' :
+                                selectedCountUnloading < clamp(multiCount, MULTI_MIN, MULTI_MAX) ? 'Select enough unloading locations' : '')
+                            : (selectedCountCurrent < MULTI_MIN ? `Pick at least ${MULTI_MIN}` : '')
+                        }
+                        >
+                        {isBatchPosting
+                            ? `Posting ${batchProgress.done}/${batchProgress.total}…`
+                            : (wantBoth
+                                ? `Post ${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers`
+                                : `Post ${selectedCountCurrent} offers`)}
+                        </button>
+                    )}
+                    </div>
+                </div>
                 </>
             )}
         </Modal>
