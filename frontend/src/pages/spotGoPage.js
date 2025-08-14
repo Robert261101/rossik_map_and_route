@@ -13,7 +13,6 @@ countries.registerLocale(enLocale);
 
 const PREFIX_PASSWORD = "parola_ta_secreta";
 const DEFAULT_PREFIX = "APP-OFFER-";
-const API_BASE = '';
 
 const MULTI_MIN = 2;
 const MULTI_MAX = 5;
