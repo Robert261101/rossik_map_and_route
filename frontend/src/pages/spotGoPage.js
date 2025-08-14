@@ -163,19 +163,16 @@ export default function SpotGoPage({ user }) {
     const [isBatchPosting, setIsBatchPosting] = useState(false);
     const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
     const [batchLog, setBatchLog] = useState([]); // [{city, ok, id?, error?}]
-
     // which side to expand (null | 'loading' | 'unloading')
     const [batchTarget, setBatchTarget] = useState(null);
 
-    // first modal: target picker
-    const [showTargetPicker, setShowTargetPicker] = useState(false);
-    const [targetDraft, setTargetDraft] = useState({ loading: false, unloading: false });
 
-
-    const showPreviewAction = postMultiple && !showTargetPicker && !showMultiConfig;
+    const showPreviewAction = postMultiple && !showMultiConfig;
     const needAddressPicked =
         batchTarget === 'unloading' ? !!unloadingLocation : !!loadingLocation;
 
+    const postMultipleLoading    = postMultiple && batchTarget === 'loading';
+    const postMultipleUnloading  = postMultiple && batchTarget === 'unloading';
 
     const navigate = useNavigate()
 
@@ -249,6 +246,11 @@ export default function SpotGoPage({ user }) {
         setPalletsExchange(false);
         setSelectedVehicles([]);
         setSelectedBodies([]);
+        setPostMultiple(false);
+        setBatchTarget(null);
+        setShowMultiConfig(false);
+        setShowPreview(false);
+        setPreviewItems([]);
     }
 
     
@@ -383,6 +385,25 @@ export default function SpotGoPage({ user }) {
         const timeStr = end.toTimeString().slice(0, 5);
         setUnloadEndTime(unloadEndDate === todayStr ? timeStr : "15:00");
     }, [unloadEndDate]);
+
+    useEffect(() => {
+        if (!loadingLocation && batchTarget === 'loading') {
+            setPostMultiple(false);
+            setShowPreview(false);
+            setShowMultiConfig(false);
+            setBatchTarget(null);
+        }
+    }, [loadingLocation]);
+
+    useEffect(() => {
+        if (!unloadingLocation && batchTarget === 'unloading') {
+            setPostMultiple(false);
+            setShowPreview(false);
+            setShowMultiConfig(false);
+            setBatchTarget(null);
+        }
+    }, [unloadingLocation]);
+
 /**
  * Reverse‑geocode in expanding radii until we get a postalCode + valid 2‑letter countryCode.
  * If that fails, fall back to a forward‑geocode on the label.
@@ -1346,11 +1367,62 @@ export default function SpotGoPage({ user }) {
         <div style={{flex: 1,minWidth: '300px',border: '1px solid #ccc',padding: '15px',borderRadius: '8px', backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Loading Address:</label><br />
             <AutoCompleteInput key={`loading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
+            {loadingLocation && (
+            <div style={{ marginTop: 8 }}>
+                <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                    <input
+                            type="checkbox"
+                        checked={postMultipleLoading}
+                        disabled={postMultipleUnloading}   // keep “only one” rule
+                        onChange={e => {
+                        const on = e.target.checked;
+                        if (on) {
+                            setBatchTarget('loading');
+                            setPostMultiple(true);
+                            setShowMultiConfig(true);   // jump straight to count/radius
+                            setShowPreview(false);
+                        } else {
+                            setPostMultiple(false);
+                            setBatchTarget(null);
+                            setShowPreview(false);
+                        }
+                        }}
+                    />
+                    <strong>Post multiple</strong>
+                </label>
+            </div>
+            )}
         </div>
 
         <div style={{flex: 1, minWidth: '300px',border: '1px solid #ccc',padding: '15px', borderRadius: '8px',backgroundColor: '#fdfdfd'}}>
             <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
             <AutoCompleteInput key={`unloading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
+            {unloadingLocation && (
+              <div style={{ marginTop: 8 }}>
+                <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                    <input
+                        type="checkbox"
+                        checked={postMultipleUnloading}
+                        disabled={postMultipleLoading}    // keep “only one” rule
+                        onChange={e => {
+                        const on = e.target.checked;
+                        if (on) {
+                            setBatchTarget('unloading');
+                            setPostMultiple(true);
+                            setShowMultiConfig(true);
+                                        setShowPreview(false);
+                        } else {
+                            setPostMultiple(false);
+                            setBatchTarget(null);
+                            setShowPreview(false);
+                        }
+                        }}
+                    />
+                    <strong>Post multiple</strong>
+                </label>
+            </div>
+            )}
+
         </div>
         </div>
 
@@ -1480,19 +1552,6 @@ export default function SpotGoPage({ user }) {
 
         {/* Post-multiple controls and Preview button */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <input
-            type="checkbox"
-            checked={postMultiple}
-            onChange={e => {
-                const v = e.target.checked;
-                setPostMultiple(v);
-                setShowTargetPicker(v);      // step 1: choose side
-                setShowMultiConfig(false);   // wait for step 2
-            }}
-            />
-            <strong>Post multiple</strong>
-        </label>
 
         {/* Show Preview only after the modal is saved (checked + modal closed) */}
         {showPreviewAction && (
@@ -1540,8 +1599,8 @@ export default function SpotGoPage({ user }) {
                 }}
                 style={{ ...buttonInputStyle, opacity: !needAddressPicked ? 0.6 : 1 }}
                 title={
-                needAddressPicked ? '' :
-                batchTarget === 'unloading' ? 'Pick an unloading address first' : 'Pick a loading address first'
+                    needAddressPicked ? '' :
+                    batchTarget === 'unloading' ? 'Pick an unloading address first' : 'Pick a loading address first'
                 }
             >
                 Preview
@@ -1551,80 +1610,10 @@ export default function SpotGoPage({ user }) {
         </div>
 
         </div>
-
-        {/* === Target Picker (step 1) === */}
-        <Modal
-        open={showTargetPicker}
-        title="Expand which address?"
-        onClose={() => {
-            // X cancels and unchecks, per spec
-            setShowTargetPicker(false);
-            setPostMultiple(false);
-            setTargetDraft({ loading: false, unloading: false });
-            setBatchTarget(null);
-        }}
-        >
-        <div style={{ display:'grid', gap:12 }}>
-            <label style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <input
-                type="checkbox"
-                checked={targetDraft.loading}
-                onChange={e => setTargetDraft(p => ({ ...p, loading: e.target.checked }))}
-            />
-            <strong>Loading address</strong>
-            </label>
-
-            <label style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <input
-                type="checkbox"
-                checked={targetDraft.unloading}
-                onChange={e => setTargetDraft(p => ({ ...p, unloading: e.target.checked }))}
-            />
-            <strong>Unloading address</strong>
-            </label>
-
-            <div style={{ fontSize:12, color:'#555' }}>
-            Select <em>exactly one</em> for now — both at once coming later.
-            </div>
-
-            <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-            <button
-                type="button"
-                onClick={() => {
-                setShowTargetPicker(false);
-                setPostMultiple(false);
-                setTargetDraft({ loading:false, unloading:false });
-                setBatchTarget(null);
-                }}
-                style={{ ...buttonInputStyle, background:'#9CA3AF' }}
-            >
-                Cancel
-            </button>
-            <button
-                type="button"
-                disabled={!(targetDraft.loading ^ targetDraft.unloading)} // exactly one
-                onClick={() => {
-                const chosen = targetDraft.loading ? 'loading' : 'unloading';
-                setBatchTarget(chosen);
-                setShowTargetPicker(false);   // step 1 done
-                setShowMultiConfig(true);     // step 2: count/radius
-                }}
-                style={{
-                ...buttonInputStyle,
-                opacity: (targetDraft.loading ^ targetDraft.unloading) ? 1 : 0.6
-                }}
-            >
-                Continue
-            </button>
-            </div>
-        </div>
-        </Modal>
-
-
         <Modal
         open={showMultiConfig}
         title="Batch posting settings"
-        onClose={() => { setShowMultiConfig(false); setPostMultiple(false); }}  // ✕ unchecks
+        onClose={() => { setShowMultiConfig(false); setPostMultiple(false); setBatchTarget(null); }}  // ✕ unchecks
         >
         {/* Modal body: stacked, always full-width, no focus/blur styling */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
@@ -1897,4 +1886,3 @@ export default function SpotGoPage({ user }) {
 //TODO: add both at once functionality. you go from A to B, post multiple for both works like -> A-B, A1-B1, A2-B2, etc
 
 //TODO later: batch delete for batch post.
-
