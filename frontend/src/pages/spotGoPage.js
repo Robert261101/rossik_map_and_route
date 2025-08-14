@@ -163,8 +163,21 @@ export default function SpotGoPage({ user }) {
     const [isBatchPosting, setIsBatchPosting] = useState(false);
     const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
     const [batchLog, setBatchLog] = useState([]); // [{city, ok, id?, error?}]
-    // which side to expand (null | 'loading' | 'unloading')
-    const [batchTarget, setBatchTarget] = useState(null);
+
+    const [batchTarget, setBatchTarget] = useState(null); // 'loading' | 'unloading' | null
+    const [expandedGroups, setExpandedGroups] = useState(new Set()); // which groups are expanded
+
+    const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+    const toggleGroup = (groupId) => {
+        setExpandedGroups(prev => {
+            const next = new Set(prev);
+            if (next.has(groupId)) next.delete(groupId);
+            else next.add(groupId);
+            return next;
+        });
+    };
+
 
 
     const showPreviewAction = postMultiple && !showMultiConfig;
@@ -201,6 +214,67 @@ export default function SpotGoPage({ user }) {
     const parseDbHHMM = s => s?.slice(11,16) ?? "08:00";
 
     const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+    async function handleDeleteBatch(rootOffer) {
+        const groupId = rootOffer?.batchGroupId;
+        if (!groupId) {
+            // no batch on this row – fall back to single delete
+            return handleDeleteOffer(rootOffer.id);
+        }
+
+        if (!window.confirm("Delete the entire batch for this offer? This will remove ALL entries in the group.")) {
+            return;
+        }
+
+        setIsBatchDeleting(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (!token) { alert("Please sign in first."); setIsBatchDeleting(false); return; }
+
+            // Find every offer in this group
+            const { data: rows, error } = await supabase
+            .from('submitted_offers')
+            .select('offer_id')
+            .eq('batch_group_id', groupId);
+
+            if (error) throw error;
+            const ids = (rows || []).map(r => r.offer_id).filter(Boolean);
+            if (!ids.length) {
+            // Nothing found locally, just bail from UI
+            setOffers(prev => prev.filter(o => o.batchGroupId !== groupId));
+            setIsBatchDeleting(false);
+            return;
+            }
+
+            // Try to delete from SpotGo first (best-effort)
+            for (const id of ids) {
+            try {
+                await fetch(`${API_BASE}/api/spotgo/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch {}
+            }
+
+            // Purge them from Supabase in one go
+            await supabase.from('submitted_offers').delete().in('offer_id', ids);
+
+            // Optimistic local update (remove the whole group from the table)
+            setOffers(prev => prev.filter(o => o.batchGroupId !== groupId));
+
+            // If you prefer to fully re-sync from DB, uncomment:
+            // await refreshSubmittedOffers();
+
+            alert(`Batch deleted (${ids.length} item${ids.length>1?'s':''}).`);
+        } catch (e) {
+            console.error("Delete batch error:", e);
+            alert("Something went wrong while deleting the batch.");
+        } finally {
+            setIsBatchDeleting(false);
+        }
+    }
+
 
 
     // put this above handleSubmitOffer
@@ -266,54 +340,66 @@ export default function SpotGoPage({ user }) {
             const { data: { session } } = await supabase.auth.getSession();
             const userEmail = session?.user?.email || "unknown@user.com";
             const finalPrefix = formatName(userEmail);
-            const userShortCode = shortCodeFor(userEmail);
 
-            const formatted = data.map(o => {
+            const formatAddr = (raw) => {
+            if (!raw) return "";
+            const postalMatch = raw.match(/\d{4,}/)?.[0] || "";
+            const addressOnly = raw.replace(/.*?(?=\d{4,})\d{4,}\s*/, "")
+                                    .replace(/,?\s*[^,]+$/, "")
+                                    .trim();
+            const countryMatch = raw.match(/([A-Za-z ]+),?\s*$/);
+            const country = countryMatch ? countryMatch[1].trim() : "";
+            const cc = countries.getAlpha2Code(country, "en") || "";
+            return postalMatch ? `${cc}-${postalMatch} ${addressOnly}` : `${addressOnly}, ${country}`;
+            };
 
-                // Format Loading Address
-                let formattedLoading = o.loading_address || "";
-                if (formattedLoading) {
-                    const postalMatch = formattedLoading.match(/\d{4,}/)?.[0] || "";
-                    const addressOnly = formattedLoading.replace(/.*?(?=\d{4,})\d{4,}\s*/, "").replace(/,?\s*[^,]+$/, "").trim();
-                    const countryMatch = formattedLoading.match(/([A-Za-z ]+),?\s*$/);
-                    const country = countryMatch ? countryMatch[1].trim() : "";
-                    const cc = countries.getAlpha2Code(country, "en") || "";
-
-                    formattedLoading = postalMatch
-                    ? `${cc}-${postalMatch} ${addressOnly}`
-                    : `${addressOnly}, ${country}`;
-                }
-
-                // Format Unloading Address
-                let formattedUnloading = o.unloading_address || "";
-                if (formattedUnloading) {
-                    const postalMatch = formattedUnloading.match(/\d{4,}/)?.[0] || "";
-                    const addressOnly = formattedUnloading.replace(/.*?(?=\d{4,})\d{4,}\s*/, "").replace(/,?\s*[^,]+$/, "").trim();
-                    const countryMatch = formattedUnloading.match(/([A-Za-z ]+),?\s*$/);
-                    const country = countryMatch ? countryMatch[1].trim() : "";
-                    const cc = countries.getAlpha2Code(country, "en") || "";
-
-                    formattedUnloading = postalMatch
-                    ? `${cc}-${postalMatch} ${addressOnly}`
-                    : `${addressOnly}, ${country}`;
-                }
-                    const isMine = o.external_number === finalPrefix;
-
-                    return {
-                        id: o.offer_id,
-                        externalNumber: fullNameForShortCode(o.external_number),
-                        _loading: formattedLoading,
-                        _unloading: formattedUnloading,
-                        isMine
-                    };
-                });
-
-            formatted.sort((a, b) => {
-                if (a.isMine === b.isMine) return 0;
-                return a.isMine ? -1 : 1;
+            // 1) Map raw rows with display fields
+            const rows = data.map(o => {
+            const isMine = o.external_number === finalPrefix;
+            return {
+                id: o.offer_id,
+                externalNumber: fullNameForShortCode(o.external_number),
+                _loading: formatAddr(o.loading_address || ""),
+                _unloading: formatAddr(o.unloading_address || ""),
+                isMine,
+                // batch meta (may be null on legacy rows)
+                batchGroupId: o.batch_group_id || null,
+                batchParentId: o.batch_parent_id || null,
+                batchOrder: typeof o.batch_order === 'number' ? o.batch_order : null,
+                batchTarget: o.batch_target || null,
+            };
             });
 
-            setOffers(formatted);
+            // 2) Group them
+            const groups = new Map();
+            /*
+            group key:
+            - if it has a batch_group_id, use that
+            - otherwise treat the single offer as its own group: "single:{offer_id}"
+            */
+            for (const r of rows) {
+            const gk = r.batchGroupId || `single:${r.id}`;
+            if (!groups.has(gk)) groups.set(gk, { root: null, children: [] });
+
+            const isRoot =
+                r.batchGroupId
+                ? (r.batchParentId === r.id) || (r.batchOrder === 0)
+                : true;
+
+            if (isRoot && !groups.get(gk).root) groups.get(gk).root = r;
+            else groups.get(gk).children.push(r);
+            }
+
+            // 3) Build final array of root rows with children
+            const grouped = Array.from(groups.values())
+            .map(({ root, children }) => ({
+                ...(root || children[0]), // fail-safe
+                children: (root ? children.filter(c => c.id !== root.id) : children).sort((a,b) => (a.batchOrder ?? 999) - (b.batchOrder ?? 999))
+            }))
+            // keep your “mine first” sorting
+            .sort((a,b) => (a.isMine === b.isMine) ? 0 : (a.isMine ? -1 : 1));
+
+            setOffers(grouped);
         }
     }
 
@@ -1118,6 +1204,14 @@ export default function SpotGoPage({ user }) {
         setBatchLog([]);
         setBatchProgress({ done: 0, total: selected.length });
 
+        const groupId =
+            (typeof crypto !== 'undefined' && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+
+        let parentOfferId = null;
+        let orderIdx = 0;
+
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.access_token) { alert('Please sign in first.'); setIsBatchPosting(false); return; }
@@ -1208,45 +1302,57 @@ export default function SpotGoPage({ user }) {
                 const result = raw ? JSON.parse(raw) : {};
                 const offerId = result.id || null;
 
+                // establish parent (first posted is root)
+                if (parentOfferId == null) parentOfferId = offerId;
+
+
                 const loadAddr   = batchTarget === 'loading'   ? c : loadingLocation;
                 const unloadAddr = batchTarget === 'unloading' ? c : unloadingLocation;
 
 
                 // mirror to Supabase
                 await supabase.from('submitted_offers').insert([{
-                offer_id: offerId,
-                external_number: formatName(userEmail),
-                loading_address: loadAddr?.label || '',
-                unloading_address: unloadAddr?.label || '',
-                updated_at: new Date().toISOString(),
+                    offer_id: offerId,
+                    external_number: formatName(userEmail),
+                    loading_address: loadAddr?.label || '',
+                    unloading_address: unloadAddr?.label || '',
+                    updated_at: new Date().toISOString(),
 
-                loading_country_code: loadAddr?.countryCode || null,
-                loading_postal_code:  loadAddr?.postalCode  || null,
-                loading_lat:          loadAddr?.lat || null,
-                loading_lng:          loadAddr?.lng || null,
+                    loading_country_code: loadAddr?.countryCode || null,
+                    loading_postal_code:  loadAddr?.postalCode  || null,
+                    loading_lat:          loadAddr?.lat || null,
+                    loading_lng:          loadAddr?.lng || null,
 
-                unloading_country_code: unloadAddr?.countryCode || null,
-                unloading_postal_code:  unloadAddr?.postalCode  || null,
-                unloading_lat:          unloadAddr?.lat || null,
-                unloading_lng:          unloadAddr?.lng || null,
+                    unloading_country_code: unloadAddr?.countryCode || null,
+                    unloading_postal_code:  unloadAddr?.postalCode  || null,
+                    unloading_lat:          unloadAddr?.lat || null,
+                    unloading_lng:          unloadAddr?.lng || null,
 
-                loading_start_time:  `${loadStartDate}T${loadStartTime}:00`,
-                loading_end_time:    `${loadEndDate}T${loadEndTime}:00`,
-                unloading_start_time:`${unloadStartDate}T${unloadStartTime}:00`,
-                unloading_end_time:  `${unloadEndDate}T${unloadEndTime}:00`,
+                    loading_start_time:  `${loadStartDate}T${loadStartTime}:00`,
+                    loading_end_time:    `${loadEndDate}T${loadEndTime}:00`,
+                    unloading_start_time:`${unloadStartDate}T${unloadStartTime}:00`,
+                    unloading_end_time:  `${unloadEndDate}T${unloadEndTime}:00`,
 
-                external_comment: externalComment || null,
-                hide_locations: hideLocations,
-                pallets_exchange: palletsExchange,
-                vehicle_types: selectedVehicles.length ? selectedVehicles : null,
-                body_types:     selectedBodies.length   ? selectedBodies   : null,
-                freight_charge: freightCharge ? parseFloat(freightCharge) : null,
-                currency: currency || null,
-                payment_due: paymentDue || null,
-                length_m: lengthM ? parseFloat(lengthM) : null,
-                weight_t: weightT ? parseFloat(weightT) : null,
-                submitted_by_email: userEmail
+                    external_comment: externalComment || null,
+                    hide_locations: hideLocations,
+                    pallets_exchange: palletsExchange,
+                    vehicle_types: selectedVehicles.length ? selectedVehicles : null,
+                    body_types:     selectedBodies.length   ? selectedBodies   : null,
+                    freight_charge: freightCharge ? parseFloat(freightCharge) : null,
+                    currency: currency || null,
+                    payment_due: paymentDue || null,
+                    length_m: lengthM ? parseFloat(lengthM) : null,
+                    weight_t: weightT ? parseFloat(weightT) : null,
+                    submitted_by_email: userEmail,
+
+                    // NEW
+                    batch_group_id: groupId,
+                    batch_parent_id: parentOfferId,      // root points to itself; children point to root
+                    batch_target: batchTarget,           // 'loading' | 'unloading'
+                    batch_order: orderIdx                // 0 for root, 1.. for children
                 }]);
+
+                orderIdx++;
 
                 setBatchLog(l => [...l, { city: c.city, ok: true, id: offerId }]);
             } catch (err) {
@@ -1828,6 +1934,7 @@ export default function SpotGoPage({ user }) {
         {offers.length === 0 ? (
           <p>No offers submitted yet.</p>
         ) : (
+            
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '14px' }}>
             <thead>
               <tr style={{ background: '#ff0a0aa6', position: 'sticky' }}>
@@ -1838,40 +1945,107 @@ export default function SpotGoPage({ user }) {
               </tr>
             </thead>
             <tbody>
-              {offers.map((offer, idx) => (
-                <tr key={offer.id} style={{ backgroundColor: offer.isMine ? (idx % 2 === 0 ? '#f2f8fc' : '#ffffff') : '#fff6e0' }}>
-                    <td style={{ padding: '8px' }}>{offer.externalNumber}</td>
-                    <td style={{ padding: '8px' }}>{offer._loading}</td>
-                    <td style={{ padding: '8px' }}>{offer._unloading}</td>
-                    <td style={{ textAlign: 'center' }}>
-                        {offer.isMine ? (
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
-                            <button
-                                onClick={() => handleEditOffer(offer)}
-                                style={{ padding: '5px 10px', background: '#15803d', color: '#fff', border: 'none', borderRadius: '4px' }}
-                            >
-                                Edit
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleCopyOffer(offer); }}
-                                style={{ padding: '5px 10px', background: '#1e4a7b', color: '#fff', border: 'none', borderRadius: '4px' }}
-                            >
-                                Copy
-                            </button>
-                            <button
-                                onClick={() => handleDeleteOffer(offer.id)}
-                                style={{ padding: '5px 10px', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: '4px' }}
-                            >
-                                Delete
-                            </button>
-                            </div>
-                        ) : (
-                            <span style={{ color: '#9aa2af', fontStyle: 'italic' }}></span>
-                        )}
-                    </td>
+                {offers.map((offer, idx) => {
+                    const hasChildren = (offer.children?.length || 0) > 0;
+                    const groupKey = offer.batchGroupId || `single:${offer.id}`;
+                    const expanded = expandedGroups.has(groupKey);
 
-                </tr>
-              ))}
+
+                    const rowBg = offer.isMine
+                    ? (idx % 2 === 0 ? '#f2f8fc' : '#ffffff')
+                    : '#fff6e0';
+
+                    return (
+                    <React.Fragment key={groupKey}>
+                        {/* Root row */}
+                        <tr style={{ backgroundColor: rowBg }}>
+                        <td style={{ padding:'8px' }}>
+                            {offer.externalNumber}
+                        </td>
+                        <td style={{ padding:'8px' }}>{offer._loading}</td>
+                        <td style={{ padding:'8px' }}>{offer._unloading}</td>
+                        <td style={{ textAlign:'center' }}>
+                            <div style={{ display:'flex', justifyContent:'center', gap:6, flexWrap:'wrap' }}>
+                            {hasChildren && (
+                                <button
+                                onClick={() => toggleGroup(groupKey)}
+                                style={{ padding:'5px 10px', background:'#9CA3AF', color:'#fff', border:'none', borderRadius:4 }}
+                                title={expanded ? 'Hide batch' : 'Show batch'}
+                                >
+                                {expanded ? '▲ Hide batch' : `▼ Show batch (${offer.children.length})`}
+                                </button>
+                            )}
+                            {offer.isMine && (
+                                <>
+                                <button
+                                    onClick={() => handleEditOffer(offer)}
+                                    style={{ padding:'5px 10px', background:'#15803d', color:'#fff', border:'none', borderRadius:4 }}
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleCopyOffer(offer); }}
+                                    style={{ padding:'5px 10px', background:'#1e4a7b', color:'#fff', border:'none', borderRadius:4 }}
+                                >
+                                    Copy
+                                </button>
+                                {/* 🔥 Delete the entire batch */}
+                                {offer.batchGroupId && (
+                                <button
+                                    onClick={() => handleDeleteBatch(offer)}
+                                    style={{ padding:'5px 10px', background:'#b91c1c', color:'#fff', border:'none', borderRadius:4 }}
+                                    disabled={isBatchDeleting}
+                                    title="Delete all offers in this batch"
+                                >
+                                    {isBatchDeleting ? 'Deleting…' : 'Delete batch'}
+                                </button>
+                                )}
+                                </>
+                            )}
+                            </div>
+                        </td>
+                        </tr>
+
+                        {/* Children (only when expanded) */}
+                        {expanded && offer.children.map(child => (
+                        <tr key={child.id} style={{ background:'#fafafa' }}>
+                            <td style={{ padding:'8px', paddingLeft: '24px', fontStyle:'italic' }}>
+                            └─ {child.externalNumber}
+                            </td>
+                            <td style={{ padding:'8px' }}>{child._loading}</td>
+                            <td style={{ padding:'8px' }}>{child._unloading}</td>
+                            <td style={{ textAlign:'center' }}>
+                            {child.isMine ? (
+                                <div style={{ display:'flex', justifyContent:'center', gap:6 }}>
+                                <button
+                                    onClick={() => handleEditOffer(child)}
+                                    style={{ padding:'5px 10px', background:'#15803d', color:'#fff', border:'none', borderRadius:4 }}
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleCopyOffer(child); }}
+                                    style={{ padding:'5px 10px', background:'#1e4a7b', color:'#fff', border:'none', borderRadius:4 }}
+                                >
+                                    Copy
+                                </button>
+                                {/* ⛔️ Delete removed for children */}
+                                {/* <button
+                                    onClick={() => handleDeleteOffer(child.id)}
+                                    style={{ padding:'5px 10px', background:'#b91c1c', color:'#fff', border:'none', borderRadius:4 }}
+                                >
+                                    Delete
+                                </button> */}
+                                </div>
+                            ) : (
+                                <span style={{ color:'#9aa2af', fontStyle:'italic' }} />
+                            )}
+                            </td>
+                        </tr>
+                        ))}
+                    </React.Fragment>
+                    );
+                })}
             </tbody>
           </table>
         )}
