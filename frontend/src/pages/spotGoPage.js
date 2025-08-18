@@ -2277,8 +2277,3 @@ export default function SpotGoPage({ user }) {
 );
 
 }
-
-
-//TODO: add both at once functionality. you go from A to B, post multiple for both works like -> A-B, A1-B1, A2-B2, etc
-
-//TODO later: batch delete for batch post.

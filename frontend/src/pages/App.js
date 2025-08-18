@@ -140,10 +140,10 @@ export default function App() {
           path="/add"
           element={user && user.role === 'admin' ? <AddTeam user={user} /> : <Navigate to="/" />} />
         <Route
-          path="/admin/teams/:teamId"
+          path="/admin/teams/:key"
           element={<TeamView />} />
         <Route
-          path="/admin/teams/:teamId/add-members"
+          path="/admin/teams/:key/add-members"
           element={user && (user.role === 'admin' || user.role === 'team_lead') ? <AddTeamMembers user={user} /> : <Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

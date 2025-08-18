@@ -29,7 +29,7 @@ export default  function TeamList({ user }) {
 
         const { data: teams, errorTteams } = await supabase
             .from('teams')
-            .select('id, name');
+            .select('id, name, url_key');
 
         if (errorTteams) {
             console.error('Error fetching teams:', errorTteams);
@@ -49,6 +49,7 @@ export default  function TeamList({ user }) {
             const teamData = teams.find(t => t.id === teamId);
             return {
                 teamId,
+                url_key: teamData?.url_key ?? null,
                 name: teamData?.name || 'No Team',
                 members,
             };
@@ -153,9 +154,9 @@ export default  function TeamList({ user }) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-            {visibleTeams.map((team, index) => (
+            {visibleTeams.map((team) => (
                 <div
-                key={index}
+                key={team.teamId}
                 className="relative border border-white/30 bg-white/80 dark:bg-gray-800/30 backdrop-blur-md rounded-lg p-6 text-center shadow-xl hover:shadow-2xl transition-transform duration-300 transform hover:scale-[1.02]"
                 >
                 <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">{team.name}</h2>
@@ -209,7 +210,7 @@ export default  function TeamList({ user }) {
                         Delete Team
                     </button>
                     <button 
-                        onClick={() => navigate(`/admin/teams/${team.teamId}`)}
+                        onClick={() => navigate(`/admin/teams/${team.url_key}`)}
                         className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
                     >
                         View
@@ -218,7 +219,7 @@ export default  function TeamList({ user }) {
                 )}
                 {user.role === 'team_lead' && (
                     <button 
-                        onClick={() => navigate(`/admin/teams/${team.teamId}`)}
+                        onClick={() => navigate(`/admin/teams/${team.url_key}`)}
                         className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
                     >
                         View
