@@ -188,18 +188,6 @@ export default  function TeamList({ user }) {
                         }
                     </ul>
                 </div>
-                {/* <button
-                    onClick={() => handleDelete(team.teamId)}
-                    className="bg-gradient-to-r from-red-400 to-red-600 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
-                >
-                    Delete Team
-                </button>
-                <button
-                    onClick={() => navigate(`/admin/teams/${team.teamId}`)}
-                    className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
-                >
-                    View
-                </button> */}
                 <div className="flex justify-center space-x-2 mt-4">
                 {user.role === 'admin' && (
                     <>
@@ -234,3 +222,5 @@ export default  function TeamList({ user }) {
         </div>
     );
 }
+
+//Transporeon idea: - curse inregistrate sa apara direct pe spotgo

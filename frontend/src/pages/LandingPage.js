@@ -5,20 +5,26 @@ import Header from '../components/header';
 const tiles = [
   { label: 'Map & Guide', to: '/map-and-guide', img: '/Map_and_Guide_Logo.png', alt: 'Map & Guide' },
   { label: 'SpotGo',      to: '/spotgo',        img: '/Spot_Go_Logo.png',       alt: 'SpotGo' },
+  { label: 'Trucks',      to: null,             img: null,                      alt: 'Trucks' },
+  { label: 'Transporeon', to: null,             img: null,                      alt: 'Transporeon' },
+
 ];
 
 export default function RossikTools({ user }) {
   const navigate = useNavigate();
 
   const Box = ({ to, img, alt, label }) => {
-    const open = () => navigate(to);
-    const onKey = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+    const hasNav = Boolean(to);
+    const open = () => { if (hasNav) navigate(to); };
+    const onKey = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    };
 
     return (
       <div
         role="button"
         tabIndex={0}
-        aria-label={`Open ${label}`}
+        aria-label={`${hasNav ? 'Open' : 'Tile'} ${label}`}
         onClick={open}
         onKeyDown={onKey}
         className="group cursor-pointer rounded-2xl overflow-hidden shadow-2xl
@@ -26,16 +32,35 @@ export default function RossikTools({ user }) {
                    focus:outline-none focus:ring-2 focus:ring-emerald-500
                    w-[260px] sm:w-[500px] mx-auto"
       >
-        {/* Full-bleed image fills the “box” */}
-        <img
-          src={img}
-          alt={alt}
-          className="w-full object-cover select-none pointer-events-none"
-          draggable="false"
-          loading="eager"
-          decoding="async"
-        />
-        <span className="sr-only">{label}</span>
+        {img ? (
+          <>
+            {/* Full-bleed image fills the “box” */}
+            <img
+              src={img}
+              alt={alt}
+              className="w-full object-cover select-none pointer-events-none"
+              draggable="false"
+              loading="eager"
+              decoding="async"
+            />
+            <span className="sr-only">{label}</span>
+          </>
+        ) : (
+          // Fallback panel when there’s no image
+          <div className="flex items-center justify-center h-[140px] sm:h-[220px] 
+                          bg-white backdrop-blur-sm">
+            <span className="text-2xl sm:text-3xl font-semibold">{label}</span>
+          </div>
+        )}
+        {!hasNav && (
+          <div className="absolute top-3 right-3">
+            <span className="inline-flex items-center rounded-full bg-amber-500/90
+                            text-white text-xs font-semibold px-3 py-1 shadow">
+              Coming soon
+            </span>
+          </div>
+        )}
+
       </div>
     );
   };
@@ -47,7 +72,7 @@ export default function RossikTools({ user }) {
         <h1 className="sr-only">Rossik Tools</h1>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
-          {tiles.map(t => <Box key={t.to} {...t} />)}
+          {tiles.map(t => <Box key={t.label} {...t} />)}
         </div>
       </main>
 
