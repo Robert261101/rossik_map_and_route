@@ -5,7 +5,7 @@ import Header from '../components/header';
 const tiles = [
   { label: 'Map & Guide', to: '/map-and-guide', img: '/Map_and_Guide_Logo.png', alt: 'Map & Guide' },
   { label: 'SpotGo',      to: '/spotgo',        img: '/Spot_Go_Logo.png',       alt: 'SpotGo' },
-  { label: 'Trucks',      to: null,             img: null,                      alt: 'Trucks' },
+  { label: 'Trucks',      to: '/spotgotrucks',             img: null,                      alt: 'Trucks' },
   { label: 'Transporeon', to: null,             img: null,                      alt: 'Transporeon' },
 
 ];

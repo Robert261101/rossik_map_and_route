@@ -25,6 +25,11 @@ const spotgoSubmit = require('./routes/spotgo/submit');
 const spotgoDelete = require('./routes/spotgo/delete');
 const spotgoUpdate = require('./routes/spotgo/update');
 
+const vehiclesSubmit = require('./routes/spotgo/trucks/submit');
+const vehiclesDelete = require('./routes/spotgo/trucks/delete');
+const vehiclesUpdate = require('./routes/spotgo/trucks/update');
+
+
 const app = express();
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
@@ -399,6 +404,12 @@ app.delete('/api/admin/teams/:id', requireRole('admin'), async (req, res) => {
 // SpotGo endpoints
 app.post(   '/api/spotgo/submit', spotgoSubmit);
 app.delete( '/api/spotgo/:id',    spotgoDelete);
+
+// SpotGo (vehicles)
+app.post(   '/api/spotgo/trucks/submit', vehiclesSubmit);
+app.delete( '/api/spotgo/trucks/:id',    vehiclesDelete);
+app.put(    '/api/spotgo/trucks/:id',    vehiclesUpdate);
+
 
 
 const PORT = process.env.PORT || 4000;

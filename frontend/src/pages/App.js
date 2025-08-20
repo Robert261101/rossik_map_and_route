@@ -18,6 +18,7 @@ import ForgotPasswordPage from './ForgotPassword'
 import ResetPasswordPage from './ResetPassword'
 import SpotGoPage from './spotGoPage';
 import RossikTools from './LandingPage'
+import SpotGoTrucks from './spotGoTrucks'
 import ReactDOM from 'react-dom'
 import { ThemeProvider } from '../contexts/ThemeContext'
 
@@ -112,6 +113,9 @@ export default function App() {
         <Route 
           path="/spotgo"
           element={user ? <SpotGoPage user={user} /> : <Navigate to="/login" />} />
+        <Route 
+          path="/spotgotrucks"
+          element={user ? <SpotGoTrucks user={user} /> : <Navigate to="/login" />} />
         <Route
           path="/history"
           element={user ? <HistoryPage user={user} /> : <Navigate to="/login" />} />
