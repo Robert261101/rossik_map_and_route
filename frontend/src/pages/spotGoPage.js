@@ -2222,6 +2222,14 @@ export default function SpotGoPage({ user }) {
                                     {isBatchDeleting ? 'Deleting…' : 'Delete batch'}
                                 </button>
                                 )}
+                                {!offer.batchGroupId && (
+                                <button
+                                    onClick={() => handleDeleteOffer(offer.id)}
+                                    style={{ padding:'5px 10px', background:'#b91c1c', color:'#fff', border:'none', borderRadius:4 }}
+                                >
+                                    Delete
+                                </button>
+                                )}
                                 </>
                             )}
                             </div>

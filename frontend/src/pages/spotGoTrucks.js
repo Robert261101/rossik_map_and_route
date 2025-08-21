@@ -1,5 +1,5 @@
 // pages/spotGoTrucks.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AutoCompleteInput from "../AutoCompleteInput";
 import { supabase } from "../lib/supabase";
 import countries from "i18n-iso-countries";
@@ -150,6 +150,7 @@ async function reverseWithFallback(loc, apiKey) {
 export default function SpotGoTrucks({ user }) {
   // Addresses + period + range
   const todayStr = new Date().toISOString().slice(0, 10);
+  const [isPrefilling, setIsPrefilling] = useState(false);
   const [loadingLoc, setLoadingLoc] = useState(null);
   const [unloadingLoc, setUnloadingLoc] = useState(null);
   const [loadStartDate, setLoadStartDate] = useState(todayStr);
@@ -175,6 +176,38 @@ export default function SpotGoTrucks({ user }) {
 
   // offers table (very light list)
   const [vehicles, setVehicles] = useState([]);
+
+  // Auto times: if date is today -> next full hour / +2h ; else fallback defaults
+  useEffect(() => {
+    if (isPrefilling) return;
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    if (loadStartDate === today) {
+      const nextHour = new Date(now);
+      nextHour.setMinutes(0, 0, 0);
+      nextHour.setHours(now.getHours() + 1);
+      setLoadStartTime(nextHour.toTimeString().slice(0, 5));
+    } else {
+      setLoadStartTime("08:00");
+    }
+  }, [loadStartDate, isPrefilling]);
+
+  useEffect(() => {
+    if (isPrefilling) return;
+    const now = new Date();
+    const nextHour = new Date(now);
+    nextHour.setMinutes(0, 0, 0);
+    nextHour.setHours(now.getHours() + 1);
+    const end = new Date(nextHour);
+    end.setHours(nextHour.getHours() + 2);
+    const today = now.toISOString().slice(0, 10);
+    if (loadEndDate === today) {
+      setLoadEndTime(end.toTimeString().slice(0, 5));
+    } else {
+      setLoadEndTime("17:00");
+    }
+  }, [loadEndDate, isPrefilling]);
+
 
   const baseInput = {
     padding: "6px 10px",
@@ -212,8 +245,14 @@ export default function SpotGoTrucks({ user }) {
     setUnloadingLoc(null);
     setLoadStartDate(todayStr);
     setLoadEndDate(todayStr);
-    setLoadStartTime("08:00");
-    setLoadEndTime("17:00");
+    const now = new Date();
+    const nextHour = new Date(now);
+    nextHour.setMinutes(0, 0, 0);
+    nextHour.setHours(now.getHours() + 1);
+    const end = new Date(nextHour);
+    end.setHours(nextHour.getHours() + 2);
+    setLoadStartTime(nextHour.toTimeString().slice(0, 5));
+    setLoadEndTime(end.toTimeString().slice(0, 5));
     setRangeKm(50);
     setVehicleType(1);
     setTrailerType(1);
@@ -380,6 +419,7 @@ export default function SpotGoTrucks({ user }) {
 
 async function handleCopy(id) {
   try {
+    setIsPrefilling(true);
     // pull full row for this vehicle
     const { data: row, error } = await supabase
       .from('spotgo_trucks')
@@ -426,6 +466,9 @@ async function handleCopy(id) {
   } catch (e) {
     console.error('copy vehicle error:', e);
     alert('Could not copy vehicle.');
+  } finally {
+    // allow the date-change effects to run again after prefill is done
+    setIsPrefilling(true)
   }
 }
   
