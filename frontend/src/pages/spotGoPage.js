@@ -1848,61 +1848,6 @@ export default function SpotGoPage({ user }) {
 
         {/* Post-multiple controls and Preview button */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-
-        {/* Show Preview only after the modal is saved (checked + modal closed) */}
-        {/* {showPreviewAction && (
-            <button
-                type="button"
-                disabled={!needAddressPicked}
-                onClick={async () => {
-                const centerLoc = batchTarget === 'unloading' ? unloadingLocation : loadingLocation;
-                if (!centerLoc) return;
-
-                setShowPreview(true);
-                setLoadingPreview(true);
-                setPreviewError('');
-                try {
-                    // 1) pin the base place
-                    const pinned = asCandidate(centerLoc, { lat: centerLoc.lat, lng: centerLoc.lng });
-                    pinned.distanceKm = 0;
-                    pinned.pinned = true;
-                    pinned.selected = true; // always included
-                    pinned._pinNote = batchTarget === 'unloading' ? '• current unloading' : '• current loading';
-
-                    // 2) fetch nearby localities around that side
-                    const near = await findNearbyLocalities(
-                    { lat: centerLoc.lat, lng: centerLoc.lng },
-                    clamp(radiusKm, 1, RADIUS_MAX),
-                    clamp(multiCount, MULTI_MIN, MULTI_MAX),
-                    HERE_API_KEY
-                    );
-
-                    // 3) remove duplicate of the pinned one
-                    const filtered = near.filter(c => c.key !== pinned.key);
-
-                    // 4) preselect the next N-1
-                    const need = clamp(multiCount, MULTI_MIN, MULTI_MAX) - 1;
-                    for (let i = 0; i < filtered.length; i++) filtered[i].selected = i < need;
-
-                    setPreviewItems([pinned, ...filtered]);
-                } catch (e) {
-                    console.error('preview error', e);
-                    setPreviewError('Could not fetch nearby localities. Try a smaller radius or later.');
-                    setPreviewItems([]);
-                } finally {
-                    setLoadingPreview(false);
-                }
-                }}
-                style={{ ...buttonInputStyle, opacity: !needAddressPicked ? 0.6 : 1 }}
-                title={
-                    needAddressPicked ? '' :
-                    batchTarget === 'unloading' ? 'Pick an unloading address first' : 'Pick a loading address first'
-                }
-            >
-                Preview
-            </button>
-        )} */}
-
         </div>
 
         </div>

@@ -474,7 +474,7 @@ async function handleCopy(id) {
   
 
   return (
-    <div style={{ background: "#fff5f5", fontFamily: "Arial, sans-serif" }}>
+    <div style={{ minHeight: '100vh', width: '100%', background: "#fff5f5", fontFamily: "Arial, sans-serif" }}>
       <Header user={user} />
       <div style={{ display: "flex", alignItems: "flex-start", gap: 20 }}>
         {/* FORM */}
@@ -591,31 +591,6 @@ async function handleCopy(id) {
             <label><strong>Comments</strong></label>
             <input value={comments} onChange={(e) => setComments(e.target.value)} style={baseInput} />
           </div>
-
-          {/* Sources */}
-          {/* <div style={{ marginBottom: 16 }}>
-            <strong>Sources:</strong>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-              {Object.entries(sourcesMap).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => toggleSource(Number(id))}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: 16,
-                    border: "1px solid #ddd",
-                    background: sources.includes(Number(id)) ? "#1e4a7b" : "#f7f7f7",
-                    color: sources.includes(Number(id)) ? "#fff" : "#333",
-                    cursor: "pointer",
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div> */}
-
           <button type="submit" disabled={submitting} style={{ ...btn, opacity: submitting ? 0.7 : 1 }}>
             {submitting ? "Publishing…" : "Publish"}
           </button>
