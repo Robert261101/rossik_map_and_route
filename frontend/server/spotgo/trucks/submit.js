@@ -5,15 +5,15 @@ export default async function handler(req, res) {
   }
 
   const base = process.env.SPOTGO_BASE_URL || 'https://api.spotgo.eu/api/v1';
-  const apiKey = process.env.SPOTGO_API_KEY;
-  const ownerEmail = process.env.SPOTGO_OWNER_EMAIL;
+  const SPOTGO_API_KEY="zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$";
+  const SPOTGO_OWNER_EMAIL='spot.loads@rossik.eu'
 
-  if (!apiKey || !ownerEmail) {
+  if (!SPOTGO_API_KEY || !SPOTGO_OWNER_EMAIL) {
     return res.status(500).json({ error: 'Server misconfigured: SPOTGO_API_KEY / SPOTGO_OWNER_EMAIL' });
   }
 
   // Use server-controlled owner + pass through the user payload
-  const body = { ...(req.body || {}), owner: ownerEmail };
+  const body = { ...(req.body || {}), owner: SPOTGO_OWNER_EMAIL };
 
   try {
     const upstream = await fetch(`${base}/vehicles`, {
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
       headers: {
         'Content-Type': 'application/json',
         'x-api-version': req.headers['x-api-version'] || '1.0',
-        'X-Api-Key': apiKey,                // ✅ SpotGo expects this
+        'X-Api-Key': SPOTGO_API_KEY,                // ✅ SpotGo expects this
       },
       body: JSON.stringify(body),
     });
