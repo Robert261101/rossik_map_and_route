@@ -372,6 +372,7 @@ export default function SpotGoTrucks({ user }) {
       });
       await supabase.from("spotgo_trucks").delete().eq("vehicle_id", id);
       setVehicles((v) => v.filter((x) => x.id !== id));
+      alert("Vehicle deleted")
     } catch {
       alert("Delete failed.");
     }
