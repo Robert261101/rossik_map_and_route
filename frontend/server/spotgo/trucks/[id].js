@@ -1,47 +1,71 @@
 // frontend/server/spotgo/trucks/[id].js
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const SPOTGO_API_KEY="zTr@sMfsn%hTJeS58qgmF2Lcq8xd9#J$";
+
+
 export default async function handler(req, res) {
   const { id } = req.query;
+  if (!id) return res.status(400).json({ error: 'Missing freight ID' });
+
   const method = req.method;
 
-  if (!['GET', 'PUT', 'DELETE'].includes(method)) {
-    res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-  if (!id) return res.status(400).json({ error: 'Missing id' });
-
-  // Local access control (don’t forward this to SpotGo)
+  // Require logged-in user (Option B)
   const auth = req.headers.authorization || '';
-  if (!auth) return res.status(401).json({ error: 'Missing Authorization header' });
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Missing token' });
 
-  const base   = process.env.SPOTGO_BASE_URL || 'https://api.spotgo.eu/api/v1';
-  const apiKey = process.env.SPOTGO_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Server misconfigured: SPOTGO_API_KEY' });
-  }
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: 'Invalid token or user not found' });
 
-  const url = `${base}/vehicles/${encodeURIComponent(id)}`;
+  const apiKey = SPOTGO_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'Server misconfigured (SPOTGO_API_KEY)' });
+
+  const url = `https://api.spotgo.eu/api/v1/vehicles/${id}`;
+  const common = { 'x-api-version': '1.0', 'X-Api-Key': apiKey };
 
   try {
-    const upstream = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-version': req.headers['x-api-version'] || '1.0',
-        'X-Api-Key': apiKey, // ✅ SpotGo expects this
-      },
-      body: method === 'PUT' ? JSON.stringify(req.body || {}) : undefined,
-    });
+    if (req.method === 'PUT') {
+      const upstream = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...common },
+        body: JSON.stringify(req.body)
+      });
 
-    const text = await upstream.text();
-    if (!text) return res.status(upstream.status).end(); // e.g., 204 No Content
+      const text = await upstream.text();
+      if (!upstream.ok) return res.status(upstream.status).send(text || 'SpotGo error');
 
-    let json;
-    try { json = JSON.parse(text); }
-    catch { json = { raw: text }; }
+      // optional DB update
+      const { error } = await supabaseAdmin
+        .from('spotgo_trucks')
+        .update({ ...req.body, updated_at: new Date().toISOString() })
+        .eq('vehicle_id', id);
+      if (error) console.error('Supabase PUT update error:', error.message);
 
-    return res.status(upstream.status).json(json);
+      return res.status(200).send(text);
+    }
+
+    if (req.method === 'DELETE') {
+      const upstream = await fetch(url, { method: 'DELETE', headers: common });
+      const text = await upstream.text();
+      if (!upstream.ok) return res.status(upstream.status).send(text || 'SpotGo error');
+
+      // optional DB delete
+      const { error } = await supabaseAdmin.from('spotgo_trucks').delete().eq('vehicle_id', id);
+      if (error) console.error('Supabase delete error:', error.message);
+
+      return res.status(200).json({ message: 'Vehicle deleted.' });
+    }
+
+    res.setHeader('Allow', ['PUT', 'DELETE']);
+    return res.status(405).end(`Method ${req.method} Not Allowed`);
   } catch (e) {
-    console.error('vehicles id error', e);
-    return res.status(500).json({ error: 'Upstream error' });
+    console.error('[spotgo/[id]] error:', e);
+    return res.status(500).json({ error: 'A server error has occurred' });
   }
 }
