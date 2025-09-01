@@ -29,12 +29,15 @@ const vehiclesSubmit = require('./routes/spotgo/trucks/submit');
 const vehiclesDelete = require('./routes/spotgo/trucks/delete');
 const vehiclesUpdate = require('./routes/spotgo/trucks/update');
 
+const cleanupExpiredRoutes = require("./routes/spotgo/cleanupExpired");
 
 const app = express();
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 app.use(cors());
 app.use(express.json());
+
+app.use("/api/spotgo/cleanup-expired", cleanupExpiredRoutes);
 
 // -- PUBLIC: Login Endpoint --
 app.post('/api/auth/login', async (req, res) => {
