@@ -160,6 +160,10 @@ export default function Header({ user }) {
                     Teams
                   </button>
                 )}
+                
+                <button onClick={handleHistory} className={btnWhiteRed}>
+                  History
+                </button>
 
                 {/* Tools dropdown trigger now white/red */}
                 <div className="relative">

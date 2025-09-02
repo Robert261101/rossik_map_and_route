@@ -218,23 +218,38 @@ export default function SpotGoPage({ user }) {
     const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
     React.useEffect(() => {
-        let alive = true;
-        (async () => {
+    let alive = true;
+    (async () => {
         const { data: { session } } = await supabase.auth.getSession();
         const userId = session?.user?.id;
+        const email  = session?.user?.email;
         if (!userId || !alive) return;
 
-        const { data: prof } = await supabase
+        let profRole = null;
+
+        const { data: profById } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+
+        profRole = profById?.role ?? null;
+
+        if (!profRole && email) {
+        const { data: profByEmail } = await supabase
             .from('profiles')
             .select('role')
-            .eq('id', userId)
-            .single();
+            .eq('email', email)
+            .maybeSingle();
+        profRole = profByEmail?.role ?? null;
+        }
 
         if (!alive) return;
-        setRole(prof?.role ?? session?.user?.user_metadata?.role ?? null);
-        })();
-        return () => { alive = false; };
+        setRole(profRole ?? session?.user?.user_metadata?.role ?? null);
+    })();
+    return () => { alive = false; };
     }, []);
+
 
     async function buildPreviewFor(side) {
         const centerLoc = side === 'unloading' ? unloadingLocation : loadingLocation;
@@ -647,7 +662,7 @@ export default function SpotGoPage({ user }) {
             }
 
             // Purge them from Supabase in one go
-            await supabase.from('submitted_offers').delete().in('offer_id', ids);
+            // await supabase.from('submitted_offers').delete().in('offer_id', ids);
 
             // Optimistic local update (remove the whole group from the table)
             setOffers(prev => prev.filter(o => o.batchGroupId !== groupId));
@@ -1560,15 +1575,15 @@ export default function SpotGoPage({ user }) {
             return;
             }
 
-            // Delete from Supabase
-            const { error: supabaseError } = await supabase
-                .from('submitted_offers')
-                .delete()
-                .eq('offer_id', offerId);
+            // // Delete from Supabase
+            // const { error: supabaseError } = await supabase
+            //     .from('submitted_offers')
+            //     .delete()
+            //     .eq('offer_id', offerId);
 
-            if (supabaseError) {
-                console.error("Supabase delete error:", supabaseError.message);
-            }
+            // if (supabaseError) {
+            //     console.error("Supabase delete error:", supabaseError.message);
+            // }
 
             // ✅ Update local table only (no refresh)
             setOffers(prev => prev.filter(o => o.id !== offerId));
@@ -1609,9 +1624,12 @@ export default function SpotGoPage({ user }) {
     const handleFocus = e => Object.assign(e.target.style, { ...baseInputStyle, ...highlightStyle });
     const handleBlur = e => Object.assign(e.target.style, baseInputStyle);
 
-    const isAdmin = role === 'admin';
-    const isTeamlead = role === 'team_lead'; // exact cum e în DB
+    // în SpotGoPage, după state-ul `role`:
+    const roleStr = (role ?? user?.role ?? user?.user_metadata?.role ?? '').toString().toLowerCase();
+    const isAdmin    = roleStr === 'admin';
+    const isTeamlead = roleStr === 'team_lead' || roleStr === 'teamlead';
     const canManageOffer = (o) => !!(o?.isMine || isAdmin || isTeamlead);
+
 
   return (
   <div style={{ background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
