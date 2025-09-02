@@ -169,6 +169,8 @@ export default function SpotGoPage({ user }) {
 
     const [isBatchDeleting, setIsBatchDeleting] = useState(false);
 
+    const [role, setRole] = React.useState(null);
+
     const wantBoth = multiLoading && multiUnloading;
     const canOpenPreview =
         wantBoth
@@ -214,6 +216,25 @@ export default function SpotGoPage({ user }) {
     const parseDbHHMM = s => s?.slice(11,16) ?? "08:00";
 
     const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+    React.useEffect(() => {
+        let alive = true;
+        (async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (!userId || !alive) return;
+
+        const { data: prof } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .single();
+
+        if (!alive) return;
+        setRole(prof?.role ?? session?.user?.user_metadata?.role ?? null);
+        })();
+        return () => { alive = false; };
+    }, []);
 
     async function buildPreviewFor(side) {
         const centerLoc = side === 'unloading' ? unloadingLocation : loadingLocation;
@@ -1015,31 +1036,6 @@ export default function SpotGoPage({ user }) {
         return list;
     }
 
-
-
-
-//   function handleModifyPrefix() {
-//     const pw = prompt("Enter password to modify prefix:");
-//     if (pw === PREFIX_PASSWORD) {
-//       setPrefixEditEnabled(true);
-//       alert("Prefix editing unlocked.");
-//     } else if (pw !== null) {
-//       alert("Incorrect password.");
-//     }
-//   }
-
-//   function handleSavePrefix() {
-//     const newPref = prefix.trim();
-//     if (!newPref) {
-//       alert("Prefix cannot be empty.");
-//       return;
-//     }
-//     setPrefix(newPref);
-//     localStorage.setItem("spotgo_prefix", newPref);
-//     setPrefixEditEnabled(false);
-//     alert(`Prefix "${newPref}" saved.`);
-//   }
-
     const formatName = (email = '') => {
         if (!email.includes('@')) return '';
         const local = email.split('@')[0];
@@ -1530,22 +1526,6 @@ export default function SpotGoPage({ user }) {
         alert("📋 Offer copied into form for submission.");
     }
 
-    // load saved config on mount
-    // useEffect(() => {
-    // try {
-    //     const raw = localStorage.getItem('spotgo_batch_cfg');
-    //     if (!raw) return;
-    //     const cfg = JSON.parse(raw);
-    //     if (cfg.multiCount) setMultiCount(clamp(cfg.multiCount, MULTI_MIN, MULTI_MAX));
-    //     if (cfg.radiusKm)   setRadiusKm  (clamp(cfg.radiusKm,   1,          RADIUS_MAX));
-    // } catch {}
-    // }, []);
-
-    // // save whenever they change
-    // useEffect(() => {
-    // localStorage.setItem('spotgo_batch_cfg', JSON.stringify({ multiCount, radiusKm }));
-    // }, [multiCount, radiusKm]);
-
 
     useEffect(() => {
         if (showMultiConfig) {
@@ -1629,25 +1609,13 @@ export default function SpotGoPage({ user }) {
     const handleFocus = e => Object.assign(e.target.style, { ...baseInputStyle, ...highlightStyle });
     const handleBlur = e => Object.assign(e.target.style, baseInputStyle);
 
+    const isAdmin = role === 'admin';
+    const isTeamlead = role === 'team_lead'; // exact cum e în DB
+    const canManageOffer = (o) => !!(o?.isMine || isAdmin || isTeamlead);
+
   return (
   <div style={{ background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
     <Header user = {user} />
-    {/* Offer Prefix Section */}
-     {/* <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ fontWeight: 'bold', marginRight: '10px' }}>Offer Prefix:</label>
-            <input 
-                type="text" 
-                value={externalPrefix} 
-                onChange={e => setPrefix(e.target.value)} 
-                onFocus={handleFocus}
-                onBlur={handleBlur}
-                disabled={!prefixEditEnabled
-                style={{...baseInputStyle, width:'200px'}} 
-            />
-            <button type="button" onClick={handleModifyPrefix} style={{ ...buttonInputStyle, padding: '5px 10px' }}>Modify Prefix</button>
-            <button type="button" onClick={handleSavePrefix} style={{ ...buttonInputStyle, padding: '5px 10px' }}>Save Prefix</button>
-        </div> */}
-
     <div style={{ display: 'flex', alignItems: 'flex-start' }}>
       {/* Left Form */}
       <form onSubmit={handleSubmitOffer} style={{ flex: '1', marginRight: '30px', background: '#ffffff', padding: '20px', borderRadius: '8px',boxShadow: '0 2px 8px rgba(185, 28, 28, 0.15)' }}>
@@ -2142,7 +2110,7 @@ export default function SpotGoPage({ user }) {
                                 {expanded ? '▲ Hide batch' : `▼ Show batch (${offer.children.length})`}
                                 </button>
                             )}
-                            {offer.isMine && (
+                            {canManageOffer(offer) && (
                                 <>
                                 <button
                                     onClick={() => handleEditOffer(offer)}
@@ -2190,7 +2158,7 @@ export default function SpotGoPage({ user }) {
                             <td style={{ padding:'8px' }}>{child._loading}</td>
                             <td style={{ padding:'8px' }}>{child._unloading}</td>
                             <td style={{ textAlign:'center' }}>
-                            {child.isMine ? (
+                            {canManageOffer(child) ? (
                                 <div style={{ display:'flex', justifyContent:'center', gap:6 }}>
                                 <button
                                     onClick={() => handleEditOffer(child)}

@@ -1,4 +1,6 @@
 // Email -> abreviere (ER1, JB1, AIM1 etc.)
+
+// TODO: add this into database and take the short codes from there, not here
 export const USER_SHORT_CODES = {
   "erwin.rossik@rossik.eu": "ER1",
   "jessika.birsan@rossik.eu": "JB1",
@@ -13,6 +15,17 @@ export const USER_SHORT_CODES = {
   "aleksandar.misic@rossik.eu": "AM2",
   "alexandru.moldovan@rossik.eu": "AIM1",
   "marius.gagiu@rossik.eu": "MG2",
+  "sebastian.appesbacher@rossik.eu": "SA1",
+  "mario.tudosa@rossik.eu": "MT1",
+  "lukas.dolezal@rossik.eu": "LD1",          // LD2 e deja Laura Demian
+  "philipp.kollersberger@rossik.eu": "PK1",
+  "petr.vagner@rossik.eu": "PV1",
+  "gabriel.deac@rossik.eu": "GD1",
+  "patrik.szilagyi@rossik.eu": "PS1",
+  "almir.causevic@rossik.eu": "AC1",
+  "mert.aksoy@rossik.eu": "MA1",
+  "dan.calciu@rossik.eu": "DC1",
+  "vanessa.redl@rossik.eu": "VR1"            // al doilea „VR”
   // adaugi restul aici...
 };
 
