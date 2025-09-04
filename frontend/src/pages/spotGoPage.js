@@ -764,8 +764,29 @@ export default function SpotGoPage({ user }) {
         setBatchCfgReady(false);
     }
 
+    // put this once, above refreshSubmittedOffers
+    function nowAsDbLocal() {
+        const n = new Date();
+        const pad = x => String(x).padStart(2, '0');
+        return `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}` +
+                `T${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
+    }
     
     async function refreshSubmittedOffers() {
+          // 0) Purge expired rows in our DB (SpotGo already did its side)
+        try {
+            const cutoff = nowAsDbLocal();
+
+            // If you want to delete when the *start* time has passed, change the column to 'loading_start_time'
+            await supabase
+            .from('submitted_offers')
+            .delete()
+            .lt('loading_end_time', cutoff);
+        } catch (e) {
+            console.warn('cleanup expired offers failed (non-fatal):', e);
+        }
+
+        // 1) fetch all submitted offers, most recent first
         const { data, error } = await supabase
             .from('submitted_offers')
             .select('*')
