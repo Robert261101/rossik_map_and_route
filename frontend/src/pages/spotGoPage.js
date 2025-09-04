@@ -252,6 +252,30 @@ export default function SpotGoPage({ user }) {
     return () => { alive = false; };
     }, []);
 
+    const [meEmail, setMeEmail] = useState('');
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!alive) return;
+            setMeEmail((session?.user?.email || '').toLowerCase());
+        })();
+        return () => { alive = false; };
+    }, []);
+
+    const isTeamMemberEmail = (e) => !!e && teamMemberEmails.has((e || '').toLowerCase());
+    const canViewRow = (o) => {
+        if (!o) return false;
+        if (isAdmin) return true;
+        if (o.isMine) return true; // <- always let users see their own stuff
+        return isTeamMemberEmail(o?.submittedByEmail);
+    };
+    const canEditOrDelete = (o) => {
+        if (!o) return false;
+        if (isAdmin) return true;
+        if (isTeamlead) return isTeamMemberEmail(o.submittedByEmail);
+        return (o.submittedByEmail || '').toLowerCase() === meEmail;
+    };
 
     async function buildPreviewFor(side) {
         const centerLoc = side === 'unloading' ? unloadingLocation : loadingLocation;
@@ -622,6 +646,8 @@ export default function SpotGoPage({ user }) {
     }
 
     async function handleDeleteBatch(rootOffer) {
+        if (!canEditOrDelete(rootOffer)) { alert("You don't have permission to delete this batch."); return; }
+
         const groupId = rootOffer?.batchGroupId;
         if (!groupId) {
             // no batch on this row – fall back to single delete
@@ -747,71 +773,73 @@ export default function SpotGoPage({ user }) {
 
         if (error) {
             console.error("Failed to fetch submitted offers:", error);
-        } else {
-            const { data: { session } } = await supabase.auth.getSession();
-            const userEmail = session?.user?.email || "unknown@user.com";
-            const finalPrefix = formatName(userEmail);
+            return;
+        }
 
-            const formatAddr = (raw) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userEmail = session?.user?.email || "unknown@user.com";
+        const finalPrefix = formatName(userEmail);
+
+        const formatAddr = (raw) => {
             if (!raw) return "";
             const postalMatch = raw.match(/\d{4,}/)?.[0] || "";
             const addressOnly = raw.replace(/.*?(?=\d{4,})\d{4,}\s*/, "")
-                                    .replace(/,?\s*[^,]+$/, "")
-                                    .trim();
+                                .replace(/,?\s*[^,]+$/, "")
+                                .trim();
             const countryMatch = raw.match(/([A-Za-z ]+),?\s*$/);
             const country = countryMatch ? countryMatch[1].trim() : "";
             const cc = countries.getAlpha2Code(country, "en") || "";
             return postalMatch ? `${cc}-${postalMatch} ${addressOnly}` : `${addressOnly}, ${country}`;
-            };
+        };
 
-            // 1) Map raw rows with display fields
-            const rows = data.map(o => {
+        // 1) flat rows
+        const rows = (data || []).map(o => {
             const isMine = o.external_number === finalPrefix;
             return {
-                id: o.offer_id,
-                externalNumber: fullNameForShortCode(o.external_number),
-                _loading: formatAddr(o.loading_address || ""),
-                _unloading: formatAddr(o.unloading_address || ""),
-                isMine,
-                submittedByEmail: o.submitted_by_email || null,   // <— add this
-                batchGroupId: o.batch_group_id || null,
-                batchParentId: o.batch_parent_id || null,
-                batchOrder: typeof o.batch_order === 'number' ? o.batch_order : null,
-                batchTarget: o.batch_target || null,
+            id: o.offer_id,
+            externalNumber: fullNameForShortCode(o.external_number),
+            _loading: formatAddr(o.loading_address || ""),
+            _unloading: formatAddr(o.unloading_address || ""),
+            isMine,
+            submittedByEmail: (o.submitted_by_email || '').toLowerCase(),
+            batchGroupId: o.batch_group_id || null,
+            batchParentId: o.batch_parent_id || null,
+            batchOrder: (typeof o.batch_order === 'number') ? o.batch_order : null,
+            batchTarget: o.batch_target || null,
             };
-            });
+        });
 
-            // 2) Group them
-            const groups = new Map();
-            /*
-            group key:
-            - if it has a batch_group_id, use that
-            - otherwise treat the single offer as its own group: "single:{offer_id}"
-            */
-            for (const r of rows) {
+        // 2) group them first
+        const groups = new Map();
+        for (const r of rows) {
             const gk = r.batchGroupId || `single:${r.id}`;
             if (!groups.has(gk)) groups.set(gk, { root: null, children: [] });
 
-            const isRoot =
-                r.batchGroupId
-                ? (r.batchParentId === r.id) || (r.batchOrder === 0)
-                : true;
-
+            const isRoot = r.batchGroupId ? (r.batchParentId === r.id) || (r.batchOrder === 0) : true;
             if (isRoot && !groups.get(gk).root) groups.get(gk).root = r;
             else groups.get(gk).children.push(r);
-            }
+        }
 
-            // 3) Build final array of root rows with children
-            const grouped = Array.from(groups.values())
+        let grouped = Array.from(groups.values())
             .map(({ root, children }) => ({
-                ...(root || children[0]), // fail-safe
-                children: (root ? children.filter(c => c.id !== root.id) : children).sort((a,b) => (a.batchOrder ?? 999) - (b.batchOrder ?? 999))
+            ...(root || children[0]),
+            children: (root ? children.filter(c => c.id !== root.id) : children)
+                .sort((a,b) => (a.batchOrder ?? 999) - (b.batchOrder ?? 999))
             }))
-            // keep your “mine first” sorting
             .sort((a,b) => (a.isMine === b.isMine) ? 0 : (a.isMine ? -1 : 1));
 
-            setOffers(grouped);
-        }
+        // 3) now apply visibility filter
+        const visible = grouped
+            .map(g => {
+            const rootOk = canViewRow(g);
+            const kids = (g.children || []).filter(canViewRow);
+            if (!rootOk && kids.length === 0) return null;
+            return rootOk ? { ...g, children: kids }
+                            : (kids[0] ? { ...kids[0], children: kids.slice(1) } : null);
+            })
+            .filter(Boolean);
+
+        setOffers(visible);
     }
 
     useEffect(() => {
@@ -1405,6 +1433,8 @@ export default function SpotGoPage({ user }) {
     }
 
     async function handleEditOffer(offer) {
+        if (!canEditOrDelete(offer)) { alert("You don't have permission to edit this offer."); return; }
+
         if (!offer?.id) return;
 
         supabase
@@ -1558,7 +1588,10 @@ export default function SpotGoPage({ user }) {
         coordinates: { latitude: c.lat, longitude: c.lng }
     });
 
-    async function handleDeleteOffer(offerId) {
+    async function handleDeleteOffer(offerIdOrRow) {
+        const offer = typeof offerIdOrRow === 'object' ? offerIdOrRow : offers.find(o => o.id === offerIdOrRow);
+        if (!canEditOrDelete(offer)) { alert("You don't have permission to delete this offer."); return; }
+
         if (!window.confirm("Are you sure you want to delete this offer?")) return;
 
         const { data: { session } } = await supabase.auth.getSession();
@@ -1566,7 +1599,7 @@ export default function SpotGoPage({ user }) {
 
         try {
             // Delete from SpotGo
-            const res = await fetch(`${API_BASE}/api/spotgo/${offerId}`, {
+            const res = await fetch(`${API_BASE}/api/spotgo/${offerIdOrRow}`, {
                 method: "DELETE",
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -1588,9 +1621,9 @@ export default function SpotGoPage({ user }) {
             // }
 
             // ✅ Update local table only (no refresh)
-            setOffers(prev => prev.filter(o => o.id !== offerId));
+            setOffers(prev => prev.filter(o => o.id !== offerIdOrRow));
 
-            alert(`Freight ${offerId} deleted successfully.`);
+            alert(`Freight ${offerIdOrRow} deleted successfully.`);
         } catch (error) {
             console.error("Delete offer error:", error);
             alert("An error occurred while deleting the offer.");
@@ -1634,10 +1667,10 @@ export default function SpotGoPage({ user }) {
     const isAdmin    = roleStr === 'admin';
     const isTeamlead = roleStr === 'team_lead' || roleStr === 'teamlead';
 
-const isTeamMemberOffer = (o) => {
-  const e = (o?.submittedByEmail || '').toLowerCase();
-  return e && teamMemberEmails.has(e);
-};
+    const isTeamMemberOffer = (o) => {
+        const e = (o?.submittedByEmail || '').toLowerCase();
+        return e && teamMemberEmails.has(e);
+    };
 
     const canManageOffer = (o) => {
     if (!o) return false;
@@ -1651,76 +1684,48 @@ const isTeamMemberOffer = (o) => {
 useEffect(() => {
   let alive = true;
   (async () => {
-    if (!isTeamlead) return;
-
     const { data: { session } } = await supabase.auth.getSession();
-    const leadId = session?.user?.id;
-    const leadEmail = (session?.user?.email || '').toLowerCase();
+    const meId = session?.user?.id;
+    const myEmail = (session?.user?.email || '').toLowerCase();
+    if (!meId) return;
 
-    console.log("👤 TeamLead login", { leadId, leadEmail });
-
-    const { data: me, error: meErr } = await supabase
+    // get my team_id
+    const { data: meRow } = await supabase
       .from('users')
       .select('team_id')
-      .eq('id', leadId)
+      .eq('id', meId)
       .maybeSingle();
-
-    if (meErr) console.warn("Lead profile fetch error", meErr);
-    console.log("📋 Lead profile row", me);
 
     let emails = [];
 
-    if (me?.team_id) {
-      const { data: members, error: mErr } = await supabase
-        .from('users')
-        .select('id, email, username')   // ← get both
-        .eq('team_id', me.team_id);
-
-      if (mErr) console.warn("members by team_id error", mErr);
-      console.log("👥 RAW members by team_id", members);
-
-      emails = (members || [])
-        .map(m => (m.email || m.username || '').toLowerCase()) // ← fallback to username
-        .filter(Boolean);
-
-      const onlyLead =
-        emails.length === 0 ||
-        (emails.length === 1 && emails[0] === leadEmail);
-
-      if (onlyLead) {
-        const { data: membersMgr, error: mmErr } = await supabase
-          .from('users')
-          .select('email, username')     // ← get both here too
-          .eq('manager_id', leadId);
-
-        if (mmErr) console.warn("members by manager_id error", mmErr);
-        console.log("👥 RAW members by manager_id", membersMgr);
-
-        emails = (membersMgr || [])
-          .map(m => (m.email || m.username || '').toLowerCase())
-          .filter(Boolean);
-      }
-    } else {
-      const { data: membersMgr, error: mmErr } = await supabase
+    if (meRow?.team_id) {
+      // members by same team_id
+      const { data: members } = await supabase
         .from('users')
         .select('email, username')
-        .eq('manager_id', leadId);
+        .eq('team_id', meRow.team_id);
 
-      if (mmErr) console.warn("members by manager_id error", mmErr);
-      console.log("👥 RAW members by manager_id", membersMgr);
-
-      emails = (membersMgr || [])
+      emails = (members || [])
         .map(m => (m.email || m.username || '').toLowerCase())
         .filter(Boolean);
+    } else {
+      // fallback: just me if no team yet
+      emails = [myEmail].filter(Boolean);
     }
 
-    const s = new Set([leadEmail, ...emails].filter(Boolean));
-    console.log("✅ Final teamMemberEmails set", Array.from(s));
-
+    const s = new Set([myEmail, ...emails].filter(Boolean));
     if (alive) setTeamMemberEmails(s);
   })();
   return () => { alive = false; };
-}, [isTeamlead]);
+}, []); // runs for everyone
+
+useEffect(() => {
+  // when my team set or role arrives, recompute visibility
+  if (teamMemberEmails.size || isAdmin || isTeamlead) {
+    refreshSubmittedOffers();
+  }
+}, [teamMemberEmails, role]);
+
 
     //admin - sees all buttons
     //teamLead - sees their teams buttons
@@ -2223,7 +2228,7 @@ useEffect(() => {
                                 {expanded ? '▲ Hide batch' : `▼ Show batch (${offer.children.length})`}
                                 </button>
                             )}
-                            {canManageOffer(offer) && (
+                            {canEditOrDelete(offer) && (
                                 <>
                                 <button
                                     onClick={() => handleEditOffer(offer)}
@@ -2271,7 +2276,7 @@ useEffect(() => {
                             <td style={{ padding:'8px' }}>{child._loading}</td>
                             <td style={{ padding:'8px' }}>{child._unloading}</td>
                             <td style={{ textAlign:'center' }}>
-                            {canManageOffer(child) ? (
+                            {canEditOrDelete(child) ? (
                                 <div style={{ display:'flex', justifyContent:'center', gap:6 }}>
                                 <button
                                     onClick={() => handleEditOffer(child)}
