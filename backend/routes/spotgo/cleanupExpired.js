@@ -82,3 +82,9 @@ router.get("/", async (req, res) => {
 });
 
 module.exports = router;
+
+//TODO: sa se stearga cursele de pe spotgo dupa loading date - add it to refresh page?
+
+//TODO LATER: connect microsoft to platform
+
+//TODO: n8n integration for spotgo- teleroot and another one, no id shows up

@@ -171,6 +171,8 @@ export default function SpotGoPage({ user }) {
 
     const [role, setRole] = React.useState(null);
 
+    const [teamMemberEmails, setTeamMemberEmails] = useState(new Set());
+
     const wantBoth = multiLoading && multiUnloading;
     const canOpenPreview =
         wantBoth
@@ -228,7 +230,7 @@ export default function SpotGoPage({ user }) {
         let profRole = null;
 
         const { data: profById } = await supabase
-        .from('profiles')
+        .from('users')
         .select('role')
         .eq('id', userId)
         .maybeSingle();
@@ -237,7 +239,7 @@ export default function SpotGoPage({ user }) {
 
         if (!profRole && email) {
         const { data: profByEmail } = await supabase
-            .from('profiles')
+            .from('users')
             .select('role')
             .eq('email', email)
             .maybeSingle();
@@ -771,7 +773,7 @@ export default function SpotGoPage({ user }) {
                 _loading: formatAddr(o.loading_address || ""),
                 _unloading: formatAddr(o.unloading_address || ""),
                 isMine,
-                // batch meta (may be null on legacy rows)
+                submittedByEmail: o.submitted_by_email || null,   // <— add this
                 batchGroupId: o.batch_group_id || null,
                 batchParentId: o.batch_parent_id || null,
                 batchOrder: typeof o.batch_order === 'number' ? o.batch_order : null,
@@ -1625,11 +1627,104 @@ export default function SpotGoPage({ user }) {
     const handleBlur = e => Object.assign(e.target.style, baseInputStyle);
 
     // în SpotGoPage, după state-ul `role`:
-    const roleStr = (role ?? user?.role ?? user?.user_metadata?.role ?? '').toString().toLowerCase();
+    const roleStr = (role ?? user?.role ?? user?.user_metadata?.role ?? '')
+    .toString()
+    .toLowerCase();
+
     const isAdmin    = roleStr === 'admin';
     const isTeamlead = roleStr === 'team_lead' || roleStr === 'teamlead';
-    const canManageOffer = (o) => !!(o?.isMine || isAdmin || isTeamlead);
 
+const isTeamMemberOffer = (o) => {
+  const e = (o?.submittedByEmail || '').toLowerCase();
+  return e && teamMemberEmails.has(e);
+};
+
+    const canManageOffer = (o) => {
+    if (!o) return false;
+    return !!(
+        o.isMine ||
+        isAdmin ||
+        (isTeamlead && isTeamMemberOffer(o))   // <— restrict team lead to their team
+    );
+    };
+
+useEffect(() => {
+  let alive = true;
+  (async () => {
+    if (!isTeamlead) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const leadId = session?.user?.id;
+    const leadEmail = (session?.user?.email || '').toLowerCase();
+
+    console.log("👤 TeamLead login", { leadId, leadEmail });
+
+    const { data: me, error: meErr } = await supabase
+      .from('users')
+      .select('team_id')
+      .eq('id', leadId)
+      .maybeSingle();
+
+    if (meErr) console.warn("Lead profile fetch error", meErr);
+    console.log("📋 Lead profile row", me);
+
+    let emails = [];
+
+    if (me?.team_id) {
+      const { data: members, error: mErr } = await supabase
+        .from('users')
+        .select('id, email, username')   // ← get both
+        .eq('team_id', me.team_id);
+
+      if (mErr) console.warn("members by team_id error", mErr);
+      console.log("👥 RAW members by team_id", members);
+
+      emails = (members || [])
+        .map(m => (m.email || m.username || '').toLowerCase()) // ← fallback to username
+        .filter(Boolean);
+
+      const onlyLead =
+        emails.length === 0 ||
+        (emails.length === 1 && emails[0] === leadEmail);
+
+      if (onlyLead) {
+        const { data: membersMgr, error: mmErr } = await supabase
+          .from('users')
+          .select('email, username')     // ← get both here too
+          .eq('manager_id', leadId);
+
+        if (mmErr) console.warn("members by manager_id error", mmErr);
+        console.log("👥 RAW members by manager_id", membersMgr);
+
+        emails = (membersMgr || [])
+          .map(m => (m.email || m.username || '').toLowerCase())
+          .filter(Boolean);
+      }
+    } else {
+      const { data: membersMgr, error: mmErr } = await supabase
+        .from('users')
+        .select('email, username')
+        .eq('manager_id', leadId);
+
+      if (mmErr) console.warn("members by manager_id error", mmErr);
+      console.log("👥 RAW members by manager_id", membersMgr);
+
+      emails = (membersMgr || [])
+        .map(m => (m.email || m.username || '').toLowerCase())
+        .filter(Boolean);
+    }
+
+    const s = new Set([leadEmail, ...emails].filter(Boolean));
+    console.log("✅ Final teamMemberEmails set", Array.from(s));
+
+    if (alive) setTeamMemberEmails(s);
+  })();
+  return () => { alive = false; };
+}, [isTeamlead]);
+
+    //admin - sees all buttons
+    //teamLead - sees their teams buttons
+    //limit lower end of offers table
 
   return (
   <div style={{ background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
