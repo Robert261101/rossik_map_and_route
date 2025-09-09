@@ -277,6 +277,24 @@ export default function SpotGoPage({ user }) {
         return (o.submittedByEmail || '').toLowerCase() === meEmail;
     };
 
+    function toUtcIso(dateStr, timeStr) {
+    // take local input and turn it into a UTC ISO string with Z
+    const local = new Date(`${dateStr}T${timeStr}:00`);
+    return new Date(local.getTime() - local.getTimezoneOffset()*60000).toISOString();
+    }
+
+    function fromUtcIsoToLocalParts(iso) {
+    if (!iso) return { date: '', hhmm: '' };
+    const d = new Date(iso);            // interprets ISO Z as UTC
+    const pad = n => String(n).padStart(2, '0');
+    const local = new Date(d.getTime() - d.getTimezoneOffset()*60000); // shift to local wall-clock
+    const date = local.toISOString().slice(0,10);
+    const hhmm = local.toISOString().slice(11,16);
+    return { date, hhmm };
+    }
+
+
+
     async function buildPreviewFor(side) {
         const centerLoc = side === 'unloading' ? unloadingLocation : loadingLocation;
         if (!centerLoc) return [];
@@ -369,12 +387,19 @@ export default function SpotGoPage({ user }) {
                 {
                     sequence: 1, type: "Loading",
                     address: cleanAddress(loadingLocation),
-                    period: { startDate: `${loadStartDate}T${loadStartTime}:00Z`, endDate: `${loadEndDate}T${loadEndTime}:00Z` }
+                    period: {
+                    startDate: toUtcIso(loadStartDate, loadStartTime),
+                    endDate:   toUtcIso(loadEndDate,   loadEndTime)
+                    }
+
                 },
                 {
                     sequence: 2, type: "Unloading",
                     address: cleanAddress(unloadingLocation),
-                    period: { startDate: `${unloadStartDate}T${unloadStartTime}:00Z`, endDate: `${unloadEndDate}T${unloadEndTime}:00Z` }
+                    period: {
+                    startDate: toUtcIso(unloadStartDate, unloadStartTime),
+                    endDate:   toUtcIso(unloadEndDate,   unloadEndTime)
+                    }
                 }
                 ],
                 requirements: {
@@ -435,10 +460,11 @@ export default function SpotGoPage({ user }) {
                 unloading_postal_code:  unloadAddr?.postalCode  || null,
                 unloading_lat:          unloadAddr?.lat || null,
                 unloading_lng:          unloadAddr?.lng || null,
-                loading_start_time:  `${loadStartDate}T${loadStartTime}:00`,
-                loading_end_time:    `${loadEndDate}T${loadEndTime}:00`,
-                unloading_start_time:`${unloadStartDate}T${unloadStartTime}:00`,
-                unloading_end_time:  `${unloadEndDate}T${unloadEndTime}:00`,
+                loading_start_time:  toUtcIso(loadStartDate, loadStartTime),
+                loading_end_time:    toUtcIso(loadEndDate, loadEndTime),
+                unloading_start_time: toUtcIso(unloadStartDate, unloadStartTime),
+                unloading_end_time:   toUtcIso(unloadEndDate, unloadEndTime),
+
                 external_comment: externalComment || null,
                 hide_locations: hideLocations,
                 pallets_exchange: palletsExchange,
@@ -526,12 +552,18 @@ export default function SpotGoPage({ user }) {
                 {
                     sequence: 1, type: "Loading",
                     address: cleanAddress(loadingLocation),
-                    period: { startDate: `${loadStartDate}T${loadStartTime}:00Z`, endDate: `${loadEndDate}T${loadEndTime}:00Z` }
+                    period: {
+                        startDate: toUtcIso(loadStartDate, loadStartTime),
+                        endDate:   toUtcIso(loadEndDate,   loadEndTime)
+                    }
                 },
                 {
                     sequence: 2, type: "Unloading",
                     address: cleanAddress(unloadingLocation),
-                    period: { startDate: `${unloadStartDate}T${unloadStartTime}:00Z`, endDate: `${unloadEndDate}T${unloadEndTime}:00Z` }
+                    period: {
+                        startDate: toUtcIso(unloadStartDate, unloadStartTime),
+                        endDate:   toUtcIso(unloadEndDate,   unloadEndTime)
+                    }
                 }
                 ],
                 requirements: {
@@ -593,10 +625,10 @@ export default function SpotGoPage({ user }) {
                 unloading_postal_code:  unloadC?.postalCode  || null,
                 unloading_lat:          unloadC?.lat || null,
                 unloading_lng:          unloadC?.lng || null,
-                loading_start_time:  `${loadStartDate}T${loadStartTime}:00`,
-                loading_end_time:    `${loadEndDate}T${loadEndTime}:00`,
-                unloading_start_time:`${unloadStartDate}T${unloadStartTime}:00`,
-                unloading_end_time:  `${unloadEndDate}T${unloadEndTime}:00`,
+                loading_start_time:  toUtcIso(loadStartDate, loadStartTime),
+                loading_end_time:    toUtcIso(loadEndDate, loadEndTime),
+                unloading_start_time: toUtcIso(unloadStartDate, unloadStartTime),
+                unloading_end_time:  toUtcIso(unloadEndDate, unloadEndTime),
                 external_comment: externalComment || null,
                 hide_locations: hideLocations,
                 pallets_exchange: palletsExchange,
@@ -1222,8 +1254,8 @@ export default function SpotGoPage({ user }) {
                 type: "Loading",
                 address: cleanAddress(address0),
                 period: {
-                    startDate: `${loadStartDate}T${loadStartTime}:00Z`,
-                    endDate:   `${loadEndDate}T${loadEndTime}:00Z`
+                    startDate: toUtcIso(loadStartDate, loadStartTime),
+                    endDate:   toUtcIso(loadEndDate,   loadEndTime)
                 }
                 },
                 {
@@ -1231,8 +1263,8 @@ export default function SpotGoPage({ user }) {
                 type: "Unloading",
                 address: cleanAddress(address1),
                 period: {
-                    startDate: `${unloadStartDate}T${unloadStartTime}:00Z`,
-                    endDate:   `${unloadEndDate}T${unloadEndTime}:00Z`
+                    startDate: toUtcIso(unloadStartDate, unloadStartTime),
+                    endDate:   toUtcIso(unloadEndDate,   unloadEndTime)
                 }
                 }
             ],
@@ -1341,10 +1373,10 @@ export default function SpotGoPage({ user }) {
                     unloading_lat: address1?.lat || null,
                     unloading_lng: address1?.lng || null,
 
-                    loading_start_time: buildDbTs(loadStartDate,  loadStartTime),
-                    loading_end_time: buildDbTs(loadEndDate,    loadEndTime),
-                    unloading_start_time: buildDbTs(unloadStartDate,unloadStartTime),
-                    unloading_end_time: buildDbTs(unloadEndDate,  unloadEndTime),
+                    loading_start_time: toUtcIso(loadStartDate,  loadStartTime),
+                    loading_end_time: toUtcIso(loadEndDate,    loadEndTime),
+                    unloading_start_time: toUtcIso(unloadStartDate,unloadStartTime),
+                    unloading_end_time: toUtcIso(unloadEndDate,  unloadEndTime),
 
                     external_comment: externalComment || null,
                     hide_locations: hideLocations,
@@ -1388,10 +1420,10 @@ export default function SpotGoPage({ user }) {
                         unloading_lat: address1?.lat || null,
                         unloading_lng: address1?.lng || null,
 
-                        loading_start_time:  buildDbTs(loadStartDate,  loadStartTime),
-                        loading_end_time:    buildDbTs(loadEndDate,    loadEndTime),
-                        unloading_start_time:buildDbTs(unloadStartDate,unloadStartTime),
-                        unloading_end_time:  buildDbTs(unloadEndDate,  unloadEndTime),
+                        loading_start_time:  toUtcIso(loadStartDate,  loadStartTime),
+                        loading_end_time:    toUtcIso(loadEndDate,    loadEndTime),
+                        unloading_start_time:toUtcIso(unloadStartDate,unloadStartTime),
+                        unloading_end_time:  toUtcIso(unloadEndDate,  unloadEndTime),
 
                         external_comment: externalComment || null,
                         hide_locations: hideLocations,
@@ -1471,19 +1503,22 @@ export default function SpotGoPage({ user }) {
                 countryCode: data.unloading_country_code
             });
 
-
-
-            setLoadStartDate(parseDbDate(data.loading_start_time));
-            setLoadStartTime(parseDbHHMM(data.loading_start_time));
-
-            setLoadEndDate(parseDbDate(data.loading_end_time));
-            setLoadEndTime(parseDbHHMM(data.loading_end_time));
-
-            setUnloadStartDate(parseDbDate(data.unloading_start_time));
-            setUnloadStartTime(parseDbHHMM(data.unloading_start_time));
-
-            setUnloadEndDate(parseDbDate(data.unloading_end_time));
-            setUnloadEndTime(parseDbHHMM(data.unloading_end_time));
+            {
+                const p = fromUtcIsoToLocalParts(data.loading_start_time);
+                setLoadStartDate(p.date); setLoadStartTime(p.hhmm);
+            }
+            {
+                const p = fromUtcIsoToLocalParts(data.loading_end_time);
+                setLoadEndDate(p.date); setLoadEndTime(p.hhmm);
+            }
+            {
+                const p = fromUtcIsoToLocalParts(data.unloading_start_time);
+                setUnloadStartDate(p.date); setUnloadStartTime(p.hhmm);
+            }
+            {
+                const p = fromUtcIsoToLocalParts(data.unloading_end_time);
+                setUnloadEndDate(p.date); setUnloadEndTime(p.hhmm);
+            }
 
             // 🔽 All other fields
             setLengthM(String(data.length_m || "13.6"));
@@ -1580,6 +1615,18 @@ export default function SpotGoPage({ user }) {
             setRadiusDraft(String(radiusKm));
         }
     }, [showMultiConfig]);
+
+    useEffect(() => {
+    async function purgeExpired() {
+        const now = new Date().toISOString();
+        await supabase
+        .from('submitted_offers')
+        .delete()
+        .lte('loading_end_time', now);
+    }
+    purgeExpired().then(refreshSubmittedOffers);
+    }, []);
+
 
     const toSpotgoAddr = (c) => ({
         countryCode: c.countryCode,
