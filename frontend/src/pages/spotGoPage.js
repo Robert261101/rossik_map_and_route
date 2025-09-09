@@ -678,65 +678,67 @@ export default function SpotGoPage({ user }) {
     }
 
     async function handleDeleteBatch(rootOffer) {
-        if (!canEditOrDelete(rootOffer)) { alert("You don't have permission to delete this batch."); return; }
+    if (!canEditOrDelete(rootOffer)) { alert("You don't have permission to delete this batch."); return; }
 
-        const groupId = rootOffer?.batchGroupId;
-        if (!groupId) {
-            // no batch on this row – fall back to single delete
-            return handleDeleteOffer(rootOffer.id);
-        }
+    const groupId = rootOffer?.batchGroupId;
+    if (!groupId) return handleDeleteOffer(rootOffer.id);
 
-        if (!window.confirm("Delete the entire batch for this offer? This will remove ALL entries in the group.")) {
-            return;
-        }
+    if (!window.confirm("Delete the entire batch for this offer? This will remove ALL entries in the group.")) {
+        return;
+    }
 
-        setIsBatchDeleting(true);
+    setIsBatchDeleting(true);
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) { alert("Please sign in first."); setIsBatchDeleting(false); return; }
+
+        // 1) Look up all offer_ids in the group
+        const { data: rows, error } = await supabase
+        .from('submitted_offers')
+        .select('offer_id')
+        .eq('batch_group_id', groupId);
+
+        if (error) throw error;
+
+        const ids = (rows || []).map(r => r.offer_id).filter(Boolean);
+
+        // 2) Best-effort SpotGo delete for each
+        for (const id of ids) {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
-            if (!token) { alert("Please sign in first."); setIsBatchDeleting(false); return; }
-
-            // Find every offer in this group
-            const { data: rows, error } = await supabase
-            .from('submitted_offers')
-            .select('offer_id')
-            .eq('batch_group_id', groupId);
-
-            if (error) throw error;
-            const ids = (rows || []).map(r => r.offer_id).filter(Boolean);
-            if (!ids.length) {
-            // Nothing found locally, just bail from UI
-            setOffers(prev => prev.filter(o => o.batchGroupId !== groupId));
-            setIsBatchDeleting(false);
-            return;
+            const res = await fetch(`${API_BASE}/api/spotgo/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok && res.status !== 404) {
+            console.warn(`SpotGo delete failed for ${id}:`, await res.text());
             }
-
-            // Try to delete from SpotGo first (best-effort)
-            for (const id of ids) {
-            try {
-                await fetch(`${API_BASE}/api/spotgo/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-                });
-            } catch {}
-            }
-
-            // Purge them from Supabase in one go
-            // await supabase.from('submitted_offers').delete().in('offer_id', ids);
-
-            // Optimistic local update (remove the whole group from the table)
-            setOffers(prev => prev.filter(o => o.batchGroupId !== groupId));
-
-            // If you prefer to fully re-sync from DB, uncomment:
-            // await refreshSubmittedOffers();
-
-            alert(`Batch deleted (${ids.length} item${ids.length>1?'s':''}).`);
         } catch (e) {
-            console.error("Delete batch error:", e);
-            alert("Something went wrong while deleting the batch.");
-        } finally {
-            setIsBatchDeleting(false);
+            console.warn(`SpotGo delete error for ${id}:`, e);
         }
+        }
+
+        // 3) Delete from Supabase (this was commented out)
+        // Prefer batch delete by group_id (fewer round trips)
+        const { error: supErr } = await supabase
+        .from('submitted_offers')
+        .delete()
+        .eq('batch_group_id', groupId);
+        // If RLS enforces ownership, you may need:
+        // .in('offer_id', ids).eq('submitted_by_email', meEmail)
+
+        if (supErr) throw supErr;
+
+        // 4) Update UI
+        setOffers(prev => prev.filter(o => o.batchGroupId !== groupId));
+
+        alert(`Batch deleted (${ids.length} item${ids.length>1?'s':''}).`);
+    } catch (e) {
+        console.error("Delete batch error:", e);
+        alert("Something went wrong while deleting the batch.");
+    } finally {
+        setIsBatchDeleting(false);
+    }
     }
 
 
@@ -1636,45 +1638,55 @@ export default function SpotGoPage({ user }) {
     });
 
     async function handleDeleteOffer(offerIdOrRow) {
-        const offer = typeof offerIdOrRow === 'object' ? offerIdOrRow : offers.find(o => o.id === offerIdOrRow);
-        if (!canEditOrDelete(offer)) { alert("You don't have permission to delete this offer."); return; }
+    const offer = typeof offerIdOrRow === 'object'
+        ? offerIdOrRow
+        : offers.find(o => o.id === offerIdOrRow);
 
-        if (!window.confirm("Are you sure you want to delete this offer?")) return;
+    if (!canEditOrDelete(offer)) { alert("You don't have permission to delete this offer."); return; }
 
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
+    const offerId = offer?.id ?? offerIdOrRow;
+    if (!offerId) { alert("Missing offer ID."); return; }
 
+    if (!window.confirm("Are you sure you want to delete this offer?")) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    try {
+        // 1) Best-effort delete in SpotGo
         try {
-            // Delete from SpotGo
-            const res = await fetch(`${API_BASE}/api/spotgo/${offerIdOrRow}`, {
-                method: "DELETE",
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!res.ok) {
-                const errText = await res.text();
-                alert(`Failed to delete offer: ${errText}`);
-            return;
-            }
-
-            // // Delete from Supabase
-            // const { error: supabaseError } = await supabase
-            //     .from('submitted_offers')
-            //     .delete()
-            //     .eq('offer_id', offerId);
-
-            // if (supabaseError) {
-            //     console.error("Supabase delete error:", supabaseError.message);
-            // }
-
-            // ✅ Update local table only (no refresh)
-            setOffers(prev => prev.filter(o => o.id !== offerIdOrRow));
-
-            alert(`Freight ${offerIdOrRow} deleted successfully.`);
-        } catch (error) {
-            console.error("Delete offer error:", error);
-            alert("An error occurred while deleting the offer.");
+        const res = await fetch(`${API_BASE}/api/spotgo/${offerId}`, {
+            method: "DELETE",
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        // If SpotGo returns 404, continue—maybe it was already gone.
+        if (!res.ok && res.status !== 404) {
+            const errText = await res.text();
+            throw new Error(`SpotGo delete failed: ${errText || res.status}`);
         }
+        } catch (e) {
+        console.warn("SpotGo delete warning:", e.message || e);
+        // continue to DB delete so we don't orphan records
+        }
+
+        // 2) Delete from Supabase (this was commented out before)
+        const { error: supabaseError } = await supabase
+        .from('submitted_offers')
+        .delete()
+        .eq('offer_id', offerId);
+        // If your RLS requires ownership checks, add:
+        // .eq('submitted_by_email', meEmail)
+
+        if (supabaseError) throw supabaseError;
+
+        // 3) Optimistic UI update
+        setOffers(prev => prev.filter(o => o.id !== offerId));
+
+        alert(`Freight ${offerId} deleted successfully.`);
+    } catch (error) {
+        console.error("Delete offer error:", error);
+        alert("An error occurred while deleting the offer.");
+    }
     }
 
     // Shared input style
