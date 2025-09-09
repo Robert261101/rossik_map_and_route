@@ -881,6 +881,15 @@ export default function SpotGoPage({ user }) {
     }, []);
 
     useEffect(() => {
+    if (!multiLoading && !multiUnloading) {
+        setBatchCfgReady(false);
+        setMultiCount(3);   // default
+        setRadiusKm(150);   // default
+    }
+    }, [multiLoading, multiUnloading]);
+
+
+    useEffect(() => {
         if (!formRef.current) return;
         const el = formRef.current;
 
