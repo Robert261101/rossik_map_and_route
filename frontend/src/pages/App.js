@@ -19,6 +19,7 @@ import ResetPasswordPage from './ResetPassword'
 import SpotGoPage from './spotGoPage';
 import RossikTools from './LandingPage'
 import SpotGoTrucks from './spotGoTrucks'
+import ConversationsPage from './ConversationsPage'
 import ReactDOM from 'react-dom'
 import { ThemeProvider } from '../contexts/ThemeContext'
 
@@ -149,6 +150,9 @@ export default function App() {
         <Route
           path="/admin/teams/:key/add-members"
           element={user && (user.role === 'admin' || user.role === 'team_lead') ? <AddTeamMembers user={user} /> : <Navigate to="/" />} />
+        <Route
+          path="/conversations"
+          element={user ? <ConversationsPage user={user} /> : <Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   )

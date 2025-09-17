@@ -2397,4 +2397,6 @@ useEffect(() => {
 
 // cand postezi un batch de oferte si ai de ex jumbo si mega, daca dai edit pe tot batch-ul sa le modifice la toate.
 
-//microsoft login with rossik tools - intrebari - cand se creaza un cont de microsoft sa se creeze automat si un cont pe rossik tools?
+// microsoft login with rossik tools - intrebari - cand se creaza un cont de microsoft sa se creeze automat si un cont pe rossik tools?
+
+// map and guide TODO: implement empty km - point A to point B - basically distance between points

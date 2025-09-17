@@ -95,6 +95,11 @@ export default function Header({ user }) {
     navigate('/history', { state: { fromHistory: true } });
     setToolsOpen(false);
   };
+
+  const handleConversations= () => {
+    navigate('/conversations', { state: {} });
+    setToolsOpen(false);
+  }
   
   // Titlu/pagină activă afişat subtil în dreapta
   const pageLabel = React.useMemo(() => {
@@ -160,6 +165,10 @@ export default function Header({ user }) {
                     Teams
                   </button>
                 )}
+
+                <button onClick={handleConversations} className={btnWhiteRed}>
+                  Conversations
+                </button>
                 
                 <button onClick={handleHistory} className={btnWhiteRed}>
                   History
