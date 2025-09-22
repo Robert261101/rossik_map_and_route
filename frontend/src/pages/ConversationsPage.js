@@ -2,10 +2,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import Header from '../components/header';
+import ConversationViewer from '../components/ConversationViewer';
 
 export default function ConversationsPage({ user }) {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState('');
+  const [active, setActive] = useState(null); // {id, phone, route_identifier, truck_plate}
   const loadingRef = useRef(false);
 
   // helpers
@@ -39,6 +41,17 @@ export default function ConversationsPage({ user }) {
     }
   };
 
+  async function searchRoutes(term) {
+  const { data, error } = await supabase
+    .from('routes')
+    .select('identifier')
+    .ilike('identifier', `%${term}%`)
+    .limit(10);
+  if (error) throw error;
+  return data || [];
+}
+
+
   // 1) initial load
   useEffect(() => {
     if (loadingRef.current) return;
@@ -48,7 +61,7 @@ export default function ConversationsPage({ user }) {
       // A) conversations
       const { data: convs, error: convErr } = await supabase
         .from('wa_conversation')
-        .select('id, id, phone, status, started_at, updated_at, route_id, routes(identifier)')
+        .select('id, phone, status, started_at, updated_at, route_id_text, truck_plate')
         .order('started_at', { ascending: false });
 
       if (convErr) {
@@ -60,13 +73,12 @@ export default function ConversationsPage({ user }) {
 
       const base = (convs || []).map(c => ({
         id: c.id,
-        id: c.id,
         phone: c.phone,
         status: c.status,
         started_at: c.started_at,
         updated_at: c.updated_at,
-        route_identifier: c.routes?.identifier ?? null,
-        truck_plate: null, // filled next
+        route_identifier: c.route_id_text || null,
+        truck_plate: c.truck_plate || null,
       }));
 
       setRows(base);
@@ -114,28 +126,16 @@ export default function ConversationsPage({ user }) {
 
           const shaped = {
             id: c.id,
-            id: c.id,
             phone: c.phone,
             status: c.status,
             started_at: c.started_at,
             updated_at: c.updated_at,
-            route_identifier: null,
+            route_identifier: c.route_id_text || null,
+            truck_plate: c.truck_plate || null,
           };
+          setRows(curr => upsertById(curr, shaped));
 
-          if (c.route_id) {
-            supabase
-              .from('routes')
-              .select('identifier')
-              .eq('id', c.route_id)
-              .single()
-              .then(({ data }) => {
-                setRows(curr =>
-                  upsertById(curr, { ...shaped, route_identifier: data?.identifier ?? null })
-                );
-              });
-          } else {
-            setRows(curr => upsertById(curr, shaped));
-          }
+          console.log(shaped)
         }
       )
       .subscribe();
@@ -224,7 +224,7 @@ export default function ConversationsPage({ user }) {
                       </button>
                         : null}
                     <button
-                        // onClick={() => onClose(r.id)}
+                        onClick={() => setActive(r)}
                         className="bg-blue-600 hover:bg-blue-700 text-white text-sm mx-auto rounded w-full px-3 py-1"
                       >
                         View
@@ -244,6 +244,20 @@ export default function ConversationsPage({ user }) {
           </table>
         </div>
       </div>
+      {active ? (
+        <ConversationViewer
+          convo={active}
+          onClose={() => setActive(null)}
+        />
+      ) : null}
+
     </div>
   );
 }
+
+// cum merg grupurile de whatsapp
+// grupurile au nume dupa numerele camioanelor si sunt scrise dupa formatul "TM-01-ABC"
+// membrii siguri sunt: dispatcher, seful - erwin, soferul, disponenti(nu stiu exact cine)
+// grupurile nu se sterg cand se termina o cursa. dispatcherul - diana - adauga numerele personale a soferilor daca acestia se schimba si le scoate la finalul rutei. 
+// soferii primesc un telefon "de serviciu" care este deja asociat cu camionul si bagat in grup
+// grupurile sunt create manual de catre dispatcher, nu automat

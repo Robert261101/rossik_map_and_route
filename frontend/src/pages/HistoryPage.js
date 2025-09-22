@@ -12,6 +12,7 @@ import RouteDetailsModal from '../components/RouteDetailsModal';
 import { addLegalBreaks } from '../utils/driverTime';
 import { exportRoutesExcel } from './helpers/exportRoutesExcel';
 import Header from '../components/header';
+import ConversationViewer from '../components/ConversationViewer';
 
 
 export default function HistoryPage({ user }) {
@@ -29,6 +30,9 @@ export default function HistoryPage({ user }) {
   const normalizedQuery = normalize(filterQuery);
 
   const [modalOpenId, setModalOpenId] = useState(null);
+  const [activeConvo, setActiveConvo] = useState(null);
+  const [convByRoute, setConvByRoute] = useState(new Map());
+  const [convByPlate, setConvByPlate] = useState(new Map());
 
   const openModal = id => setModalOpenId(id);
   const closeModal = () => setModalOpenId(null);
@@ -75,6 +79,58 @@ export default function HistoryPage({ user }) {
           created_by_email: r.users?.username || 'unknown',
           pricePerDay:    r.trucks?.price_per_day ?? null
         })));
+
+        // build lists to look up convos by route_id_text or truck_plate
+        const identifiers = routes.map(r => r.identifier).filter(Boolean);
+        const plates      = routes.map(r => r.trucks?.plate).filter(Boolean);
+
+        // fetch by route identifiers
+        let all = [];
+        if (identifiers.length) {
+          const { data, error } = await supabase
+            .from('wa_conversation')
+            .select('id, phone, status, updated_at, route_id_text, truck_plate, started_at')
+            .in('route_id_text', identifiers);
+          if (error) console.error(error);
+          if (data) all = all.concat(data);
+        }
+
+        // fetch by plates
+        if (plates.length) {
+          const { data, error } = await supabase
+            .from('wa_conversation')
+            .select('id, phone, status, updated_at, route_id_text, truck_plate, started_at')
+            .in('truck_plate', plates);
+          if (error) console.error(error);
+          if (data) all = all.concat(data);
+        }
+
+        // index: prefer OPEN; else latest by updated_at
+        const byRoute = new Map();
+        const byPlate = new Map();
+
+        for (const c of all) {
+          if (c.route_id_text) {
+            const prev = byRoute.get(c.route_id_text);
+            if (!prev ||
+                (prev.status !== 'open' && c.status === 'open') ||
+                new Date(c.updated_at) > new Date(prev.updated_at)) {
+              byRoute.set(c.route_id_text, c);
+            }
+          }
+          if (c.truck_plate) {
+            const prev = byPlate.get(c.truck_plate);
+            if (!prev ||
+                (prev.status !== 'open' && c.status === 'open') ||
+                new Date(c.updated_at) > new Date(prev.updated_at)) {
+              byPlate.set(c.truck_plate, c);
+            }
+          }
+        }
+
+        setConvByRoute(byRoute);
+        setConvByPlate(byPlate);
+
       } catch (error) {
         console.error('Error fetching routes:', error);
         setSavedRoutes([]);
@@ -166,6 +222,61 @@ export default function HistoryPage({ user }) {
     }, 0);
   };
 
+async function openConvoForRoute(rt) {
+  // Try prefetched best match first
+  const bestPref =
+    (rt.identifier && convByRoute.get(rt.identifier)) ||
+    (rt.truck_plate && convByPlate.get(rt.truck_plate));
+
+  if (bestPref) {
+    setActiveConvo({
+      id: bestPref.id,
+      phone: bestPref.phone,
+      status: bestPref.status,
+      started_at: bestPref.started_at,
+      updated_at: bestPref.updated_at,
+      route_identifier: bestPref.route_id_text || null,
+      truck_plate: bestPref.truck_plate || null,
+    });
+    return;
+  }
+
+  // Fallback: live lookup by OR (identifier/plate)
+  const filters = [];
+  if (rt.identifier)  filters.push(`route_id_text.eq.${rt.identifier}`);
+  if (rt.truck_plate) filters.push(`truck_plate.eq.${rt.truck_plate}`);
+  if (!filters.length) {
+    alert('No route identifier or truck plate on this row to match conversations.');
+    return;
+  }
+
+  const { data: allMatches, error } = await supabase
+    .from('wa_conversation')
+    .select('id, phone, status, started_at, updated_at, route_id_text, truck_plate')
+    .or(filters.join(','))
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('Convo lookup failed:', error);
+    alert('Could not look up conversations for this route.');
+    return;
+  }
+  if (!allMatches?.length) {
+    alert('No conversation found for this route / truck yet.');
+    return;
+  }
+
+  const best = allMatches.find(c => c.status === 'open') || allMatches[0];
+  setActiveConvo({
+    id: best.id,
+    phone: best.phone,
+    status: best.status,
+    started_at: best.started_at,
+    updated_at: best.updated_at,
+    route_identifier: best.route_id_text || null,
+    truck_plate: best.truck_plate || null,
+  });
+}
 
   const toggleExpand = (id, e) => {
     e.stopPropagation();
@@ -342,6 +453,13 @@ export default function HistoryPage({ user }) {
                           {/* Export on the left, Delete on the right */}
                           <button
                             type="button"
+                            onClick={e => { e.stopPropagation(); openConvoForRoute(rt); }}
+                            className="w-24 whitespace-nowrap text-center bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded px-2 py-1"
+                          >
+                            Conversation
+                          </button>
+                          <button
+                            type="button"
                             onClick={e => {
                               e.stopPropagation();
                               exportRoutesExcel([rt], rt.identifier);
@@ -421,6 +539,13 @@ export default function HistoryPage({ user }) {
               />
             );
           })()}
+          {activeConvo ? (
+            <ConversationViewer
+              convo={activeConvo}
+              onClose={() => setActiveConvo(null)}
+            />
+          ) : null}
+
 
         {/* MAP DETAIL */}
         <div
