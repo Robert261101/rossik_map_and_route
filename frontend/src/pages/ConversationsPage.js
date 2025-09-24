@@ -175,7 +175,7 @@ export default function ConversationsPage({ user }) {
   }, [q, rows]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800">
       <Header user={user} />
 
       <div className="p-4">

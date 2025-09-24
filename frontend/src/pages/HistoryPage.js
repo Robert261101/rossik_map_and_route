@@ -323,6 +323,11 @@ async function openConvoForRoute(rt) {
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
       <Header user = {user} />
+      {/* Top toolbar */}
+      <div className="p-4 flex items-center gap-3">
+        <h1 className="text-xl font-semibold">Routes History</h1>
+        <SearchBar savedRoutes={savedRoutes} />
+      </div>
       {/* CONTENT */}
       <div className="flex flex-col flex-1 overflow-hidden relative">
         {/* TABLE */}
