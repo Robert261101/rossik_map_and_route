@@ -4,49 +4,93 @@ import { formatNum } from '../utils/number';
 
 export default function RouteDetailsModal({ route, days, extraCost, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg max-w-xl w-full p-6 relative">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      aria-modal="true"
+      role="dialog"
+    >
+      {/* overlay */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* card */}
+      <div
+        className="
+          relative w-[92vw] max-w-xl
+          bg-white/90 dark:bg-neutral-900/80
+          border border-gray-200 dark:border-neutral-700
+          shadow-2xl rounded-2xl p-6
+          text-gray-900 dark:text-gray-100
+          max-h-[80vh] overflow-y-auto
+        "
+      >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+          aria-label="Close"
+          className="
+            absolute top-4 right-4
+            inline-flex items-center justify-center
+            h-8 w-8 rounded-full
+            text-gray-600 dark:text-gray-300
+            hover:bg-gray-100 dark:hover:bg-neutral-800
+            focus:outline-none focus:ring-2 focus:ring-red-500/60
+          "
         >
           ✕
         </button>
-        <h2 className="text-xl font-semibold mb-4">Route Details</h2>
 
-        <div className="space-y-3 text-sm">
-          <div>
-            <strong>Addresses:</strong>
-            <ol className="list-decimal list-inside">
-              {route.addresses.map((a,i) => (
+        <h2 className="text-2xl font-semibold mb-4">Route Details</h2>
+
+        <div className="space-y-5 text-sm">
+          <section>
+            <h3 className="font-semibold mb-2">Addresses</h3>
+            <ol className="list-decimal list-inside space-y-1">
+              {route.addresses.map((a, i) => (
                 <li key={i}>{a.label}</li>
               ))}
             </ol>
-          </div>
+          </section>
 
           {route.tolls?.length > 0 && (
-            <div>
-              <strong>All Fees:</strong>
-              <ul className="list-disc list-inside">
-                {route.tolls.map((t,i) => (
+            <section>
+              <h3 className="font-semibold mb-2">All Fees</h3>
+              <ul className="list-disc list-inside space-y-1 dark:text-gray-800">
+                {route.tolls.map((t, i) => (
                   <li key={i}>
                     {t.name} ({t.country}): €{formatNum(t.cost)}
                   </li>
                 ))}
               </ul>
-            </div>
+            </section>
           )}
 
           {route.pricePerDay != null && (
-            <div>
-              <strong>Extra costs:</strong>
-              <ul className="list-disc list-inside">
+            <section>
+              <h3 className="font-semibold mb-2">Extra costs</h3>
+              <ul className="list-disc list-inside space-y-1 dark:text-gray-800">
                 <li>
-                  €{formatNum(route.pricePerDay)} /day × {days} days = €{formatNum(extraCost)}
+                  €{formatNum(route.pricePerDay)} / day × {days} days = €
+                  {formatNum(extraCost)}
                 </li>
               </ul>
-            </div>
+            </section>
           )}
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={onClose}
+            className="
+              px-4 py-2 rounded-full
+              bg-red-600 hover:bg-red-700
+              text-white font-medium shadow
+              focus:outline-none focus:ring-2 focus:ring-red-400/60
+            "
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

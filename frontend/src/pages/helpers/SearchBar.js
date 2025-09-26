@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+// src/components/helpers/SearchBar.jsx
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { exportRoutesExcel } from './exportRoutesExcel';
 
@@ -22,7 +23,6 @@ export default function SearchBar({ savedRoutes }) {
       return;
     }
     const q = normalize(query);
-    // Changed from startsWith to includes for substring matching
     const filtered = savedRoutes.filter(route =>
       normalize(route.identifier).includes(q) ||
       normalize(route.truck_plate || '').includes(q)
@@ -84,14 +84,21 @@ export default function SearchBar({ savedRoutes }) {
     : [];
 
   return (
-    <form onSubmit={onSubmit} className="ml-4 relative w-72 flex items-center gap-x-3">
+    <form onSubmit={onSubmit} className="ml-4 relative w-[18rem] sm:w-96 flex items-center gap-3">
       <input
         type="search"
         placeholder="Filter History..."
         value={query ?? ''}
         onChange={e => setQuery(e.target.value)}
         onKeyDown={onKeyDown}
-        className="flex-grow px-2 py-1 border rounded text-lg"
+        className="
+          flex-grow px-3 py-2 rounded-lg text-base
+          bg-white/90 dark:bg-neutral-900/80
+          border border-gray-300 dark:border-neutral-700
+          text-gray-900 dark:text-gray-100
+          placeholder-gray-400 dark:placeholder-gray-400
+          shadow-sm focus:outline-none focus:ring-2 focus:ring-red-600/60
+        "
         aria-autocomplete="list"
         aria-controls="search-suggestion-list"
         aria-activedescendant={activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined}
@@ -99,7 +106,11 @@ export default function SearchBar({ savedRoutes }) {
       />
       <button
         type="submit"
-        className="text-base px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium shadow"
+        className="
+          text-base px-4 py-2 rounded-full
+          bg-red-600 hover:bg-red-700 text-white font-medium shadow
+          focus:outline-none focus:ring-2 focus:ring-red-400/60
+        "
       >
         Search
       </button>
@@ -107,21 +118,29 @@ export default function SearchBar({ savedRoutes }) {
       {appliedFilter && exportList.length > 1 && (
         <button
           type="button"
-          className="text-base px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-medium shadow whitespace-nowrap transition"
+          className="
+            text-base px-4 py-2 rounded-full
+            bg-blue-600 hover:bg-blue-700 text-white font-medium shadow whitespace-nowrap transition
+            focus:outline-none focus:ring-2 focus:ring-blue-400/60
+          "
           onClick={() => exportRoutesExcel(exportList, appliedFilter)}
         >
           Export Filtered XLSX
         </button>
       )}
 
-
       {suggestions.length > 0 && (
         <ul
           id="search-suggestion-list"
-          className="absolute z-50 mt-1 bg-white border rounded shadow max-h-60 overflow-auto w-60 left-0"
           role="listbox"
           ref={suggestionsRef}
           style={{ top: '100%' }}
+          className="
+            absolute left-0 z-50 mt-1 w-[18rem] sm:w-96
+            max-h-60 overflow-auto rounded-lg border
+            bg-white/95 dark:bg-neutral-900/95
+            border-gray-200 dark:border-neutral-700 shadow-lg backdrop-blur
+          "
         >
           {suggestions.map((route, i) => (
             <li
@@ -129,13 +148,18 @@ export default function SearchBar({ savedRoutes }) {
               id={`suggestion-${i}`}
               role="option"
               aria-selected={activeIndex === i}
-              className={`cursor-pointer px-3 py-1 hover:bg-red-100 ${
-                activeIndex === i ? 'bg-red-200' : ''
-              }`}
               onMouseDown={e => e.preventDefault()}
               onClick={() => onSuggestionClick(route)}
+              className={`
+                cursor-pointer px-3 py-2
+                text-gray-900 dark:text-gray-100
+                ${activeIndex === i
+                  ? 'bg-red-100 dark:bg-red-900/30'
+                  : 'hover:bg-gray-100 dark:hover:bg-neutral-800'}
+              `}
             >
-              <span className="font-semibold">{route.identifier}</span> — {route.truck_plate}
+              <span className="font-semibold">{route.identifier}</span>
+              {route.truck_plate ? <span className="opacity-70"> — {route.truck_plate}</span> : null}
             </li>
           ))}
         </ul>

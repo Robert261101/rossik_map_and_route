@@ -1,19 +1,13 @@
-// src/HistoryPage.js
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SearchBar from './helpers/SearchBar';
-import Sun from 'lucide-react/dist/esm/icons/sun';
-import Moon from 'lucide-react/dist/esm/icons/moon';
-import RossikLogo from '../VektorLogo_Rossik_rot.gif';
-import { Link } from 'react-router-dom';
 import { formatNum } from '../utils/number';
 import RouteDetailsModal from '../components/RouteDetailsModal';
 import { addLegalBreaks } from '../utils/driverTime';
 import { exportRoutesExcel } from './helpers/exportRoutesExcel';
 import Header from '../components/header';
 import ConversationViewer from '../components/ConversationViewer';
-
 
 export default function HistoryPage({ user }) {
   const navigate = useNavigate();
@@ -40,7 +34,6 @@ export default function HistoryPage({ user }) {
   const filteredRoutes = savedRoutes.filter(route => {
     const normalizedIdentifier = normalize(route.identifier);
     const normalizedTruckPlate = normalize(route.truck_plate || '');
-
     return (
       normalizedIdentifier.includes(normalizedQuery) ||
       normalizedTruckPlate.includes(normalizedQuery)
@@ -49,14 +42,12 @@ export default function HistoryPage({ user }) {
 
   const rowsToShow = selectedId
     ? savedRoutes.filter(r => r.id === selectedId)
-    : (filterQuery ? filteredRoutes : savedRoutes)
-  
-  const [darkMode, setDarkMode] = React.useState(false);
-  // 1️⃣ Load your routes + truck plates + HERE 'sections'
+    : (filterQuery ? filteredRoutes : savedRoutes);
+
+  // 1) Load routes + conversation hints
   useEffect(() => {
     (async () => {
       try {
-        // Get user's team_id first from 'users' table
         const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('team_id')
@@ -64,51 +55,42 @@ export default function HistoryPage({ user }) {
           .single();
         if (profileError) throw profileError;
 
-        // Fetch routes directly from Supabase, filtering by team_id if you want
         const { data: routes, error: routesError } = await supabase
           .from('routes')
-          .select('*, trucks(plate,price_per_day), users(username)')  // join trucks and users for related fields
+          .select('*, trucks(plate,price_per_day), users(username)')
           .eq('team_id', profile.team_id)
           .order('created_at', { ascending: false });
 
         if (routesError) throw routesError;
 
-        setSavedRoutes(routes.map(r => ({
+        setSavedRoutes((routes || []).map(r => ({
           ...r,
           truck_plate: r.trucks?.plate,
           created_by_email: r.users?.username || 'unknown',
-          pricePerDay:    r.trucks?.price_per_day ?? null
+          pricePerDay: r.trucks?.price_per_day ?? null
         })));
 
-        // build lists to look up convos by route_id_text or truck_plate
-        const identifiers = routes.map(r => r.identifier).filter(Boolean);
-        const plates      = routes.map(r => r.trucks?.plate).filter(Boolean);
+        const identifiers = (routes || []).map(r => r.identifier).filter(Boolean);
+        const plates      = (routes || []).map(r => r.trucks?.plate).filter(Boolean);
 
-        // fetch by route identifiers
         let all = [];
         if (identifiers.length) {
           const { data, error } = await supabase
             .from('wa_conversation')
             .select('id, phone, status, updated_at, route_id_text, truck_plate, started_at')
             .in('route_id_text', identifiers);
-          if (error) console.error(error);
-          if (data) all = all.concat(data);
+          if (!error && data) all = all.concat(data);
         }
-
-        // fetch by plates
         if (plates.length) {
           const { data, error } = await supabase
             .from('wa_conversation')
             .select('id, phone, status, updated_at, route_id_text, truck_plate, started_at')
             .in('truck_plate', plates);
-          if (error) console.error(error);
-          if (data) all = all.concat(data);
+          if (!error && data) all = all.concat(data);
         }
 
-        // index: prefer OPEN; else latest by updated_at
         const byRoute = new Map();
         const byPlate = new Map();
-
         for (const c of all) {
           if (c.route_id_text) {
             const prev = byRoute.get(c.route_id_text);
@@ -127,10 +109,8 @@ export default function HistoryPage({ user }) {
             }
           }
         }
-
         setConvByRoute(byRoute);
         setConvByPlate(byPlate);
-
       } catch (error) {
         console.error('Error fetching routes:', error);
         setSavedRoutes([]);
@@ -138,8 +118,7 @@ export default function HistoryPage({ user }) {
     })();
   }, [user]);
 
-
-  // 2️⃣ One‐time HERE map init
+  // 2) HERE map init (once)
   useEffect(() => {
     if (mapRef.current) return;
     const platform = new window.H.service.Platform({
@@ -156,12 +135,11 @@ export default function HistoryPage({ user }) {
     mapRef.current = map;
   }, []);
 
-  // 3️⃣ When selection changes: clear, draw & zoom
+  // 3) Draw selected route
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    // Clear old polylines
     map.getObjects()
       .filter(o => o instanceof window.H.map.Polyline)
       .forEach(o => map.removeObject(o));
@@ -179,11 +157,9 @@ export default function HistoryPage({ user }) {
       map.addObject(poly);
     });
 
-    // manually compute the union of all polyline bounds
     let minLat = Infinity, minLng = Infinity;
     let maxLat = -Infinity, maxLng = -Infinity;
 
-    // pull out the selected route
     const route = savedRoutes.find(r => r.id === selectedId);
     if (route?.sections) {
       route.sections.forEach(section => {
@@ -199,21 +175,16 @@ export default function HistoryPage({ user }) {
       });
 
       if (minLat < Infinity) {
-        // fit the map to that bounding box
         const rect = new window.H.geo.Rect(minLat, minLng, maxLat, maxLng);
         map.getViewModel().setLookAtData({ bounds: rect });
       }
     }
 
-    // bump the zoom in one notch for a tighter view
     const currentZoom = map.getZoom();
     map.getViewModel().setLookAtData({ zoom: currentZoom });
-
-    // ensure it redraws after the container animates open
     setTimeout(() => map.getViewPort().resize(), 100);
   }, [mapVisible, selectedId, savedRoutes, expandedIds]);
 
-  // Scroll table up & show only selected row
   const handleSelect = id => {
     setSelectedId(cur => (cur === id ? null : id));
     setTimeout(() => {
@@ -222,61 +193,59 @@ export default function HistoryPage({ user }) {
     }, 0);
   };
 
-async function openConvoForRoute(rt) {
-  // Try prefetched best match first
-  const bestPref =
-    (rt.identifier && convByRoute.get(rt.identifier)) ||
-    (rt.truck_plate && convByPlate.get(rt.truck_plate));
+  async function openConvoForRoute(rt) {
+    const bestPref =
+      (rt.identifier && convByRoute.get(rt.identifier)) ||
+      (rt.truck_plate && convByPlate.get(rt.truck_plate));
 
-  if (bestPref) {
+    if (bestPref) {
+      setActiveConvo({
+        id: bestPref.id,
+        phone: bestPref.phone,
+        status: bestPref.status,
+        started_at: bestPref.started_at,
+        updated_at: bestPref.updated_at,
+        route_identifier: bestPref.route_id_text || null,
+        truck_plate: bestPref.truck_plate || null,
+      });
+      return;
+    }
+
+    const filters = [];
+    if (rt.identifier)  filters.push(`route_id_text.eq.${rt.identifier}`);
+    if (rt.truck_plate) filters.push(`truck_plate.eq.${rt.truck_plate}`);
+    if (!filters.length) {
+      alert('No route identifier or truck plate on this row to match conversations.');
+      return;
+    }
+
+    const { data: allMatches, error } = await supabase
+      .from('wa_conversation')
+      .select('id, phone, status, started_at, updated_at, route_id_text, truck_plate')
+      .or(filters.join(','))
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('Convo lookup failed:', error);
+      alert('Could not look up conversations for this route.');
+      return;
+    }
+    if (!allMatches?.length) {
+      alert('No conversation found for this route / truck yet.');
+      return;
+    }
+
+    const best = allMatches.find(c => c.status === 'open') || allMatches[0];
     setActiveConvo({
-      id: bestPref.id,
-      phone: bestPref.phone,
-      status: bestPref.status,
-      started_at: bestPref.started_at,
-      updated_at: bestPref.updated_at,
-      route_identifier: bestPref.route_id_text || null,
-      truck_plate: bestPref.truck_plate || null,
+      id: best.id,
+      phone: best.phone,
+      status: best.status,
+      started_at: best.started_at,
+      updated_at: best.updated_at,
+      route_identifier: best.route_id_text || null,
+      truck_plate: best.truck_plate || null,
     });
-    return;
   }
-
-  // Fallback: live lookup by OR (identifier/plate)
-  const filters = [];
-  if (rt.identifier)  filters.push(`route_id_text.eq.${rt.identifier}`);
-  if (rt.truck_plate) filters.push(`truck_plate.eq.${rt.truck_plate}`);
-  if (!filters.length) {
-    alert('No route identifier or truck plate on this row to match conversations.');
-    return;
-  }
-
-  const { data: allMatches, error } = await supabase
-    .from('wa_conversation')
-    .select('id, phone, status, started_at, updated_at, route_id_text, truck_plate')
-    .or(filters.join(','))
-    .order('updated_at', { ascending: false });
-
-  if (error) {
-    console.error('Convo lookup failed:', error);
-    alert('Could not look up conversations for this route.');
-    return;
-  }
-  if (!allMatches?.length) {
-    alert('No conversation found for this route / truck yet.');
-    return;
-  }
-
-  const best = allMatches.find(c => c.status === 'open') || allMatches[0];
-  setActiveConvo({
-    id: best.id,
-    phone: best.phone,
-    status: best.status,
-    started_at: best.started_at,
-    updated_at: best.updated_at,
-    route_identifier: best.route_id_text || null,
-    truck_plate: best.truck_plate || null,
-  });
-}
 
   const toggleExpand = (id, e) => {
     e.stopPropagation();
@@ -285,146 +254,150 @@ async function openConvoForRoute(rt) {
     );
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('token');
-    navigate('/login');
-  };
-
-  // Actualizează poziția tabelului pentru hartă
+  // Keep the table-bottom CSS var in sync for the map’s top edge
   useEffect(() => {
     const updateTablePosition = () => {
       const table = document.getElementById('historyTableContainer');
       if (table) {
         const rect = table.getBoundingClientRect();
-        document.documentElement.style.setProperty(
-          '--table-bottom', 
-          `${rect.bottom}px`
-        );
-        // Forțează redimensionarea hărții
+        document.documentElement.style.setProperty('--table-bottom', `${rect.bottom}px`);
         if (mapRef.current) {
           setTimeout(() => mapRef.current.getViewPort().resize(), 100);
         }
       }
     };
-
-    // Actualizează la încărcare inițială
     updateTablePosition();
-
-    // Adaugă event listener pentru resize
     window.addEventListener('resize', updateTablePosition);
-    
-    // Curăță event listener la unmount
     return () => window.removeEventListener('resize', updateTablePosition);
-  }, [savedRoutes, expandedIds, selectedId]); // Adăugăm expandedIds la dependencies
-
-  //TODO2: edit button on history
+  }, [savedRoutes, expandedIds, selectedId]);
 
   return (
-    <div className={`flex flex-col min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
-      <Header user = {user} />
+    <div
+      className="
+        flex flex-col min-h-screen
+        bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800
+        dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100
+      "
+    >
+      <Header user={user} />
+
       {/* Top toolbar */}
       <div className="p-4 flex items-center gap-3">
-        <h1 className="text-xl font-semibold">Routes History</h1>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Routes History</h1>
         <SearchBar savedRoutes={savedRoutes} />
       </div>
+
       {/* CONTENT */}
       <div className="flex flex-col flex-1 overflow-hidden relative">
         {/* TABLE */}
         <div id="historyTableContainer" className="flex-none overflow-auto p-4">
-          <table className="min-w-full border bg-white">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="px-3 py-2 border">Created By</th>
-                <th className="px-3 py-2 border">Date</th>
-                <th className="px-3 py-2 border">Identifier</th>
-                <th className="px-3 py-2 border">Truck</th>
-                <th className="px-3 py-2 border">Distance</th>
-                <th className="px-3 py-2 border">Duration</th>
-                <th className="px-3 py-2 border">€ / km</th>
-                <th className="px-3 py-2 border">Toll</th>
-                <th className="px-3 py-2 border">Route Cost</th>
-                <th className="px-3 py-2 border">Total</th>
-                <th className="px-3 py-2 border">Addresses</th>
-                {/* Removed All Fees column */}
-                <th className="px-3 py-2 border w-24"></th> {/* Actions column */}
+          <table
+            className="
+              w-full table-auto border
+              bg-white dark:bg-neutral-900
+              border-gray-200 dark:border-neutral-700
+              text-gray-800 dark:text-gray-100
+              rounded-lg overflow-hidden
+            "
+          >
+            <thead className="bg-gray-50 dark:bg-neutral-800">
+              <tr>
+                {[
+                  'Created By','Date','Identifier','Truck','Distance','Duration',
+                  '€ / km','Toll','Route Cost','Total','Addresses',''
+                ].map((h, i) => (
+                  <th
+                    key={i}
+                    className="
+                      px-3 py-2 border
+                      border-gray-200 dark:border-neutral-700
+                      text-left font-semibold
+                    "
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
 
             <tbody>
               {rowsToShow.map(rt => {
-                const km        = formatNum(rt.distance_km);
-                const dur       = rt.duration;
-                // parse "Xh Ym" → total hours
+                const km  = formatNum(rt.distance_km);
+                const dur = rt.duration;
                 const [hPart, mPart] = dur.split(' ').map(s => parseInt(s));
-                const rawSec    = (hPart || 0) * 3600 + (mPart || 0) * 60;
-                // inject legal breaks
+                const rawSec = (hPart || 0) * 3600 + (mPart || 0) * 60;
                 const secWithBreaks = addLegalBreaks(rawSec);
-                // format back to "Xh Ym"
                 const wbH = Math.floor(secWithBreaks / 3600);
                 const wbM = Math.floor((secWithBreaks % 3600) / 60);
                 const durWithBreaks = `${wbH}h ${wbM}m`;
 
-                const totalHours     = (hPart || 0) + ((mPart || 0) / 60);
-                const days           = Math.ceil(totalHours / 24);
+                const totalHours = (hPart || 0) + ((mPart || 0) / 60);
+                const days       = Math.ceil(totalHours / 24);
                 const epkm      = rt.euro_per_km.toFixed(2);
                 const toll      = formatNum(rt.toll_cost);
                 const routeCost = formatNum(rt.distance_km * rt.euro_per_km);
-                const extra = rt.pricePerDay != null
-                                ? days * rt.pricePerDay
-                                : 0;
+                const extra     = rt.pricePerDay != null ? days * rt.pricePerDay : 0;
                 const tot       = formatNum(rt.total_cost + extra);
-                const feesList  = Array.isArray(rt.tolls)
-                  ? rt.tolls.map(t => `${t.name} (${t.country}): €${t.cost.toFixed(2)}`).join(', ')
-                  : '';
-                const savedBy = rt.created_by_email || 'Unknown';
+                const savedBy   = rt.created_by_email || 'Unknown';
 
                 return (
                   <tr
                     key={rt.id}
                     onClick={() => handleSelect(rt.id)}
-                    className={`cursor-pointer ${selectedId === rt.id ? 'bg-red-50' : ''} hover:bg-gray-100`}
+                    className={`
+                      cursor-pointer
+                      hover:bg-gray-100 dark:hover:bg-neutral-800
+                      ${selectedId === rt.id ? 'bg-red-50 dark:bg-red-900/20' : ''}
+                    `}
                   >
-                    <td className="px-3 py-2 border text-center">{savedBy}</td>
-                    <td className="px-3 py-2 border text-center">{rt.date}</td>
-                    <td className="px-3 py-2 border text-center">{rt.identifier}</td>
-                    <td className="px-3 py-2 border text-center">{rt.truck_plate}</td>
-                    <td className="px-3 py-2 border text-center">{km}</td>
-                    <td className="px-3 py-2 border text-center">
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">{savedBy}</td>
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">{rt.date}</td>
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">{rt.identifier}</td>
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">{rt.truck_plate}</td>
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">{km}</td>
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">
                       {durWithBreaks}
                       <span
-                        className="ml-1 cursor-help text-blue-500"
+                        className="ml-1 cursor-help text-blue-600 dark:text-blue-400"
                         title={`Includes ${((secWithBreaks - rawSec)/3600).toFixed(2)} hours of breaks`}
                       >
                         ⓘ
                       </span>
                     </td>
-                    <td className="px-3 py-2 border text-center">{epkm}</td>
-                    <td className="px-3 py-2 border text-center">{toll}</td>
-                    <td className="px-3 py-2 border text-center">{routeCost}</td>
-                    <td className="px-3 py-2 border text-center">{tot}</td>
-                    <td className="px-3 py-2 border">
-                      {rt.addresses[0].label} → {rt.addresses.slice(-1)[0].label}
-                      <button
-                      //TODO: make it look better/ possibly change functionality to previous method - see "thingy" text file in your notes
-                        className="ml-2 text-s text-red-600 underline"
-                        onClick={e => { e.stopPropagation(); openModal(rt.id); }}
-                      >
-                        Details
-                      </button>
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">{epkm}</td>
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">{toll}</td>
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">{routeCost}</td>
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700 text-center">{tot}</td>
+
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700">
+                      <div className="text-gray-900 dark:text-gray-100">
+                        {rt.addresses[0].label} → {rt.addresses.slice(-1)[0].label}
+                        <button
+                          className="ml-2 text-xs text-red-600 dark:text-red-400 underline"
+                          onClick={e => { e.stopPropagation(); openModal(rt.id); }}
+                        >
+                          Details
+                        </button>
+                      </div>
 
                       {expandedIds.includes(rt.id) && (
-                        <div className="mt-1 text-sm bg-gray-50 p-2 rounded shadow space-y-2">
+                        <div
+                          className="
+                            mt-2 text-sm
+                            bg-gray-50 dark:bg-neutral-800/70
+                            border border-gray-200 dark:border-neutral-700
+                            text-gray-800 dark:text-gray-100
+                            p-3 rounded-lg shadow
+                            space-y-2
+                          "
+                        >
                           <strong>Addresses:</strong>
-                          <ul>
+                          <ul className="list-disc list-inside">
                             {rt.addresses.map((a, i) => (
-                              <li key={i}>
-                                {i + 1}. {a.label}
-                              </li>
+                              <li key={i}>{i + 1}. {a.label}</li>
                             ))}
                           </ul>
 
-                          {/* Show All Fees here */}
                           {Array.isArray(rt.tolls) && rt.tolls.length > 0 && (
                             <div>
                               <strong>All Fees:</strong>
@@ -437,29 +410,32 @@ async function openConvoForRoute(rt) {
                               </ul>
                             </div>
                           )}
-                          { rt.pricePerDay != null && (
+
+                          {rt.pricePerDay != null && (
                             <div className="mt-2">
                               <strong>Extra costs:</strong>
                               <ul className="list-disc list-inside">
                                 <li>Price / Day: €{formatNum(rt.pricePerDay)}</li>
-                              </ul>
-                              <ul className="list-disc list-inside">
-                                <li>Days: {days}</li>
+                                <li>Days: {Math.ceil(((hPart||0)+((mPart||0)/60))/24)}</li>
                               </ul>
                             </div>
-                          ) }
+                          )}
                         </div>
                       )}
                     </td>
 
-                    <td className="px-3 py-2 border">
+                    <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700">
                       {isLeadOrAdmin && (
                         <div className="flex items-center justify-between space-x-2">
-                          {/* Export on the left, Delete on the right */}
                           <button
                             type="button"
                             onClick={e => { e.stopPropagation(); openConvoForRoute(rt); }}
-                            className="w-24 whitespace-nowrap text-center bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded px-2 py-1"
+                            className="
+                              w-24 whitespace-nowrap text-center
+                              bg-emerald-600 hover:bg-emerald-700
+                              text-white text-sm rounded px-2 py-1
+                              focus:outline-none focus:ring-2 focus:ring-emerald-400/60
+                            "
                           >
                             Conversation
                           </button>
@@ -469,7 +445,12 @@ async function openConvoForRoute(rt) {
                               e.stopPropagation();
                               exportRoutesExcel([rt], rt.identifier);
                             }}
-                            className="w-24 whitespace-nowrap text-center bg-blue-600 hover:bg-blue-700 text-white text-sm rounded px-2 py-1"
+                            className="
+                              w-24 whitespace-nowrap text-center
+                              bg-blue-600 hover:bg-blue-700
+                              text-white text-sm rounded px-2 py-1
+                              focus:outline-none focus:ring-2 focus:ring-blue-400/60
+                            "
                           >
                             Export XLSX
                           </button>
@@ -478,11 +459,7 @@ async function openConvoForRoute(rt) {
                               e.stopPropagation();
                               if (!window.confirm('Delete this route?')) return;
 
-                              // pull the real access token from Supabase
-                              const {
-                                data: { session },
-                                error: sessionErr
-                              } = await supabase.auth.getSession();
+                              const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
                               if (sessionErr || !session?.access_token) {
                                 alert('You must be logged in to delete a route');
                                 return;
@@ -510,60 +487,60 @@ async function openConvoForRoute(rt) {
                                 alert('Delete failed: ' + err.message);
                               }
                             }}
-                            className="w-24 whitespace-nowrap text-center bg-red-600 hover:bg-red-700 text-white text-sm rounded px-2 py-1"
+                            className="
+                              w-24 whitespace-nowrap text-center
+                              bg-red-600 hover:bg-red-700
+                              text-white text-sm rounded px-2 py-1
+                              focus:outline-none focus:ring-2 focus:ring-red-400/60
+                            "
                           >
                             Delete
                           </button>
                         </div>
                       )}
                     </td>
-
                   </tr>
                 );
               })}
             </tbody>
-
           </table>
         </div>
 
         {/* Route details popup */}
-          {modalOpenId && (() => {
-            const rt = savedRoutes.find(r => r.id === modalOpenId);
-            if (!rt) return null;
-            const [h, m] = rt.duration.split(' ').map(s => parseInt(s));
-            const totalHours = (h||0) + ((m||0)/60);
-            const days = Math.ceil(totalHours/24);
-            const extra = rt.pricePerDay != null ? days * rt.pricePerDay : 0;
-
-            return (
-              <RouteDetailsModal
-                route={rt}
-                days={days}
-                extraCost={extra}
-                onClose={closeModal}
-              />
-            );
-          })()}
-          {activeConvo ? (
-            <ConversationViewer
-              convo={activeConvo}
-              onClose={() => setActiveConvo(null)}
+        {modalOpenId && (() => {
+          const rt = savedRoutes.find(r => r.id === modalOpenId);
+          if (!rt) return null;
+          const [h, m] = rt.duration.split(' ').map(s => parseInt(s));
+          const totalHours = (h||0) + ((m||0)/60);
+          const days = Math.ceil(totalHours/24);
+          const extra = rt.pricePerDay != null ? days * rt.pricePerDay : 0;
+          return (
+            <RouteDetailsModal
+              route={rt}
+              days={days}
+              extraCost={extra}
+              onClose={closeModal}
             />
-          ) : null}
+          );
+        })()}
 
+        {activeConvo ? (
+          <ConversationViewer
+            convo={activeConvo}
+            onClose={() => setActiveConvo(null)}
+          />
+        ) : null}
 
         {/* MAP DETAIL */}
         <div
           id="historyMapContainer"
           className="fixed inset-x-0 bottom-0"
-          style={{ 
+          style={{
             top: 'var(--table-bottom, 100px)',
-            display: selectedId ? 'block' : 'none' 
+            display: selectedId ? 'block' : 'none'
           }}
         />
       </div>
     </div>
   );
 }
-
-//TODO: via station edit
