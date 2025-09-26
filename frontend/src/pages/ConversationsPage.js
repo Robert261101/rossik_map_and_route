@@ -1,8 +1,14 @@
-// src/ConversationsPage.jsx
+// src/ConversationsPage.js
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import Header from '../components/header';
 import ConversationViewer from '../components/ConversationViewer';
+
+// ⬇️ new: shared UI
+import AppShell from '../ui/AppShell';
+import SectionCard from '../ui/SectionCard';
+import { H1 } from '../ui/Typography';
+import { Input } from '../ui/Controls';
 
 export default function ConversationsPage({ user }) {
   const [rows, setRows] = useState([]);
@@ -42,15 +48,14 @@ export default function ConversationsPage({ user }) {
   };
 
   async function searchRoutes(term) {
-  const { data, error } = await supabase
-    .from('routes')
-    .select('identifier')
-    .ilike('identifier', `%${term}%`)
-    .limit(10);
-  if (error) throw error;
-  return data || [];
-}
-
+    const { data, error } = await supabase
+      .from('routes')
+      .select('identifier')
+      .ilike('identifier', `%${term}%`)
+      .limit(10);
+    if (error) throw error;
+    return data || [];
+  }
 
   // 1) initial load
   useEffect(() => {
@@ -134,8 +139,6 @@ export default function ConversationsPage({ user }) {
             truck_plate: c.truck_plate || null,
           };
           setRows(curr => upsertById(curr, shaped));
-
-          console.log(shaped)
         }
       )
       .subscribe();
@@ -175,89 +178,87 @@ export default function ConversationsPage({ user }) {
   }, [q, rows]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800">
-      <Header user={user} />
+    <>
+<Header user={user} />
 
-      <div className="p-4">
-        <div className="mb-3 flex items-center gap-3">
-          <h1 className="text-xl font-semibold">WhatsApp Conversations</h1>
-          <input
-            className="border rounded px-3 py-2 w-72"
-            placeholder="Search plate / route / phone / status…"
-            value={q}
-            onChange={e => setQ(e.target.value)}
-          />
-        </div>
+<AppShell withLogo={false} className="items-start">
+  {/* page gutters so it doesn't hug the viewport edge */}
+  <div className="w-full px-4 md:px-6 lg:px-8 mt-6">
 
-        <div className="overflow-auto">
-          <table className="min-w-full border bg-white">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="px-3 py-2 border text-left">Truck (Plate)</th>
-                <th className="px-3 py-2 border text-left">Route</th>
-                <th className="px-3 py-2 border text-left">Phone</th>
-                <th className="px-3 py-2 border text-left">Status</th>
-                <th className="px-3 py-2 border text-left">Started At</th>
-                <th className="px-3 py-2 border w-32"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(r => (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 border">{r.truck_plate || '—'}</td>
-                  <td className="px-3 py-2 border">{r.route_identifier || '—'}</td>
-                  <td className="px-3 py-2 border">{r.phone}</td>
-                  <td className="px-3 py-2 border">
-                    <span className={r.status === 'open' ? 'text-green-700' : 'text-gray-600'}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 border">{fmt(r.started_at)}</td>
-                  <td className="px-3 py-2 border">
-                    <div className="flex items-center justify-between space-x-2">
-                    {r.status === 'open' ? 
-                      <button
-                        onClick={() => onClose(r.id)}
-                        className="bg-red-600 hover:bg-red-700 text-white text-sm rounded px-3 py-1"
-                      >
-                        Close
-                      </button>
-                        : null}
-                    <button
-                        onClick={() => setActive(r)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-sm mx-auto rounded w-full px-3 py-1"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td className="px-3 py-6 text-center text-gray-500" colSpan={6}>
-                    No conversations
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      {active ? (
-        <ConversationViewer
-          convo={active}
-          onClose={() => setActive(null)}
+    {/* still using the glass card for the header/search */}
+    <SectionCard maxWidth="xl">
+      <div className="mb-3 flex items-center gap-3">
+        <H1 className="!text-3xl !text-left !mb-0">WhatsApp Conversations</H1>
+        <Input
+          className="w-72"
+          placeholder="Search plate / route / phone / status…"
+          value={q}
+          onChange={e => setQ(e.target.value)}
         />
-      ) : null}
+      </div>
+    </SectionCard>
 
+    {/* FULL-WIDTH TABLE (fills the page like before) */}
+    <div className="mt-4 w-full overflow-auto rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <table className="w-full text-center">
+        <thead className="bg-gray-100 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300">
+          <tr>
+            <th className="px-3 py-2 border border-gray-300 dark:border-gray-700 text-left">Truck (Plate)</th>
+            <th className="px-3 py-2 border border-gray-300 dark:border-gray-700 text-left">Route</th>
+            <th className="px-3 py-2 border border-gray-300 dark:border-gray-700 text-left">Phone</th>
+            <th className="px-3 py-2 border border-gray-300 dark:border-gray-700 text-left">Status</th>
+            <th className="px-3 py-2 border border-gray-300 dark:border-gray-700 text-left">Started At</th>
+            <th className="px-3 py-2 border border-gray-300 dark:border-gray-700 text-left w-32"></th>
+          </tr>
+        </thead>
+        <tbody className="text-gray-800 dark:text-gray-100">
+          {filtered.map(r => (
+            <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/60">
+              <td className="px-3 py-2 border border-gray-300 dark:border-gray-700">{r.truck_plate || '—'}</td>
+              <td className="px-3 py-2 border border-gray-300 dark:border-gray-700">{r.route_identifier || '—'}</td>
+              <td className="px-3 py-2 border border-gray-300 dark:border-gray-700">{r.phone}</td>
+              <td className="px-3 py-2 border border-gray-300 dark:border-gray-700">
+                <span className={r.status === 'open' ? 'text-green-700 dark:text-green-400' : 'text-gray-600 dark:text-gray-300'}>
+                  {r.status}
+                </span>
+              </td>
+              <td className="px-3 py-2 border border-gray-300 dark:border-gray-700">{fmt(r.started_at)}</td>
+              <td className="px-3 py-2 border border-gray-300 dark:border-gray-700">
+                <div className="flex items-center justify-between gap-2">
+                  {r.status === 'open' && (
+                    <button
+                      onClick={() => onClose(r.id)}
+                      className="bg-red-600 hover:bg-red-700 text-white text-sm rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-red-600"
+                    >
+                      Close
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setActive(r)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-sm rounded px-3 py-1 w-full focus:outline-none focus:ring-2 focus:ring-red-600"
+                  >
+                    View
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {filtered.length === 0 && (
+            <tr>
+              <td className="px-3 py-6 text-center text-gray-500 dark:text-gray-300 border border-gray-300 dark:border-gray-700" colSpan={6}>
+                No conversations
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
+
+    {active ? (
+      <ConversationViewer convo={active} onClose={() => setActive(null)} />
+    ) : null}
+  </div>
+</AppShell>
+    </>
   );
 }
-
-// cum merg grupurile de whatsapp
-// grupurile au nume dupa numerele camioanelor si sunt scrise dupa formatul "TM-01-ABC"
-// membrii siguri sunt: dispatcher, seful - erwin, soferul, disponenti(nu stiu exact cine)
-// grupurile nu se sterg cand se termina o cursa. dispatcherul - diana - adauga numerele personale a soferilor daca acestia se schimba si le scoate la finalul rutei. 
-// soferii primesc un telefon "de serviciu" care este deja asociat cu camionul si bagat in grup
-// grupurile sunt create manual de catre dispatcher, nu automat
