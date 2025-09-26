@@ -1,3 +1,4 @@
+// src/pages/AddTeamMembers.js
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -23,10 +24,8 @@ export default function AddTeamMembers() {
         console.error('Error fetching users:', error);
         return;
       }
-
-      setUsers(data);
+      setUsers(data || []);
     };
-
     fetchUsers();
   }, [teamId]);
 
@@ -47,12 +46,10 @@ export default function AddTeamMembers() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (selectedUserIds.length === 0) {
       alert('Selectează cel puțin un membru pentru a adăuga.');
       return;
     }
-
     setLoading(true);
 
     const { error } = await supabase
@@ -66,22 +63,48 @@ export default function AddTeamMembers() {
       setLoading(false);
       return;
     }
-
     navigate(`/admin/teams/${teamId}`);
   };
 
   return (
-    <div className="min-h-screen bg-white p-6 flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-6">Adaugă Membri în Echipa</h1>
-      <form onSubmit={handleSubmit} className="w-full max-w-lg bg-white p-6 rounded-xl shadow-lg">
-        <div className="max-h-72 overflow-y-auto mb-6 border rounded p-3 bg-gray-50">
+    <div
+      className="
+        min-h-screen flex flex-col items-center
+        bg-gradient-to-br from-red-600 via-white to-gray-400
+        dark:from-gray-800 dark:via-gray-900 dark:to-black
+        text-gray-800 dark:text-gray-100
+        p-6
+      "
+    >
+      <h1 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">
+        Add Team Members
+      </h1>
+
+      <form
+        onSubmit={handleSubmit}
+        className="
+          w-full max-w-lg
+          bg-white dark:bg-gray-800/90
+          border border-gray-200 dark:border-gray-700
+          p-6 rounded-xl shadow-lg
+        "
+      >
+        {/* Members picker — always white with black text */}
+        <div className="max-h-72 overflow-y-auto mb-6 border rounded p-3 bg-white dark:bg-white border-gray-300">
           {users.length === 0 ? (
-            <p className="text-gray-600">Toți utilizatorii sunt deja în această echipă sau nu există alți utilizatori disponibili.</p>
+            <p className="text-gray-700">
+              All users are already in a team or no other users available.
+            </p>
           ) : (
             users.map((user) => (
               <label
                 key={user.id}
-                className="flex items-center space-x-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-200"
+                className="
+                  flex items-center justify-start gap-3
+                  px-3 py-2 rounded-lg cursor-pointer
+                  hover:bg-gray-100
+                  text-gray-900
+                "
               >
                 <input
                   type="checkbox"
@@ -89,27 +112,40 @@ export default function AddTeamMembers() {
                   onChange={() => toggleUserSelection(user.id)}
                   className="h-5 w-5 text-red-600 focus:ring-red-500 border-gray-300 rounded"
                 />
-                <span className="text-base font-medium text-gray-800">
+                <span className="text-base font-medium">
                   {formatName(user.username)} ({user.role})
                 </span>
               </label>
             ))
           )}
         </div>
+
         <div className="flex justify-between">
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 text-gray-800"
+            className="
+              px-4 py-2 rounded
+              bg-gray-300 hover:bg-gray-400
+              text-gray-800
+              dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white
+              focus:outline-none focus:ring-2 focus:ring-gray-400
+            "
           >
-            Anulează
+            Cancel
           </button>
+
           <button
             type="submit"
             disabled={loading || users.length === 0}
-            className="px-6 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50"
+            className="
+              px-6 py-2 rounded
+              bg-red-600 hover:bg-red-700 text-white font-semibold
+              disabled:opacity-50
+              focus:outline-none focus:ring-2 focus:ring-red-400/60
+            "
           >
-            {loading ? 'Adăugare...' : 'Adaugă Membri'}
+            {loading ? 'Adding...' : 'Add Members'}
           </button>
         </div>
       </form>

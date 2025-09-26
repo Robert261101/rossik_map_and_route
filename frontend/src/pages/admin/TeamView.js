@@ -1,3 +1,4 @@
+// src/pages/TeamView.js
 import { supabase } from "../../lib/supabase";
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -16,7 +17,6 @@ export default function TeamView() {
       setLoading(true);
       setErr('');
       try {
-        // 1) Resolve url_key -> team row (id, name)
         const { data: teamData, error: teamError } = await supabase
           .from('teams')
           .select('id, name, url_key')
@@ -31,7 +31,6 @@ export default function TeamView() {
         }
         setTeam(teamData);
 
-        // 2) Fetch users by real team id
         const { data: usersData, error: usersError } = await supabase
           .from('users')
           .select('id, username, role')
@@ -67,12 +66,11 @@ export default function TeamView() {
     try {
       const { error } = await supabase
         .from('users')
-        .update({ team_id: FALLBACK_TEAM_ID })  // keep your current behavior
+        .update({ team_id: FALLBACK_TEAM_ID })
         .eq('id', userId);
 
       if (error) return alert('Error removing member: ' + error.message);
 
-      // refresh users
       const { data: updated, error: refetchErr } = await supabase
         .from('users')
         .select('id, username, role')
@@ -106,15 +104,27 @@ export default function TeamView() {
   };
 
   if (loading) {
-    return <div className="min-h-screen grid place-items-center">Loading…</div>;
+    return (
+      <div className="min-h-screen grid place-items-center
+                      bg-gradient-to-br from-red-600 via-white to-gray-400
+                      dark:from-gray-800 dark:via-gray-900 dark:to-black
+                      text-gray-800 dark:text-gray-100">
+        Loading…
+      </div>
+    );
   }
+
   if (err || !team) {
     return (
-      <div className="min-h-screen grid place-items-center p-6">
-        <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
-          <p className="mb-4">{err || 'Team not found'}</p>
+      <div className="min-h-screen grid place-items-center p-6
+                      bg-gradient-to-br from-red-600 via-white to-gray-400
+                      dark:from-gray-800 dark:via-gray-900 dark:to-black">
+        <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center
+                        border border-gray-200
+                        dark:bg-gray-800/90 dark:border-gray-700">
+          <p className="mb-4 text-gray-800 dark:text-gray-100">{err || 'Team not found'}</p>
           <button
-            className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700"
+            className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400/60"
             onClick={() => navigate('/admin/teams')}
           >
             Back
@@ -125,36 +135,51 @@ export default function TeamView() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-600 via-white to-gray-400 relative">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div className="min-h-screen relative
+                    bg-gradient-to-br from-red-600 via-white to-gray-400
+                    dark:from-gray-800 dark:via-gray-900 dark:to-black">
+      {/* Light grid */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none dark:hidden">
         <svg className="w-full h-full opacity-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 640 640">
           <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <pattern id="grid-light" width="40" height="40" patternUnits="userSpaceOnUse">
               <path d="M40 0H0V40" fill="none" stroke="#E5E7EB" strokeWidth="1" />
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
+          <rect width="100%" height="100%" fill="url(#grid-light)" />
+        </svg>
+      </div>
+      {/* Dark grid */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none hidden dark:block">
+        <svg className="w-full h-full opacity-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 640 640">
+          <defs>
+            <pattern id="grid-dark" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M40 0H0V40" fill="none" stroke="#374151" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid-dark)" />
         </svg>
       </div>
 
       <div className="relative z-10 flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="w-full max-w-3xl bg-white shadow-2xl rounded-3xl p-10 space-y-8 border border-gray-200">
+        <div className="w-full max-w-3xl bg-white shadow-2xl rounded-3xl p-10 space-y-8 border border-gray-200
+                        dark:bg-gray-800/90 dark:border-gray-700">
           <div className="flex justify-between items-center">
             <button
-              className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700"
+              className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400/60"
               onClick={() => navigate('/admin/teams')}
             >
               Back
             </button>
             <div className="flex space-x-2">
               <button
-                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700"
+                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400/60"
                 onClick={() => navigate(`/admin/teams/${team.url_key}/add-members`)}
               >
                 Add Member
               </button>
               <button
-                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700"
+                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400/60"
                 onClick={handleChangeName}
               >
                 Edit Team Name
@@ -162,21 +187,21 @@ export default function TeamView() {
             </div>
           </div>
 
-          <h1 className="text-4xl font-bold text-gray-800 border-b pb-5 tracking-tight">
+          <h1 className="text-4xl font-bold text-gray-800 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-5 tracking-tight">
             Users in {team.name}
           </h1>
 
           {users.length === 0 ? (
-            <p className="text-gray-600 text-lg">No users found in this team.</p>
+            <p className="text-gray-600 dark:text-gray-800 text-lg">No users found in this team.</p>
           ) : (
             <ul className="list-disc pl-5 space-y-3 max-h-96 overflow-y-auto">
               {users.map(u => (
                 <li key={u.id} className="flex justify-between items-center">
-                  <span className="text-lg text-gray-800 font-medium">
+                  <span className="text-lg text-gray-800 dark:text-gray-800 font-medium">
                     {formatName(u.username)} ({u.role})
                   </span>
                   <button
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-xl"
+                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-400/60"
                     onClick={() => handleRemoveMember(u.id)}
                   >
                     Remove

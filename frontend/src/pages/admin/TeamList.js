@@ -3,224 +3,231 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/header';
-import Sun from 'lucide-react/dist/esm/icons/sun';
-import Moon from 'lucide-react/dist/esm/icons/moon';
-import RossikLogo from '../../VektorLogo_Rossik_rot.gif'
-import { Link } from 'react-router-dom';
 
-export default  function TeamList({ user }) {
-    const [teams, setTeams] = useState([]);
-    const [viewedTeamId, setViewedTeamId] = useState(null);
-    const navigate = useNavigate();
-    const [darkMode, setDarkMode] = React.useState(false);
+export default function TeamList({ user }) {
+  const [teams, setTeams] = useState([]);
+  const navigate = useNavigate();
 
-    // fetch necesar pentru refresh
-    const fetchTeamsAndUsers = async () => {
-        try {
-        const { data: teamUsers, error } = await supabase
-            .from('users')
-            .select('id, username, team_id, role')
-            .order('team_id');
+  // fetch necesar pentru refresh
+  const fetchTeamsAndUsers = async () => {
+    try {
+      const { data: teamUsers, error } = await supabase
+        .from('users')
+        .select('id, username, team_id, role')
+        .order('team_id');
 
-        if (error) {
-            console.error('Error fetching users:', error);
-            return;
-        }
+      if (error) {
+        console.error('Error fetching users:', error);
+        return;
+      }
 
-        const { data: teams, errorTteams } = await supabase
-            .from('teams')
-            .select('id, name, url_key');
+      const { data: teamsData, error: errorTeams } = await supabase
+        .from('teams')
+        .select('id, name, url_key');
 
-        if (errorTteams) {
-            console.error('Error fetching teams:', errorTteams);
-            return;
-        }
+      if (errorTeams) {
+        console.error('Error fetching teams:', errorTeams);
+        return;
+      }
 
-        const FALLBACK_TEAM_ID = 'cf70d8dc-5451-4979-a50d-c288365c77b4';
+      const FALLBACK_TEAM_ID = 'cf70d8dc-5451-4979-a50d-c288365c77b4';
 
-        const grouped = {};
-        for (const u of teamUsers) {
-            const teamId = u.team_id || FALLBACK_TEAM_ID;
-            if (!grouped[teamId]) grouped[teamId] = [];
-            grouped[teamId].push(u);
-        }
+      const grouped = {};
+      for (const u of teamUsers) {
+        const teamId = u.team_id || FALLBACK_TEAM_ID;
+        if (!grouped[teamId]) grouped[teamId] = [];
+        grouped[teamId].push(u);
+      }
 
-        const teamList = Object.entries(grouped).map(([teamId, members]) => {
-            const teamData = teams.find(t => t.id === teamId);
-            return {
-                teamId,
-                url_key: teamData?.url_key ?? null,
-                name: teamData?.name || 'No Team',
-                members,
-            };
-            
-        });
+      const teamList = Object.entries(grouped).map(([teamId, members]) => {
+        const teamData = teamsData.find(t => t.id === teamId);
+        return {
+          teamId,
+          url_key: teamData?.url_key ?? null,
+          name: teamData?.name || 'No Team',
+          members,
+        };
+      });
 
-        setTeams(teamList);
-        } catch (err) {
-            console.error('Error loading teams and users:', err);
-        }
-    };
+      setTeams(teamList);
+    } catch (err) {
+      console.error('Error loading teams and users:', err);
+    }
+  };
 
-    useEffect(() => {
-        fetchTeamsAndUsers();
-    }, []);
+  useEffect(() => {
+    fetchTeamsAndUsers();
+  }, []);
 
-    const formatName = (username = '') => {
-        if (!username || !username.includes('@')) return 'Fără Nume';
-        const local = username.split('@')[0];
-        const parts = local.split('.');
-        return parts.map(p => p[0]?.toUpperCase() + p.slice(1)).join(' ');
-    };
+  const formatName = (username = '') => {
+    if (!username || !username.includes('@')) return 'Fără Nume';
+    const local = username.split('@')[0];
+    const parts = local.split('.');
+    return parts.map(p => p[0]?.toUpperCase() + p.slice(1)).join(' ');
+  };
 
-    const handleLogout = async () => {
-        await supabase.auth.signOut();
-        localStorage.removeItem('token');
-        navigate('/login');
-    };
+  const handleDelete = async (teamId) => {
+    if (!window.confirm('Ești sigur că vrei să ștergi echipa? Această acțiune este ireversibilă.')) {
+      return;
+    }
 
-    const handleDelete = async (teamId) => {
-        if (!window.confirm('Ești sigur că vrei să ștergi echipa? Această acțiune este ireversibilă.')) {
-            return;
-        }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-        try {
-            // Get the current session to extract the token
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
+      if (!token) {
+        alert('Nu ești autentificat');
+        return;
+      }
 
-            if (!token) {
-            alert('Nu ești autentificat');
-            return;
-            }
+      const res = await fetch(`/api/admin/teams/${teamId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-            // Call your server API to delete the team
-            const res = await fetch(`/api/admin/teams/${teamId}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            });
+      if (!res.ok) {
+        const err = await res.json();
+        alert('Eroare la ștergere: ' + (err.error || 'Unknown error'));
+        return;
+      }
 
-            if (!res.ok) {
-            const err = await res.json();
-            alert('Eroare la ștergere: ' + (err.error || 'Unknown error'));
-            return;
-            }
+      const result = await res.json();
+      alert(result.message || 'Echipă ștearsă cu succes');
+      await fetchTeamsAndUsers();
+    } catch (error) {
+      console.error('Eroare la ștergere echipă:', error);
+      alert('Eroare la ștergere echipă');
+    }
+  };
 
-            const result = await res.json();
-            alert(result.message || 'Echipă ștearsă cu succes');
+  const visibleTeams =
+    user.role === 'admin'
+      ? teams
+      : user.role === 'team_lead'
+      ? teams.filter(t => t.teamId === user.team_id)
+      : [];
 
-            // Refresh the teams list after deletion
-            await fetchTeamsAndUsers();
+  return (
+    <div
+      className="
+        min-h-screen transition-colors
+        bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800
+        dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100
+      "
+    >
+      <Header user={user} />
 
-        } catch (error) {
-            console.error('Eroare la ștergere echipă:', error);
-            alert('Eroare la ștergere echipă');
-        }
-    };
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-10">
+          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">Teams</h1>
 
-    const toggleView = (teamId) => {
-        if (viewedTeamId === teamId) {
-        setViewedTeamId(null); // close if same team clicked again
-        } else {
-        setViewedTeamId(teamId);
-        }
-    };
+          {user.role === 'admin' && (
+            <button
+              className="
+                bg-gradient-to-r from-emerald-400 to-emerald-600
+                hover:from-emerald-500 hover:to-emerald-700
+                text-white px-4 py-2 rounded-full text-sm font-medium
+                shadow-md hover:shadow-lg transition
+                focus:outline-none focus:ring-2 focus:ring-emerald-400/60
+              "
+              onClick={() => navigate('/add')}
+            >
+              Add Team
+            </button>
+          )}
+        </div>
 
-    const visibleTeams =
-        user.role === 'admin'
-            ? teams
-            : user.role === 'team_lead'
-            ? teams.filter(t => t.teamId === user.team_id)
-            : [];
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+          {visibleTeams.map((team) => (
+            <div
+              key={team.teamId}
+              className="
+                relative
+                border border-gray-300 dark:border-white/10
+                bg-white/80 dark:bg-gray-800/30
+                backdrop-blur-md rounded-lg p-6 text-center
+                shadow-xl hover:shadow-2xl transition-transform duration-300 transform hover:scale-[1.02]
+              "
+            >
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                {team.name}
+              </h2>
 
-    return (
-        <div className={`min-h-screen top-0 z-50 transition-colors duration-500 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
-        <Header user = {user} />
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+                Team Lead:{' '}
+                {team.members?.find(member => member.role === 'team_lead')
+                  ? formatName(team.members.find(member => member.role === 'team_lead').username)
+                  : 'Nespecificat'}
+              </p>
 
-        <div className="p-6 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-10">
-            <h1 className="text-4xl font-extrabold">Teams</h1>
-            {user.role === 'admin' && (
-                <button
-                    className="bg-gradient-to-r from-emerald-400 to-emerald-600 hover:from-emerald-500 hover:to-emerald-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
-                    onClick={() => navigate('/add')}
-                >
-                    Add Team
-                </button>
-            )}
-            </div>
+              <div className="text-left mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Members:</h3>
+                <ul className="text-sm text-gray-800 dark:text-gray-800 list-disc list-inside space-y-1">
+                  {[...team.members]
+                    .sort((a, b) =>
+                      a.role === 'team_lead' ? -1 : b.role === 'team_lead' ? 1 : 0
+                    )
+                    .map((member) => (
+                      <li key={member.id}>
+                        {formatName(member.username)} ({member.role})
+                      </li>
+                    ))
+                  }
+                </ul>
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-            {visibleTeams.map((team) => (
-                <div
-                key={team.teamId}
-                className="relative border border-white/30 bg-white/80 dark:bg-gray-800/30 backdrop-blur-md rounded-lg p-6 text-center shadow-xl hover:shadow-2xl transition-transform duration-300 transform hover:scale-[1.02]"
-                >
-                <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">{team.name}</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
-                    Team Lead:{' '}
-                    {team.members?.find(member => member.role === 'team_lead')
-                    ? formatName(team.members.find(member => member.role === 'team_lead').username)
-                    : 'Nespecificat'}
-                </p>
-                <div className="text-left mb-4">
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Members:</h3>
-                    <ul className="text-sm text-gray-800 dark:text-gray-100 list-disc list-inside space-y-1">
-                        {[
-                            // copy & sort so team_lead is first
-                            ...team.members
-                        ]
-                            .sort((a, b) =>
-                            a.role === 'team_lead'
-                                ? -1
-                                : b.role === 'team_lead'
-                                ?  1
-                                :  0
-                            )
-                            .map((member) => (
-                            <li key={member.id}>
-                                {formatName(member.username)} ({member.role})
-                            </li>
-                            ))
-                        }
-                    </ul>
-                </div>
-                <div className="flex justify-center space-x-2 mt-4">
+              <div className="flex justify-center space-x-2 mt-4">
                 {user.role === 'admin' && (
-                    <>
+                  <>
                     <button
-                        onClick={() => handleDelete(team.teamId)}
-                        className="bg-gradient-to-r from-red-400 to-red-600 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
+                      onClick={() => handleDelete(team.teamId)}
+                      className="
+                        bg-gradient-to-r from-red-400 to-red-600
+                        text-white px-4 py-2 rounded-full text-sm font-medium
+                        shadow-md hover:shadow-lg transition
+                        focus:outline-none focus:ring-2 focus:ring-red-400/60
+                      "
                     >
-                        Delete Team
+                      Delete Team
                     </button>
-                    <button 
-                        onClick={() => navigate(`/admin/teams/${team.url_key}`)}
-                        className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
-                    >
-                        View
-                    </button>
-                    </>
-                )}
-                {user.role === 'team_lead' && (
-                    <button 
-                        onClick={() => navigate(`/admin/teams/${team.url_key}`)}
-                        className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium shadow-md hover:shadow-lg transition"
-                    >
-                        View
-                    </button>
-                )}
-                </div>
 
-                </div>
-            ))}
+                    <button
+                      onClick={() => navigate(`/admin/teams/${team.url_key}`)}
+                      className="
+                        ml-2 bg-gradient-to-r from-blue-500 to-blue-700
+                        text-white px-4 py-2 rounded-full text-sm font-medium
+                        shadow-md hover:shadow-lg transition
+                        focus:outline-none focus:ring-2 focus:ring-blue-400/60
+                      "
+                    >
+                      View
+                    </button>
+                  </>
+                )}
+
+                {user.role === 'team_lead' && (
+                  <button
+                    onClick={() => navigate(`/admin/teams/${team.url_key}`)}
+                    className="
+                      ml-2 bg-gradient-to-r from-blue-500 to-blue-700
+                      text-white px-4 py-2 rounded-full text-sm font-medium
+                      shadow-md hover:shadow-lg transition
+                      focus:outline-none focus:ring-2 focus:ring-blue-400/60
+                    "
+                  >
+                    View
+                  </button>
+                )}
+              </div>
             </div>
+          ))}
         </div>
-        </div>
-    );
+      </div>
+    </div>
+  );
 }
 
-//Transporeon idea: - curse inregistrate sa apara direct pe spotgo
+// Transporeon idea: - curse inregistrate sa apara direct pe spotgo
