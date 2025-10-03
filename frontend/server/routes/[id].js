@@ -1,3 +1,4 @@
+// server/routes/[id].js
 import { createClient } from '@supabase/supabase-js'
 import getUserWithRole from '../lib/getUserWithRole'
 import requireRole      from '../lib/requireRole'

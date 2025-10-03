@@ -1,21 +1,13 @@
 // server.js
 require('dotenv').config();
+const { supabaseAnon, supabaseService } = require('./lib/supabase');
 const express = require('express');
 const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
 const FALLBACK_TEAM_ID = 'cf70d8dc-5451-4979-a50d-c288365c77b4';
 
-
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
+// for now, keep existing code working by aliasing:
+const supabase = supabaseService;
+const supabaseAdmin = supabaseService;
 
 // -- Middleware Imports --
 const getUserWithRole = require('./middleware/getUserWithRole');
@@ -35,20 +27,20 @@ const app = express();
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 app.use(cors());
-app.use(express.json());
-
-app.use("/api/spotgo/cleanup-expired", cleanupExpiredRoutes);
 
 // -- PUBLIC: Login Endpoint --
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
   if (error) return res.status(401).json({ message: error.message });
   res.json({ token: data.session.access_token, user: data.user });
 });
 
 // -- PROTECTED: All /api routes after this get user+role loaded --
 app.use('/api', getUserWithRole);
+
+// cleanup expired (admin only, now behind auth)
+app.use('/api/admin/spotgo/cleanup-expired', requireRole('admin'), cleanupExpiredRoutes);
 
 // -- WHO AM I --
 app.get('/api/users/me', (req, res) => {
@@ -201,30 +193,54 @@ app.post(
 app.post('/api/admin/user/add', requireRole('admin'), async (req, res) => {
   const { email, password, role, team_id } = req.body;
 
+  const ALLOWED_ROLES = new Set(['driver','dispatcher','transport_manager','team_lead','admin']);
   if (!email || !password || !role || !team_id) {
     return res.status(400).json({ error: 'All fields are required' });
   }
+  if (!ALLOWED_ROLES.has(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  // ensure team exists
+  const { data: team, error: teamErr } = await supabaseService
+    .from('teams')
+    .select('id')
+    .eq('id', team_id)
+    .single();
+  if (teamErr || !team) {
+    return res.status(400).json({ error: 'Invalid team_id' });
+  }
 
   try {
-    const { data, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    // create auth user
+    const { data, error: createError } = await supabaseService.auth.admin.createUser({
       email,
       password,
+      email_confirm: true,
       user_metadata: { role, team_id }
     });
     if (createError) throw createError;
 
-    await supabase.from('users').insert({
-      id: data.user.id,
+    const authUserId = data.user.id;
+
+    // insert profile
+    const { error: insertErr } = await supabaseService.from('users').insert({
+      id: authUserId,
       username: email,
       role,
       team_id
     });
 
-    return res.status(200).json({ message: 'User created successfully' });
+    if (insertErr) {
+      // rollback auth user to keep state consistent
+      await supabaseService.auth.admin.deleteUser(authUserId);
+      throw insertErr;
+    }
 
+    return res.status(200).json({ message: 'User created successfully' });
   } catch (err) {
-    console.error('Eroare la crearea userului:', JSON.stringify(err, null, 2));
-    return res.status(400).json({ error: err.message || 'Eroare necunoscută' });
+    console.error('User creation failed:', err);
+    return res.status(400).json({ error: err.message || 'Unknown error' });
   }
 });
 

@@ -1,24 +1,25 @@
 // backend/routes/spotgo/cleanupExpired.js
 const express = require("express");
-const fetch = require("node-fetch");
-const supabase = require("../../lib/supabaseAdmin").default; // păstrăm default importul tău
+const { supabaseService } = require("../../lib/supabase");
 
 const router = express.Router();
-
-// Endpoint-ul nativ SpotGo pentru freights
 const SPOTGO_FREIGHTS_BASE = "https://api.spotgo.eu/api/v1/freights";
 
-// GET /api/spotgo/cleanup-expired?dryRun=1
+// GET /api/admin/spotgo/cleanup-expired?dryRun=1
 router.get("/", async (req, res) => {
-  const dryRun = req.query.dryRun === "1";
+  const dryRun = req.query.dryRun === "1" || req.query.dryRun === "true";
+
+  if (!process.env.SPOTGO_API_KEY) {
+    return res.status(500).json({ error: "Missing SPOTGO_API_KEY" });
+  }
 
   try {
-    // 2h buffer (evităm curățarea „la limită” de fus orar)
+    // 2h buffer to avoid timezone edge-cases
     const now = new Date();
     const cutoffIso = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
 
-    // 1) selectăm ofertele expirate (loading_end_time < cutoff)
-    const { data: rows, error } = await supabase
+    // 1) find expired offers
+    const { data: rows, error } = await supabaseService
       .from("submitted_offers")
       .select("offer_id, loading_end_time")
       .lt("loading_end_time", cutoffIso)
@@ -26,7 +27,7 @@ router.get("/", async (req, res) => {
 
     if (error) throw error;
 
-    const offers = rows || [];
+    const offers = rows ?? [];
     let cleaned = 0;
     const skipped = [];
 
@@ -38,24 +39,24 @@ router.get("/", async (req, res) => {
       }
 
       if (!dryRun) {
-        // 2) încearcă ștergerea în SpotGo (404 = deja șters => succes)
+        // 2) delete in SpotGo (404 is fine → already gone)
+        let resp;
         try {
-          const resp = await fetch(`${SPOTGO_FREIGHTS_BASE}/${offerId}`, {
+          resp = await fetch(`${SPOTGO_FREIGHTS_BASE}/${offerId}`, {
             method: "DELETE",
-            headers: { Authorization: `Bearer ${process.env.SPOTGO_API_KEY}` }
+            headers: { Authorization: `Bearer ${process.env.SPOTGO_API_KEY}` },
           });
-
           if (!resp.ok && resp.status !== 404) {
             skipped.push({ offerId, reason: `spotgo_${resp.status}` });
             continue;
           }
-        } catch (e) {
+        } catch {
           skipped.push({ offerId, reason: "spotgo_request_failed" });
           continue;
         }
 
-        // 3) șterge rândul din Supabase
-        const { error: delError } = await supabase
+        // 3) delete local row
+        const { error: delError } = await supabaseService
           .from("submitted_offers")
           .delete()
           .eq("offer_id", offerId);
@@ -65,16 +66,11 @@ router.get("/", async (req, res) => {
           continue;
         }
 
-        cleaned++; // ✅ incrementăm DOAR când ștergerea chiar s-a făcut
-      } // if !dryRun
+        cleaned++;
+      }
     }
 
-    return res.json({
-      dryRun,
-      found: offers.length,
-      cleaned,
-      skipped
-    });
+    return res.json({ dryRun, found: offers.length, cleaned, skipped });
   } catch (err) {
     console.error("Cleanup error:", err);
     return res.status(500).json({ error: "Cleanup failed" });
@@ -82,9 +78,3 @@ router.get("/", async (req, res) => {
 });
 
 module.exports = router;
-
-//TODO: sa se stearga cursele de pe spotgo dupa loading date - add it to refresh page?
-
-//TODO LATER: connect microsoft to platform
-
-//TODO: n8n integration for spotgo- teleroot and another one, no id shows up

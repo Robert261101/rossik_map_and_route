@@ -1,4 +1,4 @@
-// api/admin/user/add.js
+// server/admin/user/add.js
 import { createClient } from '@supabase/supabase-js'
 
 // build your two clients

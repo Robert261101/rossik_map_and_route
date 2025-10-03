@@ -1,4 +1,4 @@
-// lib/requireRole.js
+// server/lib/requireRole.js
 class ForbiddenError extends Error {
   constructor(message = 'Forbidden', status = 403) {
     super(message);
