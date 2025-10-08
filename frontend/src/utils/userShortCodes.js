@@ -25,7 +25,11 @@ export const USER_SHORT_CODES = {
   "almir.causevic@rossik.eu": "AC1",
   "mert.aksoy@rossik.eu": "MA1",
   "dan.calciu@rossik.eu": "DC1",
-  "vanessa.redl@rossik.eu": "VR1"            // al doilea „VR”
+  "vanessa.redl@rossik.eu": "VR1",         // al doilea „VR”
+  "cosmin.rotariu@rossik.eu": "CR1",
+  "george.serbanescu@rossik.eu": "GS1",
+  "ovidiu.maran@rossik.eu": "OM1",
+  "filip.lukic@rossik.eu": "FL1"
   // adaugi restul aici...
 };
 

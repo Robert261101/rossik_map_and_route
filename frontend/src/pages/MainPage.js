@@ -1091,21 +1091,3 @@ setTimeout(() => {
 };
 
 export default MainPage;
-
-//TODO: id in team view
-
-//TODO: add a new landing page called Rossik Tools - model - admin dashboard, but instead of the gets you have Map and Guide and SpotGo
-
-//TODO: map after you hit calculate route doesnt show up.
-
-//TODO: loading and unloading can accept multiple addresses - spotgo
-
-//TODO: prefix de la email - spotgo
-
-//TODO: adaugare header in spotgo
-
-//TODO: diferentiere intre cursele tale si restul - spotgo
-
-//TODO: edit, copy ????????????? - spotgo
-
-//TODO FOR THE FUTURE: map and guide post directly to spotgo, or have a button that copies the inputs and adds them in the spotgo form

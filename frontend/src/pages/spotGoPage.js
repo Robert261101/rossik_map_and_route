@@ -2384,19 +2384,6 @@ useEffect(() => {
 );
 
 }
-
-// /start_trip - tour number porneste workflow ul de mesaje. 
-
-// cere plate number - ala trimite mesaj
-
-// cere poza la plate number - trebuie trimisa o singura poza
-
-// cere 4 poze pentru fiecare colt al remorcii - trebuie trimise 4 poze
-
-// intreaba daca are sau a avut accidente/damage - nu - iese din workflow, da- trimite cateva poze, maxim 5 + descriere a accidentului
-
-// cand postezi un batch de oferte si ai de ex jumbo si mega, daca dai edit pe tot batch-ul sa le modifice la toate.
-
 // microsoft login with rossik tools - intrebari - cand se creaza un cont de microsoft sa se creeze automat si un cont pe rossik tools?
 
-// map and guide TODO: implement empty km - point A to point B - basically distance between points
+// TODO: implement empty km - point A to point B - basically distance between points

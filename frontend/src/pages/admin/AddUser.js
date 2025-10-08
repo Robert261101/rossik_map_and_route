@@ -52,7 +52,8 @@ export default function AddUser({ user }) {
     setPassword('');
     setRole('');
     setTeamId('');
-    // navigate('/admin'); // uncomment if you want to redirect
+    alert('User created successfully');
+    navigate('/admin');
   };
 
   return (
