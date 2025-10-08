@@ -37,9 +37,14 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center">
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg w-full max-w-3xl relative">
-        <button onClick={onClose}
-                className="absolute top-4 right-4 text-white bg-red-600 rounded-full p-2 hover:scale-110 transition">
-          ✕
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-gray-700 dark:text-white hover:text-white hover:bg-red-700 hover:scale-150 hover:border-white/10 transition-all duration-300 shadow-lg"
+          aria-label="Close modal"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
         <h2 className="text-2xl font-bold mb-4 text-center">Truck List</h2>
         <div className="overflow-y-auto max-h-[70vh]">
@@ -50,7 +55,7 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
                 <th className="p-2 border-b">Team</th>
                 <th className="p-2 border-b">Euro/km</th>
                 {hasPricePerDay && <th className="p-2 border-b">Price/Day</th>}
-                <th className="p-2 border-b"></th>
+                <th className="p-2 border-b">Actions</th>
               </tr>
             </thead>
             <tbody>
