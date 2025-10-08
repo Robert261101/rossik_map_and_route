@@ -43,6 +43,8 @@ export default function DeleteUser({ user }) {
       setUsers(prev => prev.filter(u => u.id !== userId));
       setSelected('');
       alert('User deleted successfully ✅');
+      navigate('/admin');
+
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Eroare la ștergere: ' + (err.error || 'Unknown error'));
