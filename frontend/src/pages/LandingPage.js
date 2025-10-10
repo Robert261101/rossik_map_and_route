@@ -1,8 +1,6 @@
-// src/RossikTools.js
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/header';
-import { Workflow } from 'lucide-react';
 
 const tiles = [
   { label: 'Map & Guide', to: '/map-and-guide', img: '/Map_and_Guide_Logo.png', alt: 'Map & Guide' },
@@ -17,91 +15,73 @@ export default function RossikTools({ user }) {
   const Box = ({ to, img, alt, label }) => {
     const hasNav = Boolean(to);
     const open = () => { if (hasNav) navigate(to); };
-    const onKey = (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
-    };
+    const Base = hasNav ? 'button' : 'div';
 
     return (
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`${hasNav ? 'Open' : 'Tile'} ${label}`}
+      <Base
         onClick={open}
-        onKeyDown={onKey}
+        aria-label={`${hasNav ? 'Open' : 'Tile'} ${label}`}
         className="
-          group relative cursor-pointer rounded-2xl overflow-hidden shadow-2xl
-          transition-transform duration-300 hover:scale-[1.02] active:scale-95
+          group relative rounded-2xl overflow-hidden shadow-2xl
+          transition-transform duration-300
+          hover:scale-[1.01] active:scale-[0.98] transform-gpu will-change-transform
           focus:outline-none focus:ring-2 focus:ring-emerald-500
-          w-[260px] sm:w-[500px] mx-auto
+          w-full
           border border-gray-200 dark:border-gray-700
-          bg-white/90 dark:bg-gray-800/70 backdrop-blur
+          bg-white/90 dark:bg-gray-800/70
         "
       >
-        {img ? (
-          <>
-            {/* Full-bleed image fills the “box” */}
+        <div className="aspect-[16/9] sm:aspect-[2/1]">
+          {img ? (
             <img
               src={img}
               alt={alt}
-              className="w-full object-cover select-none pointer-events-none"
+              className="h-full w-full object-contain sm:object-cover select-none pointer-events-none"
               draggable="false"
-              loading="eager"
+              loading="lazy"
               decoding="async"
             />
-            <span className="sr-only">{label}</span>
-          </>
-        ) : (
-          // Fallback panel when there’s no image
-          <div
-            className="
-              flex items-center justify-center h-[140px] sm:h-[220px]
-              bg-white dark:bg-gray-800/70
-            "
-          >
-            <span className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white">
-              {label}
-            </span>
-          </div>
-        )}
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <span className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">
+                {label}
+              </span>
+            </div>
+          )}
+        </div>
 
         {!hasNav && (
           <div className="absolute top-3 right-3">
-            <span
-              className="
-                inline-flex items-center rounded-full
-                bg-amber-500/90 text-white text-xs font-semibold px-3 py-1 shadow
-              "
-            >
+            <span className="inline-flex items-center rounded-full bg-amber-500/90 text-white text-xs font-semibold px-3 py-1 shadow">
               Coming soon
             </span>
           </div>
         )}
-      </div>
+      </Base>
     );
   };
 
   return (
     <div
       className="
-        min-h-screen
+        min-h-dvh
         bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800
         dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100
       "
     >
       <Header user={user} />
 
-      <main className="py-12 px-6 max-w-7xl mx-auto">
+      <main className="py-8 sm:py-12 px-4 sm:px-6 max-w-7xl mx-auto">
         <h1 className="sr-only">Rossik Tools</h1>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+        <div className="grid gap-6 sm:gap-8 grid-cols-1 sm:grid-cols-2">
           {tiles.map((t) => (
             <Box key={t.label} {...t} />
           ))}
         </div>
       </main>
 
-      {/* subtle dot grid background */}
-      <div className="fixed inset-0 -z-10 pointer-events-none">
+      <div className="fixed inset-0 -z-10 pointer-events-none hidden sm:block">
         <div
           className="
             w-full h-full
