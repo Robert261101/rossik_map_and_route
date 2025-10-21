@@ -792,11 +792,10 @@ setTimeout(() => {
      {/* MAIN CONTENT */}
       <div className="flex flex-row flex-1 overflow-hidden">
         {/* LEFT SIDE */}
-          <div className={`${leftWidth} p-4 overflow-auto space-y-4 transition-all duration-500`}>
-
+        <div className="bg-burgundy-200 w-1/2 p-4 overflow-auto space-y-4">
           {/* ROW 1: Address + Vehicle */}
-          <div className={`flex ${cardsLayout}`}>
-            <div className={`${cardWidth} bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition`}>
+          <div className="flex space-x-4">
+            <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
               <h2 className="text-lg font-bold mb-2">Address</h2>
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 <div >
@@ -867,8 +866,7 @@ setTimeout(() => {
                 </button>
               </form>
             </div>
-            <div className={`${cardWidth} bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition`}>
-
+            <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
               <div className="flex justify-between items-center mb-2">
                 <h2 className="text-lg font-bold">Vehicle Parameters</h2>
                 <label className="inline-flex items-center text-sm">
@@ -1116,8 +1114,8 @@ setTimeout(() => {
           )}
         </div>
 
-      {/* RIGHT SIDE - MAP */}
-      <div className={`${rightWidth} h-full transition-all duration-500`} id="mapContainer"></div>
+        {/* RIGHT SIDE - MAP */}
+        <div className="w-1/2 h-full" id="mapContainer"></div>
       </div>
 
       {/* FOOTER */}
