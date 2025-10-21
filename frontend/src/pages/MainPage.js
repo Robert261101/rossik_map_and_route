@@ -39,6 +39,7 @@ const MainPage = ({ user })  => {
   const [rawDistance, setRawDistance] = useState(null);
   const [rawDuration, setRawDuration] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasCalculated, setHasCalculated] = useState(false);
   const mapRef = useRef(null);
   const markerGroupRef = useRef(null);
   const navigate = useNavigate();
@@ -58,6 +59,54 @@ const MainPage = ({ user })  => {
   const viaMarkersRef = useRef([]);            // H.map.DomMarker refs per point
   const behaviorRef = useRef(null);
   const currentLineGeom = useRef(null);
+
+  // layout helpers driven by hasCalculated
+const leftWidth   = hasCalculated ? "w-1/2" : "w-1/3";
+const rightWidth  = hasCalculated ? "w-1/2" : "w-2/3";
+const cardsLayout = hasCalculated ? "flex-row space-x-4" : "flex-col space-y-4";
+const cardWidth   = hasCalculated ? "w-1/2" : "w-full";
+
+
+  const resetRouteState = () => {
+    // clear computed data
+    setRoutes([]);
+    setSelectedRouteIndex(null);
+    setRouteTaxCosts([]);
+    setTollCosts([]);
+    setDistance(null);
+    setDuration(null);
+    setDurationWithBreaks(null);
+    setRawDistance(null);
+    setRawDuration(null);
+    setHasCalculated(false);
+    setViaPoints([]);
+    setSaveMsg("");
+
+    // clear map artifacts
+    if (mapRef.current) {
+      const map = mapRef.current;
+
+      // remove all map objects (polylines, markers, etc.)
+      map.getObjects().forEach(obj => map.removeObject(obj));
+
+      if (markerGroupRef.current) {
+        map.removeObject(markerGroupRef.current);
+        markerGroupRef.current = null;
+      }
+
+      viaMarkersRef.current.forEach(m => map.removeObject(m));
+      viaMarkersRef.current = [];
+
+      currentLineGeom.current = null;
+
+      // recenter to default
+      map.getViewModel().setLookAtData({
+        position: { lat: 44.4268, lng: 26.1025 },
+        zoom: 6
+      });
+    }
+  };
+
 
   const debouncedLive = debounce((lat, lng, legIdx) => {
     calculateAndDisplayLiveRoute(
@@ -180,6 +229,7 @@ const MainPage = ({ user })  => {
       }
 
       setSaveMsg('Route saved ✔️');
+      setHasCalculated(false);
     } catch (err) {
       console.error('Save failed:', err);
       setSaveMsg('Save failed: ' + err.message);
@@ -235,6 +285,9 @@ const addAddress = async (coordsWithLabel) => {
     const newArr = [...addresses];
     newArr.splice(index, 1);
     setAddresses(newArr);
+    if (newArr.length === 0) {
+      resetRouteState();
+    }
   };
 
   // Obținere rute
@@ -519,6 +572,7 @@ const handleSubmit = async (e) => {
   apiCallCount++;
   try {
     await getRoute(coords);
+    setHasCalculated(true);
   } finally {
     setIsLoading(false);
   }
@@ -728,6 +782,8 @@ setTimeout(() => {
     };
   }, [isOpen]);
 
+  
+
   return (
   <div className="App flex flex-col h-screen">
     <div className={`flex flex-col flex-1 transition-colors duration-500 ${darkMode ? 'bg-gray-900 ' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
@@ -736,10 +792,11 @@ setTimeout(() => {
      {/* MAIN CONTENT */}
       <div className="flex flex-row flex-1 overflow-hidden">
         {/* LEFT SIDE */}
-        <div className="bg-burgundy-200 w-1/2 p-4 overflow-auto space-y-4">
+          <div className={`${leftWidth} p-4 overflow-auto space-y-4 transition-all duration-500`}>
+
           {/* ROW 1: Address + Vehicle */}
-          <div className="flex space-x-4">
-            <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
+          <div className={`flex ${cardsLayout}`}>
+            <div className={`${cardWidth} bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition`}>
               <h2 className="text-lg font-bold mb-2">Address</h2>
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 <div >
@@ -806,11 +863,12 @@ setTimeout(() => {
                   disabled={isLoading}
                   className={`mt-3 ${isLoading ? "bg-red-400" : "bg-red-600 hover:bg-red-700"} text-white py-2 px-4 rounded font-semibold text-sm transition-colors`}
                 >
-                  {isLoading ? "Calculare..." : "Calculate route"}
+                  {isLoading ? "Calculating..." : (hasCalculated ? "Update route" : "Calculate route")}
                 </button>
               </form>
             </div>
-            <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
+            <div className={`${cardWidth} bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition`}>
+
               <div className="flex justify-between items-center mb-2">
                 <h2 className="text-lg font-bold">Vehicle Parameters</h2>
                 <label className="inline-flex items-center text-sm">
@@ -1058,8 +1116,8 @@ setTimeout(() => {
           )}
         </div>
 
-        {/* RIGHT SIDE - MAP */}
-        <div className="w-1/2 h-full" id="mapContainer"></div>
+      {/* RIGHT SIDE - MAP */}
+      <div className={`${rightWidth} h-full transition-all duration-500`} id="mapContainer"></div>
       </div>
 
       {/* FOOTER */}
