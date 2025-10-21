@@ -13,7 +13,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
  * Usage: <DebugMouseOverlay /> anywhere in your app (ideally near the root)
  */
 export default function DebugMouseOverlay() {
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [buttons, setButtons] = useState({ left: false, middle: false, right: false });
   const [mods, setMods] = useState({ alt: false, ctrl: false, meta: false, shift: false });
