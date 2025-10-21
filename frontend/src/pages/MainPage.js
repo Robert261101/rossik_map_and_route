@@ -1090,3 +1090,11 @@ setTimeout(() => {
 };
 
 export default MainPage;
+
+/* TODOS:
+calculate route change to update route if via station is visible.
+in the future: possible to have multiple via stations per leg
+empty km from 1 to 2 - set ui to accept that and display it as lets say 1-2 -> 20km 2-3 -> 50 km; total km 70km empty km 20 
+- idee 1. truck location, 2. loading location, 3. unloading location
+modal dreapta trece sub, dupa calculate route zboara dreapta sus
+*/
