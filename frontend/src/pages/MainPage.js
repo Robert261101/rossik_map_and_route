@@ -13,6 +13,7 @@ import { addLegalBreaks } from "../utils/driverTime";
 import { debounce } from 'lodash'
 import { calculateAndDisplayLiveRoute } from "./helpers/liveRoute";
 import { fetchPostalCode } from "./helpers/reversePostal.js";
+import DebugMouseOverlay from "../components/mouseOverlay.js";
 import "./App.css";
 import Header from "../components/header.js";
 
@@ -371,64 +372,45 @@ const displayRoute = (route) => {
   viaMarkersRef.current.forEach(m => map.removeObject(m));
   viaMarkersRef.current = [];
 
-  const spawnViaMarker = (lat, lng, legIdx) => {
+const spawnViaMarker = (lat, lng, legIdx) => {
   if (!mapRef.current) return;
   const map = mapRef.current;
 
-  // 1) Create the DOM handle
   const el = document.createElement('div');
   el.className = 'via-handle';
   el.style.cursor = 'grab';
-  el.style.touchAction = 'none'; // ensure pointer events fire
+  el.style.touchAction = 'none';
 
-  // 2) Wrap in a HERE DomIcon & DomMarker
   const icon = new window.H.map.DomIcon(el, { volatility: true });
   const marker = new window.H.map.DomMarker({ lat, lng }, { icon, volatility: true });
   map.addObject(marker);
-
-  // 3) Track it so we can clear later
   viaMarkersRef.current.push(marker);
 
   let dragging = false;
 
-  // // 4) Immediate preview
-  // debouncedLive(lat, lng, legIdx);
-
-  // 5) pointerdown on the marker → start drag
-  //    (we attach via the marker so the SDK correctly routes events)
-  requestAnimationFrame(() => {
-    marker.addEventListener('pointerdown', evt => {
-      evt.stopPropagation();
-      dragging = true;
-      el.style.cursor = 'grabbing';
+  const onDown = (evt) => {
+    evt.stopPropagation(); // don’t let the map start a pan
+    dragging = true;
+    el.style.cursor = 'grabbing';
+    if (behaviorRef.current) {
       behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
-      try {
-        el.setPointerCapture(evt.pointerId);
-      } catch (e) {
-        console.warn('Pointer capture failed:', e);
-      }
-    });
-  });
+    }
+  };
 
-  // 6) pointermove on the map → move marker + live preview
-  const onMove = evt => {
+  const onMove = (evt) => {
     if (!dragging) return;
-    const geo = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
+    const { viewportX, viewportY } = evt.currentPointer;
+    const geo = map.screenToGeo(viewportX, viewportY);
     marker.setGeometry(geo);
     debouncedLive(geo.lat, geo.lng, legIdx);
   };
-  map.addEventListener('pointermove', onMove);
 
-  // 7) pointerup on the map → finish drag, save point
-  const onUp = async evt => {
+  const onUp = async () => {
     if (!dragging) return;
     dragging = false;
     el.style.cursor = 'grab';
-    behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-    try {
-      el.releasePointerCapture(evt.pointerId);
-    } catch (e) {
-      console.warn('Pointer release failed:', e);
+    if (behaviorRef.current) {
+      behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
     }
     debouncedLive.flush();
 
@@ -440,11 +422,18 @@ const displayRoute = (route) => {
       return [...others, { lat: finalLat, lng: finalLng, postal, legIndex: legIdx }];
     });
   };
+
+  // HERE events (not raw DOM)
+  marker.addEventListener('pointerdown', onDown);
+  map.addEventListener('pointermove', onMove);
   map.addEventListener('pointerup', onUp);
+
+  // Cleanup when marker is removed
+  marker.addEventListener('remove', () => {
+    map.removeEventListener('pointermove', onMove);
+    map.removeEventListener('pointerup', onUp);
+  });
 };
-
-
-
 
   // 2) draw the route polyline
   const fullLineString = new window.H.geo.LineString();
@@ -466,8 +455,16 @@ const displayRoute = (route) => {
       style: { strokeColor: 'blue', lineWidth: 4 }
     });
     // tapping any leg sets viaLegIndex and drops a via-marker
-    legPolyline.addEventListener('tap', evt => {
-      const { lat, lng } = map.screenToGeo(evt.currentPointer.viewportX, evt.currentPointer.viewportY);
+    legPolyline.addEventListener('pointerdown', (evt) => {
+      const btn = evt.originalEvent && typeof evt.originalEvent.button === 'number'
+        ? evt.originalEvent.button
+        : 0; // left by default
+      if (btn !== 0 && btn !== 2) return;
+
+      const { lat, lng } = map.screenToGeo(
+        evt.currentPointer.viewportX,
+        evt.currentPointer.viewportY
+      );
       spawnViaMarker(lat, lng, legIdx);
     });
     map.addObject(legPolyline);
@@ -557,6 +554,8 @@ const handleSubmit = async (e) => {
       defaultLayers.vector.normal.map,
       { zoom: 6, center: { lat: 44.4268, lng: 26.1025 } }
     );
+
+    map.getElement().addEventListener('contextmenu', e => e.preventDefault());
     
     // Important: initialize behavior & UI
     const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
@@ -732,7 +731,7 @@ setTimeout(() => {
   return (
   <div className="App flex flex-col h-screen">
     <div className={`flex flex-col flex-1 transition-colors duration-500 ${darkMode ? 'bg-gray-900 ' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
-      
+      <DebugMouseOverlay />
     <Header user = {user} />
      {/* MAIN CONTENT */}
       <div className="flex flex-row flex-1 overflow-hidden">

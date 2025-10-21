@@ -83,24 +83,28 @@ li:hover {
   pointer-events: none;
 }
 
+/* Make the handle own the pointer and never select text */
 .via-handle {
-  background: white !important;
-  border-color: black !important;
-  opacity: 0.8;              /* hide by default */
-  position: absolute;
-  top: 0; left: 0;
   width: 15px;
   height: 15px;
   border: 2px solid #333;
   border-radius: 50%;
+  background: #fff;
+  opacity: 0.85;
   cursor: grab;
   z-index: 9999;
-  pointer-events: all;     /* still catch hover */
-  transition: none;        /* instant show/hide */
-  transform-origin: center;
-  will-change: transform, opacity;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
+.via-handle:active { cursor: grabbing; }
 
-.via-handle:hover {
-  opacity: 0.8;            /* reveal on hover */
+
+/* Don’t let numbers/labels get selected on drag */
+.numbered-marker,
+.numbered-marker .marker-label,
+.numbered-marker .arrow-icon {
+  user-select: none;
+  -webkit-user-select: none;
 }
