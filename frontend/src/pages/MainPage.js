@@ -14,6 +14,8 @@ import { debounce } from 'lodash'
 import { calculateAndDisplayLiveRoute } from "./helpers/liveRoute";
 import { fetchPostalCode } from "./helpers/reversePostal.js";
 import DebugMouseOverlay from "../components/mouseOverlay.js";
+import { extractCityFromLabel } from "../utils/segments.js";
+
 import "./App.css";
 import Header from "../components/header.js";
 
@@ -58,6 +60,33 @@ const MainPage = ({ user })  => {
   const viaMarkersRef = useRef([]);            // H.map.DomMarker refs per point
   const behaviorRef = useRef(null);
   const currentLineGeom = useRef(null);
+
+  const [selectedSegmentByIndex, setSelectedSegmentByIndex] = useState({});
+
+  // când lista de rute se schimbă, resetăm selecțiile
+  useEffect(() => {
+    setSelectedSegmentByIndex({});
+  }, [routes]);
+
+  // Segmente etichetate cu orașele din `addresses`
+  function getSegmentsForRoute(rt) {
+    if (!rt?.sections?.length || addresses.length < 2) return [];
+    const legs = buildLegs(rt.sections); // N−1 liste de secțiuni
+    return legs.map((legSecs, i) => {
+      const from = addresses[i];
+      const to   = addresses[i + 1];
+      const fromName = from?.city || extractCityFromLabel(from?.label) || `Adresa${i + 1}`;
+      const toName   = to?.city   || extractCityFromLabel(to?.label)   || `Adresa${i + 2}`;
+      const meters = legSecs.reduce((sum, s) => sum + (s.summary?.length || 0), 0);
+      const km = Math.round((meters / 1000) * 10) / 10;
+      return {
+        key: String(i),
+        label: `${fromName}→${toName}`,
+        km,
+        display: `${fromName}→${toName}  -  ${km} km`,
+      };
+    });
+  }
 
   const debouncedLive = debounce((lat, lng, legIdx) => {
     calculateAndDisplayLiveRoute(
@@ -200,25 +229,27 @@ const MainPage = ({ user })  => {
   };
 
   // Adaugă adrese
-const addAddress = async (coordsWithLabel) => {
-  const code = await fetchPostalCode(coordsWithLabel.lat, coordsWithLabel.lng);
-  const countryCode = coordsWithLabel.label
-    .split(',')
-    .pop()
-    .trim()
-    .slice(0, 2)
-    .toUpperCase();
+  const addAddress = async (coordsWithLabel) => {
+    const code = await fetchPostalCode(coordsWithLabel.lat, coordsWithLabel.lng);
+    const city = extractCityFromLabel(coordsWithLabel.label);
+    const countryCode = coordsWithLabel.label
+      .split(',')
+      .pop()
+      .trim()
+      .slice(0, 2)
+      .toUpperCase();
 
-  setAddresses(prev => [
-    ...prev,
-    { 
-      ...coordsWithLabel,
-      postal: code || "",
-      country: countryCode, 
-    }
-  ]);
-  console.log('picked address: ', coordsWithLabel)
-};
+    setAddresses(prev => [
+      ...prev,
+      { 
+        ...coordsWithLabel,
+        postal: code || "",
+        country: countryCode, 
+        city,
+      }
+    ]);
+    console.log('picked address: ', coordsWithLabel)
+  };
   const moveUp = (index) => {
     if (index === 0) return;
     const newArr = [...addresses];
@@ -954,6 +985,7 @@ setTimeout(() => {
                   <tr className="bg-red-50">
                     <th className="px-3 py-2 border">Route</th>
                     <th className="px-3 py-2 border">Distance (km)</th>
+                    <th className="px-3 py-2 border">Segment distances</th>
                     <th className="px-3 py-2 border">Time</th>
                     {!allIn && (
                       <th className="px-3 py-2 border">Price per Km (EUR)</th>
@@ -975,10 +1007,37 @@ setTimeout(() => {
                     const totalCost = allIn
                       ? parseFloat(fixedTotalCost || 0)
                       : costPerKm + routeTax + dayCost;
+
+                    const segs = getSegmentsForRoute(rt);
+                    // valoarea selectată pentru rândul curent
+                    const selected = selectedSegmentByIndex[index] ?? (segs[0]?.key || "");
+
                     return (
                       <tr key={index} className={`cursor-pointer ${selectedRouteIndex===index?"bg-red-50":""} hover:bg-red-50`} onClick={()=>handleRouteSelect(index)}>
                         <td className="px-3 py-2 border text-center">Route {index+1}</td>
                         <td className="px-3 py-2 border text-center">{km}</td>
+                        <td className="px-3 py-2 border text-center">
+                          {segs.length > 0 ? (
+                            <select
+                              className="border rounded px-2 py-1 w-full"
+                              value={selected}
+                              onChange={(e) =>
+                                setSelectedSegmentByIndex((s) => ({
+                                  ...s,
+                                  [index]: e.target.value,
+                                }))
+                              }
+                            >
+                              {segs.map((s) => (
+                                <option key={s.key} value={s.key}>
+                                  {s.display}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span>-</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 border text-center">{displayTime}</td>
                         {!allIn && <td className="px-3 py-2 border text-center">{formatNum(costPerKm)}</td>}
                         <td className="px-3 py-2 border text-center">{formatNum(routeTax)}</td>
