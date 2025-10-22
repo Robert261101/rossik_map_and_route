@@ -66,8 +66,6 @@ export async function calculateAndDisplayLiveRoute(
     }
   });
 
-
-
   // Draw each section of the fastest route as an orange polyline
   fastestRoute.forEach(section => {
     const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);

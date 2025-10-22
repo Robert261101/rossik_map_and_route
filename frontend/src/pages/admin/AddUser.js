@@ -157,15 +157,3 @@ export default function AddUser({ user }) {
     </div>
   );
 }
-
-/*
-API-uri pentru integrari:
-
-- Timocom API
-- Maybe Spotgo API
-- Maybe Rossik Tools API
-
-din pachet sigur avem nevoie de cel de dev pentru task management si organizarea proiectului pe sprint uri, ar ajuta si integrarea cu Github 
-
-
-*/
