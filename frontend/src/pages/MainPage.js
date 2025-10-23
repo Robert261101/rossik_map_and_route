@@ -62,11 +62,16 @@ const MainPage = ({ user })  => {
   const behaviorRef = useRef(null);
   const currentLineGeom = useRef(null);
 
+  const pendingViaRef = useRef(null);                // { marker, legIdx, onMove, onUp }
+  const placedViaStackRef = useRef([]);              // LIFO: [{ legIdx, marker }]
+  const liveOverlaysRef = useRef(new Map());         // legIdx -> { remove() }
+
+
   // layout helpers driven by hasCalculated
-const leftWidth   = hasCalculated ? "w-1/2" : "w-1/3";
-const rightWidth  = hasCalculated ? "w-1/2" : "w-2/3";
-const cardsLayout = hasCalculated ? "flex-row space-x-4" : "flex-col space-y-4";
-const cardWidth   = hasCalculated ? "w-1/2" : "w-full";
+  const leftWidth   = hasCalculated ? "w-1/2" : "w-1/3";
+  const rightWidth  = hasCalculated ? "w-1/2" : "w-2/3";
+  const cardsLayout = hasCalculated ? "flex-row space-x-4" : "flex-col space-y-4";
+  const cardWidth   = hasCalculated ? "w-1/2" : "w-full";
 
 
   const resetRouteState = () => {
@@ -137,8 +142,8 @@ const cardWidth   = hasCalculated ? "w-1/2" : "w-full";
     });
   }
 
-  const debouncedLive = debounce((lat, lng, legIdx) => {
-    calculateAndDisplayLiveRoute(
+  const debouncedLive = debounce(async (lat, lng, legIdx) => {
+    const handle = await calculateAndDisplayLiveRoute(
       mapRef.current,
       addresses[legIdx],
       { lat, lng },
@@ -147,6 +152,11 @@ const cardWidth   = hasCalculated ? "w-1/2" : "w-full";
       process.env.REACT_APP_HERE_API_KEY,
       legIdx
     );
+
+    // replace old preview for this leg, if any
+    const prev = liveOverlaysRef.current.get(legIdx);
+    if (prev && typeof prev.remove === 'function') prev.remove();
+    liveOverlaysRef.current.set(legIdx, handle);
   }, 50);
 
   //compute total wall-clock seconds (driving + breaks) once per render
@@ -446,6 +456,15 @@ const displayRoute = (route) => {
   if (!mapRef.current) return;
   const map = mapRef.current;
 
+  // remove any existing live previews
+for (const h of liveOverlaysRef.current.values()) {
+  if (h && typeof h.remove === 'function') h.remove();
+}
+liveOverlaysRef.current.clear();
+placedViaStackRef.current = [];
+pendingViaRef.current = null;
+
+
   // 1) clear old polylines & via-markers
   map.getObjects().forEach(obj => {
     if (obj instanceof window.H.map.Polyline) {
@@ -473,12 +492,13 @@ const spawnViaMarker = (lat, lng, legIdx) => {
   let dragging = false;
 
   const onDown = (evt) => {
-    evt.stopPropagation(); // don’t let the map start a pan
+    evt.stopPropagation();
     dragging = true;
     el.style.cursor = 'grabbing';
     if (behaviorRef.current) {
-      behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+    behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
     }
+    pendingViaRef.current = { marker, legIdx, onMove, onUp };
   };
 
   const onMove = (evt) => {
@@ -505,17 +525,24 @@ const spawnViaMarker = (lat, lng, legIdx) => {
       const others = points.filter(p => p.legIndex !== legIdx);
       return [...others, { lat: finalLat, lng: finalLng, postal, legIndex: legIdx }];
     });
+
+    placedViaStackRef.current = [
+      ...placedViaStackRef.current.filter(e => e.legIdx !== legIdx),
+      { legIdx, marker },
+    ];
+
+    if (pendingViaRef.current?.marker === marker) pendingViaRef.current = null;
   };
 
-  // HERE events (not raw DOM)
   marker.addEventListener('pointerdown', onDown);
   map.addEventListener('pointermove', onMove);
   map.addEventListener('pointerup', onUp);
 
-  // Cleanup when marker is removed
   marker.addEventListener('remove', () => {
     map.removeEventListener('pointermove', onMove);
     map.removeEventListener('pointerup', onUp);
+    placedViaStackRef.current = placedViaStackRef.current.filter(e => e.marker !== marker);
+    if (pendingViaRef.current?.marker === marker) pendingViaRef.current = null;
   });
 };
 
@@ -812,6 +839,53 @@ setTimeout(() => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+  const onKeyDown = (e) => {
+    if (e.key !== 'Escape') return;
+
+    const map = mapRef.current;
+    if (!map) return;
+
+    // 1️⃣ cancel a drag-in-progress
+    const pending = pendingViaRef.current;
+    if (pending) {
+      if (pending.onMove) map.removeEventListener('pointermove', pending.onMove);
+      if (pending.onUp)   map.removeEventListener('pointerup', pending.onUp);
+
+      map.removeObject(pending.marker);
+      viaMarkersRef.current = viaMarkersRef.current.filter(m => m !== pending.marker);
+
+      const h = liveOverlaysRef.current.get(pending.legIdx);
+      if (h && typeof h.remove === 'function') h.remove();
+      liveOverlaysRef.current.delete(pending.legIdx);
+
+      if (behaviorRef.current) {
+        behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+      }
+      placedViaStackRef.current = placedViaStackRef.current.filter(e => e.marker !== pending.marker);
+      pendingViaRef.current = null;
+      return;
+    }
+
+    // 2️⃣ undo last placed via
+    const stack = placedViaStackRef.current;
+    if (stack.length) {
+      const { legIdx, marker } = stack.pop();
+      map.removeObject(marker);
+      viaMarkersRef.current = viaMarkersRef.current.filter(m => m !== marker);
+
+      const h = liveOverlaysRef.current.get(legIdx);
+      if (h && typeof h.remove === 'function') h.remove();
+      liveOverlaysRef.current.delete(legIdx);
+
+      setViaPoints(prev => prev.filter(p => p.legIndex !== legIdx));
+    }
+  };
+
+  window.addEventListener('keydown', onKeyDown);
+  return () => window.removeEventListener('keydown', onKeyDown);
+}, []);
 
   
 
@@ -1208,7 +1282,6 @@ export default MainPage;
 
 /* TODOS:
 in the future: possible to have multiple via stations per leg
-empty km from 1 to 2 - set ui to accept that and display it as lets say 1-2 -> 20km 2-3 -> 50 km; total km 70km empty km 20 
-- idee 1. truck location, 2. loading location, 3. unloading location
-modal dreapta trece sub, dupa calculate route zboara dreapta sus
+esc pentru a anula plasarea actualului via marker
+vedem daca putem modifica ANUMITE toll-uri dupa nume/contractele noastre (mont blanc, frejous, euro tunelul franta-regatul unit )
 */

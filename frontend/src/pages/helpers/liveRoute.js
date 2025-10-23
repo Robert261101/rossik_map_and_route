@@ -1,13 +1,8 @@
 // src/pages/helpers/liveRoute.js
 
 /**
- * Displays a single fully‐constrained truck route (with a via) in orange on the HERE map.
- */
-import React from 'react';
-
-/**
- * Displays a single fully‑constrained truck route (with a via) in orange on the HERE map,
- * choosing the fastest among alternatives.
+ * Displays a single fully-constrained truck route (with a via) in orange on the HERE map,
+ * choosing the fastest among alternatives, and returns a cleanup handle.
  */
 export async function calculateAndDisplayLiveRoute(
   map,
@@ -18,9 +13,8 @@ export async function calculateAndDisplayLiveRoute(
   apiKey,
   legIdx
 ) {
-  if (!map) return;
+  if (!map) return { remove() {} }; // graceful no-op
 
-  // Build one global‑opt route request with origin → via → destination
   const params = new URLSearchParams({
     origin:                 `${startStop.lat},${startStop.lng}`,
     via:                    `${viaPoint.lat},${viaPoint.lng}`,
@@ -42,37 +36,39 @@ export async function calculateAndDisplayLiveRoute(
 
   const res = await fetch(`https://router.hereapi.com/v8/routes?${params.toString()}`);
   if (!res.ok) {
-    console.error('HERE live‑route error', res.status, await res.text());
-    return;
+    console.error('HERE live-route error', res.status, await res.text());
+    return { remove() {} };
   }
-  const { routes } = await res.json();
-  if (!routes?.length) return;
 
-  // Determine the fastest route by total duration
-  const fastestRoute = routes
+  const { routes } = await res.json();
+  if (!routes?.length) return { remove() {} };
+
+  // pick the fastest by total duration
+  const fastestSections = routes
     .map(r => ({
       sections: r.sections,
       duration: r.sections.reduce((sum, s) => sum + (s.summary?.duration || 0), 0)
     }))
     .sort((a, b) => a.duration - b.duration)[0].sections;
 
-  // Clear previous live‑preview polylines
-  map.getObjects().forEach(o => {
-    if (
-      o instanceof window.H.map.Polyline &&
-      o.getData() === `live-${legIdx}`
-    ) {
-      map.removeObject(o);
-    }
-  });
-
-  // Draw each section of the fastest route as an orange polyline
-  fastestRoute.forEach(section => {
+  // group all preview polylines for this call
+  const group = new window.H.map.Group();
+  fastestSections.forEach(section => {
     const ls = window.H.geo.LineString.fromFlexiblePolyline(section.polyline);
     const poly = new window.H.map.Polyline(ls, {
       style: { strokeColor: 'orange', lineWidth: 4 }
     });
+    // tag if you still want (not strictly needed now)
     poly.setData(`live-${legIdx}`);
-    map.addObject(poly);
+    group.addObject(poly);
   });
+
+  map.addObject(group);
+
+  // return cleanup handle so caller can replace/undo previews for this leg
+  return {
+    remove() {
+      try { map.removeObject(group); } catch (_) {}
+    }
+  };
 }
