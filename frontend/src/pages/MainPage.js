@@ -1282,6 +1282,5 @@ export default MainPage;
 
 /* TODOS:
 in the future: possible to have multiple via stations per leg
-esc pentru a anula plasarea actualului via marker
 vedem daca putem modifica ANUMITE toll-uri dupa nume/contractele noastre (mont blanc, frejous, euro tunelul franta-regatul unit )
 */
