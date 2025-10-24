@@ -60,7 +60,11 @@ const MainPage = ({ user })  => {
   // visual hint state
   const [undoCount, setUndoCount] = useState(0);               // number of placed-via items
   const [pendingLeg, setPendingLeg] = useState(null);          // legIdx being dragged or null
+  const [mapHint, setMapHint] = useState(null);
 
+  // at the top of MainPage
+  const [addressQuery, setAddressQuery] = useState("");
+  
   const viaMarkersRef = useRef([]);            // H.map.DomMarker refs per point
   const behaviorRef = useRef(null);
   const currentLineGeom = useRef(null);
@@ -68,6 +72,44 @@ const MainPage = ({ user })  => {
   const pendingViaRef = useRef(null);                // { marker, legIdx, onMove, onUp }
   const placedViaStackRef = useRef([]);              // LIFO: [{ legIdx, marker }]
   const liveOverlaysRef = useRef(new Map());         // legIdx -> { remove() }
+
+  // support multiple vias per leg
+  const viaIdRef = useRef(0);            // incremental id for via points
+  const viaPointsRef = useRef(viaPoints); // always-current viaPoints for handlers
+  useEffect(() => { viaPointsRef.current = viaPoints; }, [viaPoints]);
+
+  // ⬇️ add after your existing refs:
+  const legGeomsRef = useRef([]); // legIdx -> [{lat,lng,distFromStart}, ...] for ordering along the leg
+
+  // --- tiny geo helpers to measure along a leg ---
+  function haversine(a, b) {
+    const R = 6371000;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const s1 = Math.sin(dLat/2), s2 = Math.sin(dLng/2);
+    const q = s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
+    return 2 * R * Math.asin(Math.sqrt(q));
+  }
+  function buildLegCumulative(points) {
+    let acc = 0;
+    return points.map((p,i,arr)=>{
+      if (i>0) acc += haversine(arr[i-1], p);
+      return { ...p, distFromStart: acc };
+    });
+  }
+  // project a point to the closest vertex on the leg polyline (good enough for ordering)
+  function projectOnLeg(legIdx, lat, lng) {
+    const leg = legGeomsRef.current[legIdx] || [];
+    if (!leg.length) return 0;
+    let best = { i: 0, d: Infinity };
+    const pt = { lat, lng };
+    for (let i=0; i<leg.length; i++) {
+      const d = haversine(pt, leg[i]);
+      if (d < best.d) best = { i, d };
+    }
+    return leg[best.i].distFromStart;
+  }
 
 
   // layout helpers driven by hasCalculated
@@ -78,45 +120,70 @@ const MainPage = ({ user })  => {
 
 
   const resetRouteState = () => {
-    // clear computed data
-    setRoutes([]);
-    setSelectedRouteIndex(null);
-    setRouteTaxCosts([]);
-    setTollCosts([]);
-    setDistance(null);
-    setDuration(null);
-    setDurationWithBreaks(null);
-    setRawDistance(null);
-    setRawDuration(null);
-    setHasCalculated(false);
-    setViaPoints([]);
-    setSaveMsg("");
+  // clear computed data
+  setRoutes([]);
+  setSelectedRouteIndex(null);
+  setRouteTaxCosts([]);
+  setTollCosts([]);
+  setDistance(null);
+  setDuration(null);
+  setDurationWithBreaks(null);
+  setRawDistance(null);
+  setRawDuration(null);
+  setHasCalculated(false);
+  setViaPoints([]);
+  setSaveMsg("");
+  setMapHint(null);
 
-    // clear map artifacts
-    if (mapRef.current) {
-      const map = mapRef.current;
+  // clear map artifacts
+  const map = mapRef.current;
+  if (!map) return;
 
-      // remove all map objects (polylines, markers, etc.)
-      map.getObjects().forEach(obj => map.removeObject(obj));
+  // 1) remove any live overlays you might have registered
+  for (const h of liveOverlaysRef.current.values()) {
+    if (h && typeof h.remove === "function") h.remove();
+  }
+  liveOverlaysRef.current.clear();
 
-      if (markerGroupRef.current) {
-        map.removeObject(markerGroupRef.current);
-        markerGroupRef.current = null;
-      }
-
-      viaMarkersRef.current.forEach(m => map.removeObject(m));
-      viaMarkersRef.current = [];
-
-      currentLineGeom.current = null;
-
-      // recenter to default
-      map.getViewModel().setLookAtData({
-        position: { lat: 44.4268, lng: 26.1025 },
-        zoom: 6
-      });
+  // 2) remove via markers (detach from parent if present)
+  viaMarkersRef.current.forEach(m => {
+    const parent = m.getParent && m.getParent();
+    if (parent) {
+      try { parent.removeObject(m); } catch (_) {}
+    } else {
+      try { map.removeObject(m); } catch (_) {}
     }
-  };
+  });
+  viaMarkersRef.current = [];
+  placedViaStackRef.current = [];
+  pendingViaRef.current = null;
 
+  // 3) remove numbered address group safely (avoid double-removal)
+  if (markerGroupRef.current) {
+    try { markerGroupRef.current.removeAll(); } catch (_) {}
+    // only remove if it’s still on the map
+    const stillOnMap = map.getObjects().includes(markerGroupRef.current);
+    if (stillOnMap) {
+      try { map.removeObject(markerGroupRef.current); } catch (_) {}
+    }
+    markerGroupRef.current = null;
+  }
+
+  // 4) remove remaining polylines/strays (be selective to avoid double work)
+  map.getObjects().forEach(obj => {
+    if (obj instanceof window.H.map.Polyline || obj instanceof window.H.map.DomMarker) {
+      try { map.removeObject(obj); } catch (_) {}
+    }
+  });
+
+  currentLineGeom.current = null;
+
+  // 5) recenter
+  map.getViewModel().setLookAtData({
+    position: { lat: 44.4268, lng: 26.1025 },
+    zoom: 6
+  });
+};
 
   const [selectedSegmentByIndex, setSelectedSegmentByIndex] = useState({});
 
@@ -145,22 +212,63 @@ const MainPage = ({ user })  => {
     });
   }
 
-  const debouncedLive = debounce(async (lat, lng, legIdx) => {
+  // live preview while dragging: use all vias on the leg, ordered along the leg
+  const debouncedLive = debounce(async (legIdx, lat, lng, excludeViaId = null) => {
+    if (!addresses[legIdx] || !addresses[legIdx + 1]) return;
+
+    // existing vias on this leg (with their saved positions)
+    const base = viaPointsRef.current
+      .filter(p => p.legIndex === legIdx && p.id !== excludeViaId)
+      .map(p => ({ lat: p.lat, lng: p.lng, pos: p.pos ?? projectOnLeg(legIdx, p.lat, p.lng) }));
+
+    // the moving point (transient)
+    const moving = (lat != null && lng != null)
+      ? [{ lat, lng, pos: projectOnLeg(legIdx, lat, lng) }]
+      : [];
+
+    // order by pos → just lat/lng for the API
+    const viaArray = [...base, ...moving]
+      .sort((a,b)=>a.pos - b.pos)
+      .map(v => ({ lat: v.lat, lng: v.lng }));
+
     const handle = await calculateAndDisplayLiveRoute(
       mapRef.current,
       addresses[legIdx],
-      { lat, lng },
+      viaArray,
       addresses[legIdx + 1],
       vehicleType,
       process.env.REACT_APP_HERE_API_KEY,
       legIdx
     );
 
-    // replace old preview for this leg, if any
     const prev = liveOverlaysRef.current.get(legIdx);
     if (prev && typeof prev.remove === 'function') prev.remove();
     liveOverlaysRef.current.set(legIdx, handle);
   }, 50);
+
+  const renderLiveForLeg = async (legIdx) => {
+    if (!addresses[legIdx] || !addresses[legIdx + 1]) return;
+
+    const viaArray = viaPointsRef.current
+      .filter(p => p.legIndex === legIdx)
+      .map(p => ({ lat: p.lat, lng: p.lng, pos: p.pos ?? projectOnLeg(legIdx, p.lat, p.lng) }))
+      .sort((a,b)=>a.pos - b.pos)
+      .map(v => ({ lat: v.lat, lng: v.lng }));
+
+    const handle = await calculateAndDisplayLiveRoute(
+      mapRef.current,
+      addresses[legIdx],
+      viaArray,
+      addresses[legIdx + 1],
+      vehicleType,
+      process.env.REACT_APP_HERE_API_KEY,
+      legIdx
+    );
+
+    const prev = liveOverlaysRef.current.get(legIdx);
+    if (prev && typeof prev.remove === 'function') prev.remove();
+    liveOverlaysRef.current.set(legIdx, handle);
+  };
 
   //compute total wall-clock seconds (driving + breaks) once per render
   const secWithBreaks = rawDuration != null
@@ -270,11 +378,12 @@ const MainPage = ({ user })  => {
         throw new Error(errBody.error || errBody.message || res.statusText);
       }
 
-      setSaveMsg('Route saved ✔️');
+      alert('Route saved ✔️');
       setHasCalculated(false);
+      resetRouteState();
     } catch (err) {
       console.error('Save failed:', err);
-      setSaveMsg('Save failed: ' + err.message);
+      alert('Save failed: ' + err.message);
     }
   };
 
@@ -339,14 +448,15 @@ const getRoute = async (pts = addresses) => {
   setIsLoading(true);
 
   try {
-    // Build waypoints and insert all viaPoints per leg
-    const combined = [];
-    pts.forEach((addr, idx) => {
-      combined.push(addr);
-      viaPoints
-        .filter(p => p.legIndex === idx)
-        .forEach(p => combined.push({ lat: p.lat, lng: p.lng }));
-    });
+  // Build waypoints and insert all vias sorted by position on that leg
+  const combined = [];
+  pts.forEach((addr, idx) => {
+    combined.push(addr);
+    viaPoints
+      .filter(p => p.legIndex === idx)
+      .sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0))   // ← ensure start→end order
+      .forEach(p => combined.push({ lat: p.lat, lng: p.lng }));
+  });
     const waypoints = combined;
     // ③ Now waypoints = [start, …vias…, end]
     const origin      = waypoints[0];
@@ -405,6 +515,8 @@ const getRoute = async (pts = addresses) => {
 
     // 5️⃣ Render the fastest one on the map
     displayRoute(sorted[0]);
+    setMapHint("spawn");
+
 
     // 6️⃣ Extract summary for the first route
     const first = sorted[0];
@@ -492,9 +604,12 @@ const spawnViaMarker = (lat, lng, legIdx) => {
 
   const icon = new window.H.map.DomIcon(el, { volatility: true });
   const marker = new window.H.map.DomMarker({ lat, lng }, { icon, volatility: true });
+  marker.__viaId = null; // will be set on drop
   map.addObject(marker);
   viaMarkersRef.current.push(marker);
 
+  setMapHint("drag");
+  
   let dragging = false;
 
   const onDown = (evt) => {
@@ -505,7 +620,8 @@ const spawnViaMarker = (lat, lng, legIdx) => {
     behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
     }
     pendingViaRef.current = { marker, legIdx, onMove, onUp };
-    setPendingLeg(legIdx)
+    setPendingLeg(legIdx);
+    setMapHint(null);
   };
 
   const onMove = (evt) => {
@@ -513,7 +629,7 @@ const spawnViaMarker = (lat, lng, legIdx) => {
     const { viewportX, viewportY } = evt.currentPointer;
     const geo = map.screenToGeo(viewportX, viewportY);
     marker.setGeometry(geo);
-    debouncedLive(geo.lat, geo.lng, legIdx);
+    debouncedLive(legIdx, geo.lat, geo.lng, marker.__viaId || null);
   };
 
   const onUp = async () => {
@@ -526,21 +642,37 @@ const spawnViaMarker = (lat, lng, legIdx) => {
     debouncedLive.flush();
 
     const { lat: finalLat, lng: finalLng } = marker.getGeometry();
+    const pos = projectOnLeg(legIdx, finalLat, finalLng); // ← position along leg
     const postal = await fetchPostalCode(finalLat, finalLng);
 
-    setViaPoints(points => {
-      const others = points.filter(p => p.legIndex !== legIdx);
-      return [...others, { lat: finalLat, lng: finalLng, postal, legIndex: legIdx }];
-    });
+    if (marker.__viaId) {
+      const id = marker.__viaId;
+      setViaPoints(prev =>
+        prev.map(p =>
+          p.id === id ? { ...p, lat: finalLat, lng: finalLng, postal, pos } : p
+        )
+      );
+    } else {
+      const newId = ++viaIdRef.current;
+      marker.__viaId = newId;
 
-    placedViaStackRef.current = [
-      ...placedViaStackRef.current.filter(e => e.legIdx !== legIdx),
-      { legIdx, marker },
-    ];
+      setViaPoints(prev => [
+        ...prev,
+        { id: newId, lat: finalLat, lng: finalLng, postal, legIndex: legIdx, pos }
+      ]);
+
+      placedViaStackRef.current = [
+        ...placedViaStackRef.current,
+        { id: newId, legIdx, marker },
+      ];
+      setUndoCount(placedViaStackRef.current.length);
+    }
 
     if (pendingViaRef.current?.marker === marker) pendingViaRef.current = null;
     setPendingLeg(null);
-    setUndoCount(placedViaStackRef.current.length);
+
+    // redraw preview using sorted vias
+    renderLiveForLeg(legIdx);
   };
 
   marker.addEventListener('pointerdown', onDown);
@@ -550,7 +682,20 @@ const spawnViaMarker = (lat, lng, legIdx) => {
   marker.addEventListener('remove', () => {
     map.removeEventListener('pointermove', onMove);
     map.removeEventListener('pointerup', onUp);
-    placedViaStackRef.current = placedViaStackRef.current.filter(e => e.marker !== marker);
+
+    if (marker.__viaId) {
+      const id = marker.__viaId;
+
+      // drop from stack and state
+      placedViaStackRef.current = placedViaStackRef.current.filter(e => e.id !== id);
+      setViaPoints(prev => prev.filter(p => p.id !== id));
+      setUndoCount(placedViaStackRef.current.length);
+
+      // redraw the live preview for this leg (might become empty)
+      renderLiveForLeg(legIdx);
+    }
+
+    // ensure we don't keep dangling pending refs
     if (pendingViaRef.current?.marker === marker) pendingViaRef.current = null;
   });
 };
@@ -569,6 +714,14 @@ const spawnViaMarker = (lat, lng, legIdx) => {
         ls.pushLatLngAlt(arr[i], arr[i+1], arr[i+2]);
       }
     });
+
+    // cache leg vertices + cumulative distance for ordering vias
+    const raw = ls.getLatLngAltArray();
+    const pts = [];
+    for (let i = 0; i < raw.length; i += 3) {
+      pts.push({ lat: raw[i], lng: raw[i + 1] });
+    }
+    legGeomsRef.current[legIdx] = buildLegCumulative(pts);
 
     // draw the leg
     const legPolyline = new window.H.map.Polyline(ls, {
@@ -603,6 +756,7 @@ const spawnViaMarker = (lat, lng, legIdx) => {
   const handleRouteSelect = (index) => {
     setSelectedRouteIndex(index);
     displayRoute(routes[index]);
+    setMapHint("spawn");
     if (routes[index].sections && routes[index].sections.length > 0) {
       let totalDistance = 0;
       let totalDuration = 0;
@@ -877,19 +1031,34 @@ setTimeout(() => {
       return;
     }
 
-    // 2️⃣ undo last placed via
+    // 2️⃣ undo last placed via (only one item)
     const stack = placedViaStackRef.current;
     if (stack.length) {
-      const { legIdx, marker } = stack.pop();
+      const { id, legIdx, marker } = stack.pop();
+
+      // remove marker from map + local refs
       map.removeObject(marker);
       viaMarkersRef.current = viaMarkersRef.current.filter(m => m !== marker);
 
-      const h = liveOverlaysRef.current.get(legIdx);
-      if (h && typeof h.remove === 'function') h.remove();
-      liveOverlaysRef.current.delete(legIdx);
-
-      setViaPoints(prev => prev.filter(p => p.legIndex !== legIdx));
+      // remove the via point with that id
+      const remainingForLeg = viaPointsRef.current.filter(p => !(p.legIndex === legIdx && p.id === id));
+      setViaPoints(prev => prev.filter(p => p.id !== id));
       setUndoCount(placedViaStackRef.current.length);
+      if (placedViaStackRef.current.length === 0) {
+        setMapHint("spawn"); // ⬅️ show hint again when none remain
+      }
+
+      // update preview for that leg:
+      const stillHasVias = remainingForLeg.some(p => p.legIndex === legIdx);
+      if (stillHasVias) {
+        // redraw preview with remaining vias
+        renderLiveForLeg(legIdx);
+      } else {
+        // no vias left → remove live overlay for this leg
+        const h = liveOverlaysRef.current.get(legIdx);
+        if (h && typeof h.remove === 'function') h.remove();
+        liveOverlaysRef.current.delete(legIdx);
+      }
     }
   };
 
@@ -897,7 +1066,6 @@ setTimeout(() => {
   return () => window.removeEventListener('keydown', onKeyDown);
 }, []);
 
-  
 
   return (
   <div className="App flex flex-col h-screen">
@@ -918,9 +1086,14 @@ setTimeout(() => {
                     <div className="w-full rounded bg-gray-1000 ring-2 ring-red-300 focus-within:ring-red-500 transition">
                       <AutoCompleteInput
                         apiKey={process.env.REACT_APP_HERE_API_KEY}
-                        onSelect={addAddress}
+                        value={addressQuery}                 // ← control the text
+                        onChange={setAddressQuery}           // ← update as user types
+                        onSelect={(picked) => {              // ← when a suggestion is chosen
+                          addAddress(picked);
+                          setAddressQuery("");               // ← clear the box
+                        }}
                         className="w-full p-2 bg-red-50 border-none focus:outline-none"
-                    />
+                      />
                     </div>
                 </div>
                 {addresses.length === 0 && <p className="text-sm text-gray-500">No address entered.</p>}
@@ -1271,6 +1444,22 @@ setTimeout(() => {
                 ) : (
                   <span>Press <b>Esc</b> to undo last via ({undoCount}).</span>
                 )}
+              </div>
+            </div>
+          )}
+          {/* Hints for spawn / drag */}
+          {mapHint === "spawn" && (
+            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[999]">
+              <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium">
+                <b>Left-click</b> the route to spawn a via marker.
+              </div>
+            </div>
+          )}
+
+          {mapHint === "drag" && (
+            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[999]">
+              <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium">
+                Use <b>Right Mouse Button</b> to drag the marker.
               </div>
             </div>
           )}

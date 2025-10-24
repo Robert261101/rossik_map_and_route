@@ -7,7 +7,7 @@
 export async function calculateAndDisplayLiveRoute(
   map,
   startStop,
-  viaPoint,
+  viaPointsArray,
   endStop,
   vehicleType,
   apiKey,
@@ -17,7 +17,6 @@ export async function calculateAndDisplayLiveRoute(
 
   const params = new URLSearchParams({
     origin:                 `${startStop.lat},${startStop.lng}`,
-    via:                    `${viaPoint.lat},${viaPoint.lng}`,
     destination:            `${endStop.lat},${endStop.lng}`,
     transportMode:          'truck',
     'truck[axleCount]':     vehicleType.axles,
@@ -33,6 +32,12 @@ export async function calculateAndDisplayLiveRoute(
 
   params.append('vehicle[weightPerAxle]', '11500');
   params.append('truck[limitedWeight]',  '7500');
+
+  // add all vias in order
+  (viaPointsArray || []).forEach(v => {
+    params.append('via', `${v.lat},${v.lng}`);
+  });
+
 
   const res = await fetch(`https://router.hereapi.com/v8/routes?${params.toString()}`);
   if (!res.ok) {
@@ -59,16 +64,14 @@ export async function calculateAndDisplayLiveRoute(
       style: { strokeColor: 'orange', lineWidth: 4 }
     });
     // tag if you still want (not strictly needed now)
-    poly.setData(`live-${legIdx}`);
     group.addObject(poly);
   });
 
   map.addObject(group);
 
   // return cleanup handle so caller can replace/undo previews for this leg
+  // return a tiny handle so callers can remove this preview later if needed
   return {
-    remove() {
-      try { map.removeObject(group); } catch (_) {}
-    }
+    remove() { map.removeObject(group); }
   };
 }
