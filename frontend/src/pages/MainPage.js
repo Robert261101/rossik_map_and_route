@@ -57,6 +57,9 @@ const MainPage = ({ user })  => {
   const [durationWithBreaks, setDurationWithBreaks] = useState(null);
   const [viaPoints, setViaPoints] = useState([]); // [{lat, lng, postal, legIndex}, ...]
 
+  // visual hint state
+  const [undoCount, setUndoCount] = useState(0);               // number of placed-via items
+  const [pendingLeg, setPendingLeg] = useState(null);          // legIdx being dragged or null
 
   const viaMarkersRef = useRef([]);            // H.map.DomMarker refs per point
   const behaviorRef = useRef(null);
@@ -463,6 +466,9 @@ for (const h of liveOverlaysRef.current.values()) {
 liveOverlaysRef.current.clear();
 placedViaStackRef.current = [];
 pendingViaRef.current = null;
+setPendingLeg(null);
+setUndoCount(0);
+
 
 
   // 1) clear old polylines & via-markers
@@ -499,6 +505,7 @@ const spawnViaMarker = (lat, lng, legIdx) => {
     behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
     }
     pendingViaRef.current = { marker, legIdx, onMove, onUp };
+    setPendingLeg(legIdx)
   };
 
   const onMove = (evt) => {
@@ -532,6 +539,8 @@ const spawnViaMarker = (lat, lng, legIdx) => {
     ];
 
     if (pendingViaRef.current?.marker === marker) pendingViaRef.current = null;
+    setPendingLeg(null);
+    setUndoCount(placedViaStackRef.current.length);
   };
 
   marker.addEventListener('pointerdown', onDown);
@@ -880,6 +889,7 @@ setTimeout(() => {
       liveOverlaysRef.current.delete(legIdx);
 
       setViaPoints(prev => prev.filter(p => p.legIndex !== legIdx));
+      setUndoCount(placedViaStackRef.current.length);
     }
   };
 
@@ -1248,7 +1258,23 @@ setTimeout(() => {
         </div>
 
         {/* RIGHT SIDE - MAP */}
-        <div className="w-1/2 h-full" id="mapContainer"></div>
+        <div
+          id="mapContainer"
+          className="w-1/2 h-full relative overflow-hidden"
+        >
+          {(pendingLeg !== null || undoCount > 0) && (
+            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[1000]">
+              <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium flex items-center gap-2">
+                <span className="inline-block w-5 h-5 rounded-md bg-white/15 grid place-items-center">⎋</span>
+                {pendingLeg !== null ? (
+                  <span>Drag to adjust. <b>Esc</b> cancels.</span>
+                ) : (
+                  <span>Press <b>Esc</b> to undo last via ({undoCount}).</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* FOOTER */}
