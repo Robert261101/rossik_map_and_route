@@ -165,7 +165,7 @@ export default function AddTeam({ user }) {
                 "
               >
                 <option value="">-- Select --</option>
-                {users.map((u) => (
+                {users.filter(u => u.role === 'team_lead' || u.role === 'admin').map((u) => (
                   <option key={u.id} value={u.id}>
                     {formatName(u.username)} ({u.role})
                   </option>
