@@ -110,6 +110,21 @@ export default function TeamList({ user }) {
       ? teams.filter(t => t.teamId === user.team_id)
       : [];
 
+  // helpers for listing members from each team
+  const isLeadish = r => r === 'team_lead' || r === 'admin';
+  const initials = (username='') => {
+    const local = username.split('@')[0] || '';
+    const [a='', b=''] = local.split('.');
+    return `${a[0]||''}${b[0]||''}`.toUpperCase() || 'U';
+  };
+  const roleBadge = (role) =>
+    role === 'admin'
+      ? 'bg-red-500/15 text-red-300 ring-1 ring-red-500/30'
+      : role === 'team_lead'
+      ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
+      : 'bg-gray-500/15 text-gray-300 ring-1 ring-gray-500/30';
+
+
   return (
     <div
       className="
@@ -163,7 +178,7 @@ export default function TeamList({ user }) {
                   : 'Nespecificat'}
               </p>
 
-              <div className="text-left mb-4">
+              {/* <div className="text-left mb-4">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Members:</h3>
                 <ul className="text-sm text-gray-800 dark:text-gray-800 list-disc list-inside space-y-1">
                   {[...team.members]
@@ -177,7 +192,53 @@ export default function TeamList({ user }) {
                     ))
                   }
                 </ul>
+              </div> */}
+
+              <div className="text-left mb-4">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                  Members
+                </h3>
+
+                <ul
+                  className="
+                    max-h-48 overflow-y-auto
+                    rounded-lg p-2
+                    bg-gray-50 dark:bg-gray-900/40
+                    border border-gray-200 dark:border-gray-700
+                    divide-y divide-gray-200 dark:divide-gray-700/70
+                    list-none
+                  "
+                >
+                  {[...team.members]
+                    .sort((a, b) => {
+                      // lead/admin first, then alpha
+                      if (isLeadish(a.role) && !isLeadish(b.role)) return -1;
+                      if (!isLeadish(a.role) && isLeadish(b.role)) return 1;
+                      return formatName(a.username).localeCompare(formatName(b.username));
+                    })
+                    .map((m) => (
+                      <li key={m.id} className="py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-7 w-7 rounded-full bg-gray-200 dark:bg-gray-700
+                                            flex items-center justify-center text-xs font-semibold
+                                            text-gray-700 dark:text-gray-100">
+                              {initials(m.username)}
+                            </div>
+                            <span className="truncate text-sm text-gray-900 dark:text-gray-100">
+                              {formatName(m.username)}
+                            </span>
+                          </div>
+
+                          <span className={`px-2 py-0.5 text-[11px] font-medium rounded-md uppercase tracking-wide ${roleBadge(m.role)}`}>
+                            {m.role.replace('_',' ')}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
               </div>
+
 
               <div className="flex justify-center space-x-2 mt-4">
                 {user.role === 'admin' && (

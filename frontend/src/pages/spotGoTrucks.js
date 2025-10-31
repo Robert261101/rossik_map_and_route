@@ -84,6 +84,22 @@ const sourcesMap = {
   100: "Inside Only",
 };
 
+const panel =
+  "rounded-lg p-5 border bg-white text-gray-900 " +
+  "border-gray-200 shadow-xl " +
+  "dark:bg-gray-800/70 dark:text-gray-100 dark:border-gray-700";
+
+const field =
+  "w-full rounded-md px-3 py-2 " +
+  "border border-gray-300 bg-gray-50 text-gray-900 " +
+  "placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 " +
+  "dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400";
+
+const btnCls =
+  "px-4 py-2 rounded font-bold text-white " +
+  "bg-red-700 hover:bg-red-800 disabled:opacity-70";
+
+
 // From email -> "Firstname Lastname"
 const fullNameFromEmail = (email = '') => {
   const local = email.split('@')[0] || '';
@@ -474,16 +490,16 @@ async function handleCopy(id) {
   
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', background: "#fff5f5", fontFamily: "Arial, sans-serif" }}>
+   <div  className=" min-h-screen transition-colors bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800 dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100 "  style={{ fontFamily: "Arial, sans-serif" }} >
       <Header user={user} />
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 20 }}>
+      <div className="flex items-start gap-5 px-3 py-4">
         {/* FORM */}
-        <form onSubmit={handleSubmit} style={{ flex: 1, background: "#fff", padding: 20, borderRadius: 8, boxShadow: "0 2px 8px rgba(185,28,28,.15)" }}>
+        <form onSubmit={handleSubmit} className={`flex-1 ${panel}`}>
           <h3 style={{ color: "#8a1414", marginTop: 0 }}>Vehicle availability</h3>
 
           {/* Addresses */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-            <div style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="border border-gray-300 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900/40">
               <label style={{ fontWeight: 700 }}>Loading</label>
               <AutoCompleteInput
                 key={`load-${resetKey}`}
@@ -491,15 +507,15 @@ async function handleCopy(id) {
                 value={loadingLoc}
                 onSelect={handleSelectLoading}
               />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-                <input type="date" value={loadStartDate} onChange={(e) => setLoadStartDate(e.target.value)} style={baseInput} />
-                <input type="time" value={loadStartTime} onChange={(e) => setLoadStartTime(e.target.value)} step="60" style={baseInput} />
-                <input type="date" value={loadEndDate} onChange={(e) => setLoadEndDate(e.target.value)} style={baseInput} />
-                <input type="time" value={loadEndTime} onChange={(e) => setLoadEndTime(e.target.value)} step="60" style={baseInput} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <input type="date" value={loadStartDate} onChange={(e) => setLoadStartDate(e.target.value)} className={field} />
+                <input type="time" value={loadStartTime} onChange={(e) => setLoadStartTime(e.target.value)} step="60" className={field} />
+                <input type="date" value={loadEndDate} onChange={(e) => setLoadEndDate(e.target.value)} className={field} />
+                <input type="time" value={loadEndTime} onChange={(e) => setLoadEndTime(e.target.value)} step="60" className={field} />
               </div>
             </div>
 
-            <div style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+            <div className="border border-gray-300 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900/40">
               <label style={{ fontWeight: 700 }}>Unloading</label>
               <AutoCompleteInput
                 key={`unload-${resetKey}`}
@@ -525,7 +541,7 @@ async function handleCopy(id) {
           </div>
 
           {/* Requirements */}
-          <fieldset style={{ padding: 12, borderRadius: 8, border: "1px solid #eee", marginBottom: 16 }}>
+          <fieldset className="p-3 rounded-lg border border-gray-300 dark:border-gray-700 mb-4 bg-white dark:bg-gray-900/40">
             <legend style={{ fontWeight: 700, color: "#8a1414" }}>Requirements</legend>
 
             {/* Vehicle type (radio) */}
@@ -539,10 +555,10 @@ async function handleCopy(id) {
             </div>
 
             {/* Trailer type */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <label>
                 <span style={{ fontWeight: 700 }}>Trailer Type</span>
-                <select value={trailerType} onChange={(e) => setTrailerType(Number(e.target.value))} style={baseInput}>
+                <select value={trailerType} onChange={(e) => setTrailerType(Number(e.target.value))} className={field}>
                   {Object.entries(trailerTypes).map(([id, label]) => (
                     <option key={id} value={id}>{label}</option>
                   ))}
@@ -555,18 +571,18 @@ async function handleCopy(id) {
             </div>
 
             {/* Numeric fields */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <label>
                 <span style={{ fontWeight: 700 }}>Weight (t)</span>
-                <input value={capacityT} onChange={(e) => setCapacityT(e.target.value)} style={baseInput} />
+                <input value={capacityT} onChange={(e) => setCapacityT(e.target.value)} className={field} />
               </label>
               <label>
                 <span style={{ fontWeight: 700 }}>LDM</span>
-                <input value={ldm} onChange={(e) => setLdm(e.target.value)} style={baseInput} />
+                <input value={ldm} onChange={(e) => setLdm(e.target.value)} className={field} />
               </label>
               <label>
                 <span style={{ fontWeight: 700 }}>Pallets</span>
-                <input value={pallets} onChange={(e) => setPallets(e.target.value)} style={baseInput} />
+                <input value={pallets} onChange={(e) => setPallets(e.target.value)} className={field} />
               </label>
             </div>
 
@@ -589,40 +605,40 @@ async function handleCopy(id) {
           {/* Comments */}
           <div style={{ marginBottom: 12 }}>
             <label><strong>Comments</strong></label>
-            <input value={comments} onChange={(e) => setComments(e.target.value)} style={baseInput} />
+            <input value={comments} onChange={(e) => setComments(e.target.value)} className={field} />
           </div>
-          <button type="submit" disabled={submitting} style={{ ...btn, opacity: submitting ? 0.7 : 1 }}>
+          <button type="submit" disabled={submitting} className={btnCls} >
             {submitting ? "Publishing…" : "Publish"}
           </button>
         </form>
 
         {/* Tiny list of submitted vehicles (local) */}
-        <div style={{ flex: 1, background: "#fff", padding: 20, borderRadius: 8, boxShadow: "0 2px 8px rgba(185,28,28,.15)" }}>
+        <div className={`flex-1 ${panel}`}>
           <h3 style={{ color: "#8a1414", marginTop: 0 }}>Published vehicles</h3>
           {vehicles.length === 0 ? (
             <p>No vehicles yet.</p>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table className="w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 text-gray-900 dark:text-gray-100">
               <thead>
-                <tr style={{ background: "#ffefef" }}>
-                  <th style={{ textAlign: "left", padding: 8 }}>Owner</th>
-                  <th style={{ textAlign: "left", padding: 8 }}>Loading</th>
-                  <th style={{ textAlign: "left", padding: 8 }}>Unloading</th>
-                  <th style={{ textAlign: "center", padding: 8 }}>Action</th>
+                <tr className="bg-red-50 dark:bg-gray-800">
+                  <th className="px-3 py-2 text-left border-b border-gray-200 dark:border-gray-700">Owner</th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200 dark:border-gray-700">Loading</th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200 dark:border-gray-700">Unloading</th>
+                  <th className="px-3 py-2 text-center border-b border-gray-200 dark:border-gray-700">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {vehicles.map((v) => (
-                  <tr key={v.id}>
-                    <td style={{ padding: 8 }}>{v.owner}</td>
-                    <td style={{ padding: 8 }}>{v.loading}</td>
-                    <td style={{ padding: 8 }}>{v.unloading}</td>
-                    <td style={{ padding: 8, textAlign: "center" }}>
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <button type="button" onClick={() => handleCopy(v.id)} style={{ ...btn, background: "#1e4a7b" }}>
+                  <tr key={v.id} className="odd:bg-white even:bg-gray-50 dark:odd:bg-gray-800/40 dark:even:bg-gray-800/20">
+                    <td className="px-3 py-2">{v.owner}</td>
+                    <td className="px-3 py-2">{v.loading}</td>
+                    <td className="px-3 py-2">{v.unloading}</td>
+                    <td className="px-3 py-2 text-center">
+                      <div className="flex gap-2 justify-center flex-wrap">
+                        <button type="button" onClick={() => handleCopy(v.id)} className="px-4 py-2 rounded font-bold text-white bg-sky-800 hover:bg-sky-900">
                           Copy
                         </button>
-                        <button type="button" onClick={() => handleDelete(v.id)} style={{ ...btn, background: "#b91c1c" }}>
+                        <button type="button" onClick={() => handleDelete(v.id)} className="px-4 py-2 rounded font-bold text-white bg-red-700 hover:bg-red-800">
                           Delete
                         </button>
                       </div>

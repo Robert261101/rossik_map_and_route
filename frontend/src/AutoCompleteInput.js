@@ -126,37 +126,50 @@ const AutoCompleteInput = ({ apiKey, onSelect, className, value}) => {
         onFocus={() => selectedAddress && setSelectedAddress(null)} // setSelectedAddress(null) face ca sa dispara adresa imediat ce dau click pe textbox dupa ce am o adresa selectata
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Enter address or postal code"
-        className="w-full border-2 border-indigo-300 rounded p-2 shadow-sm transition focus-within:ring-2 focus-within:ring-indigo-300 focus:outline-none border-none"
+        className={`
+          w-full rounded p-2 shadow-sm transition
+          focus:ring-2 focus:ring-indigo-300 focus:outline-none
+          bg-gray-50 dark:bg-gray-700
+          text-gray-900 dark:text-gray-100
+          placeholder-gray-500 dark:placeholder-gray-400
+          border-none
+          ${className || ''}
+        `}
       />
       {loading && (
         <div style={{ position: 'absolute', top: '100%', left: 0 }}>Loading...</div>
       )}
       {suggestions.length > 0 && !selectedAddress && (
-        <ul
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            background: 'white',
-            listStyle: 'none',
-            padding: '5px',
-            margin: 0,
-            border: '1px solid #ccc',
-            width: '100%',
-            zIndex: 999,
-          }}
-        >
-          {suggestions.map((suggestion, index) => (
-            <li
-              key={index}
-              onClick={() => handleSelect(suggestion)}
-              style={{ cursor: 'pointer', padding: '5px 0' }}
-            >
-              {suggestion.address?.label || suggestion.title}
-            </li>
-          ))}
-        </ul>
-      )}
+  <ul
+    role="listbox"
+    className="
+      absolute left-0 top-full mt-1 w-full z-50
+      max-h-64 overflow-y-auto
+      rounded-lg overflow-hidden
+      border border-gray-200 dark:border-gray-700
+      bg-white dark:bg-gray-800
+      text-gray-900 dark:text-gray-100
+      shadow-xl
+      divide-y divide-gray-100 dark:divide-gray-700
+    "
+  >
+    {suggestions.map((s, i) => (
+      <li
+        key={i}
+        role="option"
+        onClick={() => handleSelect(s)}
+        className="
+          px-3 py-2 cursor-pointer select-none
+          hover:bg-red-50 dark:hover:bg-gray-700
+          focus:bg-red-50 dark:focus:bg-gray-700
+        "
+      >
+        {s.address?.label || s.title}
+      </li>
+    ))}
+  </ul>
+)}
+
     </div>
   );
 };

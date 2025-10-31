@@ -1749,639 +1749,651 @@ export default function SpotGoPage({ user }) {
     );
     };
 
-useEffect(() => {
-  let alive = true;
-  (async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const meId = session?.user?.id;
-    const myEmail = (session?.user?.email || '').toLowerCase();
-    if (!meId) return;
+    useEffect(() => {
+    let alive = true;
+    (async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const meId = session?.user?.id;
+        const myEmail = (session?.user?.email || '').toLowerCase();
+        if (!meId) return;
 
-    // get my team_id
-    const { data: meRow } = await supabase
-      .from('users')
-      .select('team_id')
-      .eq('id', meId)
-      .maybeSingle();
-
-    let emails = [];
-
-    if (meRow?.team_id) {
-      // members by same team_id
-      const { data: members } = await supabase
+        // get my team_id
+        const { data: meRow } = await supabase
         .from('users')
-        .select('email, username')
-        .eq('team_id', meRow.team_id);
+        .select('team_id')
+        .eq('id', meId)
+        .maybeSingle();
 
-      emails = (members || [])
-        .map(m => (m.email || m.username || '').toLowerCase())
-        .filter(Boolean);
-    } else {
-      // fallback: just me if no team yet
-      emails = [myEmail].filter(Boolean);
+        let emails = [];
+
+        if (meRow?.team_id) {
+        // members by same team_id
+        const { data: members } = await supabase
+            .from('users')
+            .select('email, username')
+            .eq('team_id', meRow.team_id);
+
+        emails = (members || [])
+            .map(m => (m.email || m.username || '').toLowerCase())
+            .filter(Boolean);
+        } else {
+        // fallback: just me if no team yet
+        emails = [myEmail].filter(Boolean);
+        }
+
+        const s = new Set([myEmail, ...emails].filter(Boolean));
+        if (alive) setTeamMemberEmails(s);
+    })();
+    return () => { alive = false; };
+    }, []); // runs for everyone
+
+    useEffect(() => {
+    // when my team set or role arrives, recompute visibility
+    if (teamMemberEmails.size || isAdmin || isTeamlead) {
+        refreshSubmittedOffers();
     }
-
-    const s = new Set([myEmail, ...emails].filter(Boolean));
-    if (alive) setTeamMemberEmails(s);
-  })();
-  return () => { alive = false; };
-}, []); // runs for everyone
-
-useEffect(() => {
-  // when my team set or role arrives, recompute visibility
-  if (teamMemberEmails.size || isAdmin || isTeamlead) {
-    refreshSubmittedOffers();
-  }
-}, [teamMemberEmails, role]);
+    }, [teamMemberEmails, role]);
 
 
-    //admin - sees all buttons
-    //teamLead - sees their teams buttons
-    //limit lower end of offers table
+    const field = "w-full rounded-md px-3 py-2 border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-600";
 
-  return (
-  <div style={{ background: '#fff5f5', fontFamily: 'Arial, sans-serif' }}>
-    <Header user = {user} />
-    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-      {/* Left Form */}
-      <form onSubmit={handleSubmitOffer} style={{ flex: '1', marginRight: '30px', background: '#ffffff', padding: '20px', borderRadius: '8px',boxShadow: '0 2px 8px rgba(185, 28, 28, 0.15)' }}>
-        <h3 style={{ color: '#8a1414ff', marginBottom: '15px' }}>Addresses</h3>
+    const rowCls = (isMine, idx) =>
+    isMine
+        ? (idx % 2 === 0
+            ? "bg-slate-50 dark:bg-gray-800/40"
+            : "bg-white dark:bg-gray-800/20")
+        : "bg-amber-50 dark:bg-amber-900/20";
 
-        {/* Address Fields */}
-        <div style={{display: 'flex',gap: '30px',alignItems: 'flex-start',marginBottom: '20px',paddingBottom: '15px',borderBottom: '1px dashed #09111aff',flexWrap: 'wrap'}} >
-        <div style={{flex: 1,minWidth: '300px',border: '1px solid #ccc',padding: '15px',borderRadius: '8px', backgroundColor: '#fdfdfd'}}>
+    return (
+    <div
+        className=" min-h-screen transition-colors bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800 dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100 " style={{ fontFamily: 'Arial, sans-serif' }} >
+        <Header user={user} />
+        <div className="flex items-start gap-0 px-0 md:px-2">
+        {/* Left Form */}
+        <form
+            onSubmit={handleSubmitOffer}
+            className="
+            flex-1 mr-0 md:mr-6 p-5 rounded-lg
+            bg-white dark:bg-gray-800/70
+            border border-gray-200 dark:border-gray-700
+            shadow-xl
+            "
+        >
+            <h3 className="mb-4 font-bold text-[#8a1414] dark:text-red-300">Addresses</h3>
+
+            {/* Address Fields */}
+            <div className="flex flex-wrap items-start gap-7 mb-5 pb-4 border-b border-dashed border-slate-800/70 dark:border-slate-200/20">
+            <div className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900/40">
             <label style={{ fontWeight: 'bold' }}>Loading Address:</label><br />
-            <AutoCompleteInput key={`loading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
-            {loadingLocation && (
-            <div style={{ marginTop: 8 }}>
-                <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
-                    <input
-                        type="checkbox"
-                        checked={multiLoading}
-                        // disabled={postMultipleUnloading}   // keep “only one” rule
-                        onChange={e => {
-                            const on = e.target.checked;
-                            setMultiLoading(on);
-                            if (on && !batchCfgReady) {
-                                setShowMultiConfig(true); // open once; after Save we won’t open again
-                            }
-                        }}
-                    />
-                    <strong>Post multiple</strong>
-                </label>
+                <AutoCompleteInput key={`loading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
+                {loadingLocation && (
+                <div style={{ marginTop: 8 }}>
+                    <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                        <input
+                            type="checkbox"
+                            checked={multiLoading}
+                            // disabled={postMultipleUnloading}   // keep “only one” rule
+                            onChange={e => {
+                                const on = e.target.checked;
+                                setMultiLoading(on);
+                                if (on && !batchCfgReady) {
+                                    setShowMultiConfig(true); // open once; after Save we won’t open again
+                                }
+                            }}
+                        />
+                        <strong>Post multiple</strong>
+                    </label>
+                </div>
+                )}
             </div>
-            )}
-        </div>
 
-        <div style={{flex: 1, minWidth: '300px',border: '1px solid #ccc',padding: '15px', borderRadius: '8px',backgroundColor: '#fdfdfd'}}>
-            <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
-            <AutoCompleteInput key={`unloading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
-            {unloadingLocation && (
-              <div style={{ marginTop: 8 }}>
-                <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
-                    <input
-                        type="checkbox"
-                        checked={multiUnloading}
-                        // disabled={postMultipleLoading}    // keep “only one” rule
-                        onChange={e => {
-                            const on = e.target.checked;
-                            setMultiUnloading(on);
-                            if (on && !batchCfgReady) {
-                                setShowMultiConfig(true);
-                            }
-                        }}
-                    />
-                    <strong>Post multiple</strong>
-                </label>
+            <div className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900/40">
+                <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
+                <AutoCompleteInput key={`unloading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
+                {unloadingLocation && (
+                <div style={{ marginTop: 8 }}>
+                    <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                        <input
+                            type="checkbox"
+                            checked={multiUnloading}
+                            // disabled={postMultipleLoading}    // keep “only one” rule
+                            onChange={e => {
+                                const on = e.target.checked;
+                                setMultiUnloading(on);
+                                if (on && !batchCfgReady) {
+                                    setShowMultiConfig(true);
+                                }
+                            }}
+                        />
+                        <strong>Post multiple</strong>
+                    </label>
+                </div>
+                )}
+
             </div>
-            )}
+            </div>
 
-        </div>
-        </div>
+            {/* Date & Time Inputs */}
+            <div className="mb-5 pb-4 border-b border-dashed border-slate-800/70 dark:border-slate-200/20 flex flex-wrap gap-7">
+                <fieldset className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40">
+                    <legend style={{ fontWeight: 'bold', color: '#8a1414ff' }}>Loading Time</legend>
+                    <label>Start:</label>
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                        <input type="date" value={loadStartDate} onChange={e => setLoadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
+                        <input
+                            type="time"
+                            value={loadStartTime}
+                            onChange={(e) => {
+                                console.log("🕓 Changing loadStartTime to", e.target.value);
+                                setLoadStartTime(e.target.value);
+                            }}
+                            lang="en-GB"
+                            step="60"
+                            onFocus={handleFocus}
+                            onBlur={handleBlur}
+                            className={`${field} flex-1`}
+                        />
 
-        {/* Date & Time Inputs */}
-        <div style={{marginBottom: '20px',paddingBottom: '15px',borderBottom: '1px dashed #09111aff',display: 'flex',gap: '30px',flexWrap: 'wrap'}}>
-            <fieldset style={{flex: 1,minWidth: '300px',border: '1px solid #ddd',padding: '15px',borderRadius: '8px'}}>
-                <legend style={{ fontWeight: 'bold', color: '#8a1414ff' }}>Loading Time</legend>
-                <label>Start:</label>
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                    <input type="date" value={loadStartDate} onChange={e => setLoadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                    <input
-                        type="time"
-                        value={loadStartTime}
-                        onChange={(e) => {
-                            console.log("🕓 Changing loadStartTime to", e.target.value);
-                            setLoadStartTime(e.target.value);
-                        }}
-                        lang="en-GB"
-                        step="60"
-                        onFocus={handleFocus}
-                        onBlur={handleBlur}
-                        style={{ ...baseInputStyle, flex: 1 }}
-                    />
+                    </div>
+                    <label>End:</label>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <input type="date" value={loadEndDate} onChange={e => setLoadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
+                        <input type="time" value={loadEndTime} onChange={e => setLoadEndTime(e.target.value)} lang="en-GB" step="60" onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
+                    </div>
+                </fieldset>
 
-                </div>
-                <label>End:</label>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <input type="date" value={loadEndDate} onChange={e => setLoadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                    <input type="time" value={loadEndTime} onChange={e => setLoadEndTime(e.target.value)} lang="en-GB" step="60" onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                </div>
-            </fieldset>
-
-            <fieldset style={{flex: 1,minWidth: '300px',border: '1px solid #ddd',padding: '15px',borderRadius: '8px'}}>
-                <legend style={{ fontWeight: 'bold', color: '#8a1414ff' }}>Unloading Time</legend>
-                <label>Start:</label>
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                    <input type="date" value={unloadStartDate} onChange={e => setUnloadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                    <input type="time" value={unloadStartTime} onChange={e => setUnloadStartTime(e.target.value)} lang="en-GB" step="60" onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                </div>
-                <label>End:</label>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <input type="date" value={unloadEndDate} onChange={e => setUnloadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                    <input type="time" value={unloadEndTime} onChange={e => setUnloadEndTime(e.target.value)} lang="en-GB" step="60" onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-                </div>
-            </fieldset>
-        </div>
+                <fieldset className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40">
+                    <legend style={{ fontWeight: 'bold', color: '#8a1414ff' }}>Unloading Time</legend>
+                    <label>Start:</label>
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                        <input type="date" value={unloadStartDate} onChange={e => setUnloadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
+                        <input type="time" value={unloadStartTime} onChange={e => setUnloadStartTime(e.target.value)} lang="en-GB" step="60" onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
+                    </div>
+                    <label>End:</label>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <input type="date" value={unloadEndDate} onChange={e => setUnloadEndDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
+                        <input type="time" value={unloadEndTime} onChange={e => setUnloadEndTime(e.target.value)} lang="en-GB" step="60" onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
+                    </div>
+                </fieldset>
+            </div>
 
 
-        {/* Measurements */}
-        <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px dashed #09111aff'}}>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
-            <label><strong>Length (m):</strong></label>
-                <input type="text" value={lengthM} onChange={e => setLengthM(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-            <label style={{ marginLeft: '20px' }}><strong>Weight (t):</strong></label>
-                <input type="text" value={weightT} onChange={e => setWeightT(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} style={{ ...baseInputStyle, flex: 1 }} />
-            <label style={{ marginRight: '20px' }}>
-                <input type="checkbox" checked={hideLocations} onChange={e => setHideLocations(e.target.checked)} />
-                {" "}Hide Locations
-            </label>
-            <label>
-                <input type="checkbox" checked={palletsExchange} onChange={e => setPalletsExchange(e.target.checked)} />
-                {" "}Pallets Exchange
-            </label>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px dashed #09111aff'}}>
-          <label><strong>External Comment:</strong></label><br />
-          <input type="text" value={externalComment} onChange={e => setExternalComment(e.target.value)} style={{ ...baseInputStyle }} />
-        </div>
-
-        {/* Payment */}
-        <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px dashed #09111aff'}}>
+            {/* Measurements */}
+            <div className="mb-5 pb-4 border-b border-dashed border-slate-800/70 dark:border-slate-200/20">
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
-            <label><strong>Freight Charge:</strong></label>
-                <input type="text" value={freightCharge} onChange={e => setFreightCharge(e.target.value)} style={{ ...baseInputStyle, flex:1}} />
-            <label style={{ marginLeft: '15px' }}><strong>Currency:</strong></label>
-                <select value={currency} onChange={e => setCurrency(e.target.value)} style={{ ...baseInputStyle, flex:1 }}>
-                    <option value="EUR">EUR</option>
-                    <option value="RON">RON</option>
-                    <option value="HUF">HUF</option>
-                </select>
-            <label style={{ marginLeft: '15px' }}><strong>Payment Due:</strong></label>
-                <input type="date" value={paymentDue} onChange={e => setPaymentDue(e.target.value)} style={{ ...baseInputStyle, flex:1 }} />
+                <label><strong>Length (m):</strong></label>
+                    <input type="text" value={lengthM} onChange={e => setLengthM(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
+                <label style={{ marginLeft: '20px' }}><strong>Weight (t):</strong></label>
+                    <input type="text" value={weightT} onChange={e => setWeightT(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
+                <label style={{ marginRight: '20px' }}>
+                    <input type="checkbox" checked={hideLocations} onChange={e => setHideLocations(e.target.checked)} />
+                    {" "}Hide Locations
+                </label>
+                <label>
+                    <input type="checkbox" checked={palletsExchange} onChange={e => setPalletsExchange(e.target.checked)} />
+                    {" "}Pallets Exchange
+                </label>
             </div>
-        </div>
+            </div>
 
-        {/* Vehicle and Body Types */}
-        <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px dashed #09111aff'}}>
-            <span style={{ display: 'inline-block', marginRight: '25px' }}>
-                <strong>Vehicle Type(s):</strong>
-            </span>
-            {Object.entries(vehicleTypes).map(([id, label]) => (
-                <label key={id} style={{ display: 'inline-block', marginRight: '15px' }}>
-                <input type="checkbox" checked={selectedVehicles.includes(Number(id))} onChange={() => toggleVehicleType(Number(id))} />
+            {/* External Comment */}
+            <div className="mb-5 pb-4 border-b border-dashed border-slate-800/70 dark:border-slate-200/20">
+            <label><strong>External Comment:</strong></label><br />
+            <input type="text" value={externalComment} onChange={e => setExternalComment(e.target.value)} className={field} />
+            </div>
+
+            {/* Payment */}
+            <div className="mb-5 pb-4 border-b border-dashed border-slate-800/70 dark:border-slate-200/20">
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
+                <label><strong>Freight Charge:</strong></label>
+                    <input type="text" value={freightCharge} onChange={e => setFreightCharge(e.target.value)} className={`${field} flex-1`} />
+                <label style={{ marginLeft: '15px' }}><strong>Currency:</strong></label>
+                    <select value={currency} onChange={e => setCurrency(e.target.value)} className={`${field} flex-1`}>
+                        <option value="EUR">EUR</option>
+                        <option value="RON">RON</option>
+                        <option value="HUF">HUF</option>
+                    </select>
+                <label style={{ marginLeft: '15px' }}><strong>Payment Due:</strong></label>
+                    <input type="date" value={paymentDue} onChange={e => setPaymentDue(e.target.value)} className={`${field} flex-1`} />
+                </div>
+            </div>
+
+            {/* Vehicle and Body Types */}
+            <div className="mb-5 pb-4 border-b border-dashed border-slate-800/70 dark:border-slate-200/20">
+                <span style={{ display: 'inline-block', marginRight: '25px' }}>
+                    <strong>Vehicle Type(s):</strong>
+                </span>
+                {Object.entries(vehicleTypes).map(([id, label]) => (
+                    <label key={id} style={{ display: 'inline-block', marginRight: '15px' }}>
+                    <input type="checkbox" checked={selectedVehicles.includes(Number(id))} onChange={() => toggleVehicleType(Number(id))} />
+                    {" "}{label}
+                    </label>
+                ))}
+            </div>
+
+            <div className="mb-5 pb-4 border-b border-dashed border-slate-800/70 dark:border-slate-200/20">
+            <strong>Body Type(s) (max 5):</strong><br />
+            {Object.entries(bodyTypes).map(([id, label]) => (
+                <label key={id} style={{ display: 'inline-block', width: '180px' }}>
+                <input type="checkbox" checked={selectedBodies.includes(Number(id))} onChange={() => toggleBodyType(Number(id))} />
                 {" "}{label}
                 </label>
             ))}
-        </div>
+            </div>
+            {/* Action Bar */}
+            <div style={{
+            marginTop: 16,
+            paddingTop: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap'
+            }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                <h3 style={{ margin: 0 }}>{isEditing ? "Edit Offer" : "New Offer"}</h3>
+                {(multiLoading || multiUnloading) ? (
+                <button
+                    type="button"
+                    onClick={openPreview}                 // defined below
+                    disabled={!canOpenPreview || showMultiConfig}
+                    style={{ ...buttonInputStyle, opacity: (!canOpenPreview || showMultiConfig) ? 0.6 : 1 }}
+                    title={
+                    showMultiConfig
+                        ? "Save batch settings first"
+                        : (!canOpenPreview
+                            ? (wantBoth ? 'Pick both addresses first' : (multiLoading ? 'Pick a loading address first' : 'Pick an unloading address first'))
+                            : '')
+                    }
+                >
+                    Preview
+                </button>
+                ) : (
+                <button type="submit" style={{ ...buttonInputStyle }}>
+                    {isEditing ? "Update Offer" : "Submit Offer"}
+                </button>
+                )}
+            </div>
 
-        <div style={{ marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px dashed #09111aff'}}>
-          <strong>Body Type(s) (max 5):</strong><br />
-          {Object.entries(bodyTypes).map(([id, label]) => (
-            <label key={id} style={{ display: 'inline-block', width: '180px' }}>
-              <input type="checkbox" checked={selectedBodies.includes(Number(id))} onChange={() => toggleBodyType(Number(id))} />
-              {" "}{label}
-            </label>
-          ))}
-        </div>
-        {/* Action Bar */}
-        <div style={{
-        marginTop: 16,
-        paddingTop: 12,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 12,
-        flexWrap: 'wrap'
-        }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
-            <h3 style={{ margin: 0 }}>{isEditing ? "Edit Offer" : "New Offer"}</h3>
-            {(multiLoading || multiUnloading) ? (
+            {/* Post-multiple controls and Preview button */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+            </div>
+
+            </div>
+            <Modal
+            open={showMultiConfig}
+            title="Batch posting settings"
+            onClose={() => { setShowMultiConfig(false); }}
+            >
+            {/* Modal body: stacked, always full-width, no focus/blur styling */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+            <div>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
+                    Count (2–5):
+                </label>
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder={`${MULTI_MIN}–${MULTI_MAX}`}
+                    value={countDraft}
+                    onChange={e => setCountDraft(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                    className={field}
+                />
+            </div>
+
+            <div>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
+                    Radius (km, ≤250):
+                </label>
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder={`1–${RADIUS_MAX}`}
+                    value={radiusDraft}
+                    onChange={e => setRadiusDraft(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                    className={field}
+                />
+            </div>
+
+
+            </div>
+
+            <div style={{ marginTop: 12, fontSize: 12, color: '#555' }}>
+            Will include the chosen city plus the nearest localities within the radius. Cross-border allowed.
+            </div>
+
+
             <button
                 type="button"
-                onClick={openPreview}                 // defined below
-                disabled={!canOpenPreview || showMultiConfig}
-                style={{ ...buttonInputStyle, opacity: (!canOpenPreview || showMultiConfig) ? 0.6 : 1 }}
-                title={
-                showMultiConfig
-                    ? "Save batch settings first"
-                    : (!canOpenPreview
-                        ? (wantBoth ? 'Pick both addresses first' : (multiLoading ? 'Pick a loading address first' : 'Pick an unloading address first'))
-                        : '')
-                }
-            >
-                Preview
+                onClick={() => {
+                    const parsedCount  = clamp(parseInt(countDraft, 10)  || MULTI_MIN, MULTI_MIN, MULTI_MAX);
+                    const parsedRadius = clamp(parseInt(radiusDraft, 10) || 1,          1,          RADIUS_MAX);
+                    setMultiCount(parsedCount);
+                    setRadiusKm(parsedRadius);
+                    setBatchCfgReady(true);
+                    setShowMultiConfig(false);
+                }}
+                style={{ ...buttonInputStyle }}
+                >
+                Save
             </button>
-            ) : (
-            <button type="submit" style={{ ...buttonInputStyle }}>
-                {isEditing ? "Update Offer" : "Submit Offer"}
-            </button>
-            )}
-        </div>
 
-        {/* Post-multiple controls and Preview button */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-        </div>
+            </Modal>
 
-        </div>
-        <Modal
-        open={showMultiConfig}
-        title="Batch posting settings"
-        onClose={() => { setShowMultiConfig(false); }}
-        >
-        {/* Modal body: stacked, always full-width, no focus/blur styling */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
-        <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
-                Count (2–5):
-            </label>
-            <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder={`${MULTI_MIN}–${MULTI_MAX}`}
-                value={countDraft}
-                onChange={e => setCountDraft(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
-                style={{ ...baseInputStyle, width: '100%' }}
-            />
-        </div>
-
-        <div>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
-                Radius (km, ≤250):
-            </label>
-            <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder={`1–${RADIUS_MAX}`}
-                value={radiusDraft}
-                onChange={e => setRadiusDraft(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
-                style={{ ...baseInputStyle, width: '100%' }}
-            />
-        </div>
-
-
-        </div>
-
-        <div style={{ marginTop: 12, fontSize: 12, color: '#555' }}>
-        Will include the chosen city plus the nearest localities within the radius. Cross-border allowed.
-        </div>
-
-
-        <button
-            type="button"
-            onClick={() => {
-                const parsedCount  = clamp(parseInt(countDraft, 10)  || MULTI_MIN, MULTI_MIN, MULTI_MAX);
-                const parsedRadius = clamp(parseInt(radiusDraft, 10) || 1,          1,          RADIUS_MAX);
-                setMultiCount(parsedCount);
-                setRadiusKm(parsedRadius);
-                setBatchCfgReady(true);
-                setShowMultiConfig(false);
-            }}
-            style={{ ...buttonInputStyle }}
-            >
-            Save
-        </button>
-
-        </Modal>
-
-        <Modal
-            open={showPreview}
-            title={`Preview (${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers) — ${previewStep || ''}`}
-            onClose={() => { if (!isBatchPosting) setShowPreview(false); }}
-            >
-            {loadingPreview ? (
-                <div style={{ padding: 12 }}>Loading nearby localities…</div>
-            ) : previewError ? (
-                <div style={{ padding: 12, color: '#b91c1c' }}>{previewError}</div>
-            ) : (
-                <>
-                {/* header status + quick selects */}
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8 }}>
-                    <div style={{ fontSize: 13, color:'#555' }}>
-                    Selected: {selectedCountCurrent} / {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
-                    </div>
-                    <div style={{ display:'flex', gap: 8 }}>
-                    <button
-                        type="button"
-                        onClick={() => {
-                        updateCurrentPreview(prev => {
-                            const cap = clamp(multiCount, MULTI_MIN, MULTI_MAX);
-                            let used = 0;
-                            return prev.map(item => {
-                            if (item.pinned) { used++; return { ...item, selected: true }; }
-                            if (used < cap)   { used++; return { ...item, selected: true }; }
-                            return { ...item, selected: false };
-                            });
-                        });
-                        }}
-                        style={{ ...buttonInputStyle, padding: '6px 10px' }}
-                    >
-                        Nearest {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                        updateCurrentPreview(prev => prev.map(it => ({ ...it, selected: !!it.pinned })));
-                        }}
-                        style={{ ...buttonInputStyle, padding: '6px 10px', background:'#9CA3AF' }}
-                    >
-                        Select none
-                    </button>
-                    </div>
-                </div>
-
-                {/* list */}
-                <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid #eee', borderRadius: 6 }}>
-                    {(previewStep === 'loading' ? previewItemsLoading : previewItemsUnloading).length === 0 && (
-                    <div style={{ padding: 12 }}>No candidates found in this radius.</div>
-                    )}
-
-                    {(previewStep === 'loading' ? previewItemsLoading : previewItemsUnloading).map((c, i) => (
-                    <label key={c.key || i} style={{
-                        display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
-                        borderBottom:'1px solid #f2f2f2', background: c.pinned ? '#f8fafc' : 'white'
-                    }}>
-                        <input
-                        type="checkbox"
-                        checked={!!c.selected}
-                        disabled={c.pinned}
-                        onChange={e => {
-                            const checked = e.target.checked;
+            <Modal
+                open={showPreview}
+                title={`Preview (${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers) — ${previewStep || ''}`}
+                onClose={() => { if (!isBatchPosting) setShowPreview(false); }}
+                >
+                {loadingPreview ? (
+                    <div style={{ padding: 12 }}>Loading nearby localities…</div>
+                ) : previewError ? (
+                    <div style={{ padding: 12, color: '#b91c1c' }}>{previewError}</div>
+                ) : (
+                    <>
+                    {/* header status + quick selects */}
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, color:'#555' }}>
+                        Selected: {selectedCountCurrent} / {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
+                        </div>
+                        <div style={{ display:'flex', gap: 8 }}>
+                        <button
+                            type="button"
+                            onClick={() => {
                             updateCurrentPreview(prev => {
-                            const maxSel = clamp(multiCount, MULTI_MIN, MULTI_MAX);
-                            const next = prev.map(x => ({ ...x }));
-                            const selectedNow = next.filter(x => x.selected).length;
-                            if (next[i].pinned && !checked) return prev;
-                            if (checked) {
-                                if (selectedNow >= maxSel) return prev;
-                                next[i].selected = true;
-                            } else {
-                                next[i].selected = false;
-                            }
-                            return next;
+                                const cap = clamp(multiCount, MULTI_MIN, MULTI_MAX);
+                                let used = 0;
+                                return prev.map(item => {
+                                if (item.pinned) { used++; return { ...item, selected: true }; }
+                                if (used < cap)   { used++; return { ...item, selected: true }; }
+                                return { ...item, selected: false };
+                                });
                             });
-                        }}
-                        />
-                        <div style={{ flex:1 }}>
-                        <div style={{ fontWeight: 600 }}>
-                            {c.city} <span style={{ fontWeight: 400 }}>({c.countryCode})</span>
-                            {c.pinned && (
-                            <span style={{ marginLeft: 8, fontSize: 12, color:'#1e4a7b' }}>
-                                {c._pinNote || '• current'}
-                            </span>
-                            )}
+                            }}
+                            style={{ ...buttonInputStyle, padding: '6px 10px' }}
+                        >
+                            Nearest {clamp(multiCount, MULTI_MIN, MULTI_MAX)}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                            updateCurrentPreview(prev => prev.map(it => ({ ...it, selected: !!it.pinned })));
+                            }}
+                            style={{ ...buttonInputStyle, padding: '6px 10px', background:'#9CA3AF' }}
+                        >
+                            Select none
+                        </button>
                         </div>
-                        <div style={{ fontSize: 12, color:'#555' }}>
-                            {c.postalCode ? `${c.postalCode} • ` : ''}{Math.max(0, c.distanceKm)} km
-                        </div>
-                        </div>
-                    </label>
-                    ))}
-                </div>
-
-                <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems:'center', gap: 8 }}>
-                    <div style={{ fontSize: 12, color:'#555' }}>
-                    {isBatchPosting
-                        ? `Posting ${batchProgress.done}/${batchProgress.total}…`
-                        : (wantBoth
-                            ? (previewStep === 'loading'
-                                ? 'Choose loading locations, then Next'
-                                : 'Choose unloading locations, then Post')
-                            : 'Ready to post the selected locations.')}
                     </div>
 
-                    <div style={{ display:'flex', gap: 8 }}>
-                    <button
-                        type="button"
-                        onClick={() => !isBatchPosting && setShowPreview(false)}
-                        disabled={isBatchPosting}
-                        style={{ ...buttonInputStyle, background:'#1e4a7b', opacity: isBatchPosting ? 0.6 : 1 }}
-                    >
-                        {isBatchPosting ? 'Working…' : 'Close'}
-                    </button>
+                    {/* list */}
+                    <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid #eee', borderRadius: 6 }}>
+                        {(previewStep === 'loading' ? previewItemsLoading : previewItemsUnloading).length === 0 && (
+                        <div style={{ padding: 12 }}>No candidates found in this radius.</div>
+                        )}
 
-                    {wantBoth && previewStep === 'loading' ? (
-                        <button
-                        type="button"
-                        onClick={async () => {
-                            // go to unloading step
-                            setLoadingPreview(true);
-                            try {
-                            setPreviewStep('unloading');
-                            // only (re)build if empty (keeps user edits if they come back)
-                            if (previewItemsUnloading.length === 0) {
-                                const itemsU = await buildPreviewFor('unloading');
-                                setPreviewItemsUnloading(itemsU);
-                            }
-                            } finally {
-                            setLoadingPreview(false);
-                            }
-                        }}
-                        disabled={selectedCountLoading < clamp(multiCount, MULTI_MIN, MULTI_MAX)}
-                        style={{ ...buttonInputStyle, opacity: (selectedCountLoading < clamp(multiCount, MULTI_MIN, MULTI_MAX)) ? 0.6 : 1 }}
-                        title={selectedCountLoading < clamp(multiCount, MULTI_MIN, MULTI_MAX) ? `Pick ${clamp(multiCount, MULTI_MIN, MULTI_MAX)} loading locations first` : ''}
-                        >
-                        Next
-                        </button>
-                    ) : (
-                        <button
-                        type="button"
-                        disabled={
-                            isBatchPosting ||
-                            (wantBoth
-                            ? (selectedCountLoading   < clamp(multiCount, MULTI_MIN, MULTI_MAX) ||
-                                selectedCountUnloading < clamp(multiCount, MULTI_MIN, MULTI_MAX))
-                            : (selectedCountCurrent   < MULTI_MIN))
-                        }
-                        onClick={() => wantBoth ? handleBatchPostBoth()
-                                                : handleBatchPostSingle(previewStep)}
-                        style={{ ...buttonInputStyle,
-                                opacity: (isBatchPosting ||
-                                    (wantBoth
-                                    ? (selectedCountLoading   < clamp(multiCount, MULTI_MIN, MULTI_MAX) ||
-                                        selectedCountUnloading < clamp(multiCount, MULTI_MIN, MULTI_MAX))
-                                    : (selectedCountCurrent < MULTI_MIN))) ? 0.6 : 1 }}
-                        title={
-                            wantBoth
-                            ? (selectedCountLoading   < clamp(multiCount, MULTI_MIN, MULTI_MAX) ? 'Select enough loading locations' :
-                                selectedCountUnloading < clamp(multiCount, MULTI_MIN, MULTI_MAX) ? 'Select enough unloading locations' : '')
-                            : (selectedCountCurrent < MULTI_MIN ? `Pick at least ${MULTI_MIN}` : '')
-                        }
-                        >
+                        {(previewStep === 'loading' ? previewItemsLoading : previewItemsUnloading).map((c, i) => (
+                        <label key={c.key || i} style={{
+                            display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
+                            borderBottom:'1px solid #f2f2f2', background: c.pinned ? '#f8fafc' : 'white'
+                        }}>
+                            <input
+                            type="checkbox"
+                            checked={!!c.selected}
+                            disabled={c.pinned}
+                            onChange={e => {
+                                const checked = e.target.checked;
+                                updateCurrentPreview(prev => {
+                                const maxSel = clamp(multiCount, MULTI_MIN, MULTI_MAX);
+                                const next = prev.map(x => ({ ...x }));
+                                const selectedNow = next.filter(x => x.selected).length;
+                                if (next[i].pinned && !checked) return prev;
+                                if (checked) {
+                                    if (selectedNow >= maxSel) return prev;
+                                    next[i].selected = true;
+                                } else {
+                                    next[i].selected = false;
+                                }
+                                return next;
+                                });
+                            }}
+                            />
+                            <div style={{ flex:1 }}>
+                            <div style={{ fontWeight: 600 }}>
+                                {c.city} <span style={{ fontWeight: 400 }}>({c.countryCode})</span>
+                                {c.pinned && (
+                                <span style={{ marginLeft: 8, fontSize: 12, color:'#1e4a7b' }}>
+                                    {c._pinNote || '• current'}
+                                </span>
+                                )}
+                            </div>
+                            <div style={{ fontSize: 12, color:'#555' }}>
+                                {c.postalCode ? `${c.postalCode} • ` : ''}{Math.max(0, c.distanceKm)} km
+                            </div>
+                            </div>
+                        </label>
+                        ))}
+                    </div>
+
+                    <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems:'center', gap: 8 }}>
+                        <div style={{ fontSize: 12, color:'#555' }}>
                         {isBatchPosting
                             ? `Posting ${batchProgress.done}/${batchProgress.total}…`
                             : (wantBoth
-                                ? `Post ${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers`
-                                : `Post ${selectedCountCurrent} offers`)}
+                                ? (previewStep === 'loading'
+                                    ? 'Choose loading locations, then Next'
+                                    : 'Choose unloading locations, then Post')
+                                : 'Ready to post the selected locations.')}
+                        </div>
+
+                        <div style={{ display:'flex', gap: 8 }}>
+                        <button
+                            type="button"
+                            onClick={() => !isBatchPosting && setShowPreview(false)}
+                            disabled={isBatchPosting}
+                            style={{ ...buttonInputStyle, background:'#1e4a7b', opacity: isBatchPosting ? 0.6 : 1 }}
+                        >
+                            {isBatchPosting ? 'Working…' : 'Close'}
                         </button>
-                    )}
+
+                        {wantBoth && previewStep === 'loading' ? (
+                            <button
+                            type="button"
+                            onClick={async () => {
+                                // go to unloading step
+                                setLoadingPreview(true);
+                                try {
+                                setPreviewStep('unloading');
+                                // only (re)build if empty (keeps user edits if they come back)
+                                if (previewItemsUnloading.length === 0) {
+                                    const itemsU = await buildPreviewFor('unloading');
+                                    setPreviewItemsUnloading(itemsU);
+                                }
+                                } finally {
+                                setLoadingPreview(false);
+                                }
+                            }}
+                            disabled={selectedCountLoading < clamp(multiCount, MULTI_MIN, MULTI_MAX)}
+                            style={{ ...buttonInputStyle, opacity: (selectedCountLoading < clamp(multiCount, MULTI_MIN, MULTI_MAX)) ? 0.6 : 1 }}
+                            title={selectedCountLoading < clamp(multiCount, MULTI_MIN, MULTI_MAX) ? `Pick ${clamp(multiCount, MULTI_MIN, MULTI_MAX)} loading locations first` : ''}
+                            >
+                            Next
+                            </button>
+                        ) : (
+                            <button
+                            type="button"
+                            disabled={
+                                isBatchPosting ||
+                                (wantBoth
+                                ? (selectedCountLoading   < clamp(multiCount, MULTI_MIN, MULTI_MAX) ||
+                                    selectedCountUnloading < clamp(multiCount, MULTI_MIN, MULTI_MAX))
+                                : (selectedCountCurrent   < MULTI_MIN))
+                            }
+                            onClick={() => wantBoth ? handleBatchPostBoth()
+                                                    : handleBatchPostSingle(previewStep)}
+                            style={{ ...buttonInputStyle,
+                                    opacity: (isBatchPosting ||
+                                        (wantBoth
+                                        ? (selectedCountLoading   < clamp(multiCount, MULTI_MIN, MULTI_MAX) ||
+                                            selectedCountUnloading < clamp(multiCount, MULTI_MIN, MULTI_MAX))
+                                        : (selectedCountCurrent < MULTI_MIN))) ? 0.6 : 1 }}
+                            title={
+                                wantBoth
+                                ? (selectedCountLoading   < clamp(multiCount, MULTI_MIN, MULTI_MAX) ? 'Select enough loading locations' :
+                                    selectedCountUnloading < clamp(multiCount, MULTI_MIN, MULTI_MAX) ? 'Select enough unloading locations' : '')
+                                : (selectedCountCurrent < MULTI_MIN ? `Pick at least ${MULTI_MIN}` : '')
+                            }
+                            >
+                            {isBatchPosting
+                                ? `Posting ${batchProgress.done}/${batchProgress.total}…`
+                                : (wantBoth
+                                    ? `Post ${clamp(multiCount, MULTI_MIN, MULTI_MAX)} offers`
+                                    : `Post ${selectedCountCurrent} offers`)}
+                            </button>
+                        )}
+                        </div>
                     </div>
-                </div>
-                </>
+                    </>
+                )}
+            </Modal>
+
+
+        </form>
+
+        {/* Submitted Offers */}
+        <div className=" flex-1 p-5 rounded-lg bg-white dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 shadow-xl ">
+            {/*<h3 style={{ color: '#b91c1c' }}>Submitted Offers</h3>*/}
+            {offers.length === 0 ? (
+            <p>No offers submitted yet.</p>
+            ) : (
+                
+            <table className="w-full text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 text-gray-900 dark:text-gray-100">
+                <thead>
+                <tr className="bg-red-600/80 text-white sticky top-0">
+                    <th className="px-3 py-2 text-left border-b border-red-700/40">User</th>
+                    <th className="px-3 py-2 text-left border-b border-red-700/40">Loading</th>
+                    <th className="px-3 py-2 text-left border-b border-red-700/40">Unloading</th>
+                    <th className="px-3 py-2 text-center border-b border-red-700/40">Action</th>
+                </tr>
+                </thead>
+                <tbody>
+                    {offers.map((offer, idx) => {
+                        const hasChildren = (offer.children?.length || 0) > 0;
+                        const groupKey = offer.batchGroupId || `single:${offer.id}`;
+                        const expanded = expandedGroups.has(groupKey);
+
+
+                        const rowBg = offer.isMine
+                        ? (idx % 2 === 0 ? '#f2f8fc' : '#ffffff')
+                        : '#fff6e0';
+
+                        return (
+                        <React.Fragment key={groupKey}>
+                            {/* Root row */}
+                            <tr className={`${rowCls(offer.isMine, idx)} text-gray-900 dark:text-gray-100`}>
+                                <td className="px-3 py-2">{offer.externalNumber}</td>
+                                <td className="px-3 py-2">{offer._loading}</td>
+                                <td className="px-3 py-2">{offer._unloading}</td>
+                                <td className="px-3 py-2 text-center">
+                                    <div className="flex justify-center gap-2 flex-wrap">
+                                    {hasChildren && (
+                                        <button
+                                        onClick={() => toggleGroup(groupKey)}
+                                        className="px-3 py-1.5 rounded text-white
+                                                    bg-gray-400 hover:bg-gray-500
+                                                    dark:bg-gray-600 dark:hover:bg-gray-500"
+                                        title={expanded ? 'Hide batch' : 'Show batch'}
+                                        >
+                                        {expanded ? '▲ Hide batch' : `▼ Show batch (${offer.children.length})`}
+                                        </button>
+                                    )}
+                                    {canEditOrDelete(offer) && (
+                                        <>
+                                        <button
+                                            onClick={() => handleEditOffer(offer)}
+                                            className="px-3 py-1.5 rounded text-white
+                                                    bg-emerald-700 hover:bg-emerald-800"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleCopyOffer(offer); }}
+                                            className="px-3 py-1.5 rounded text-white
+                                                    bg-sky-800 hover:bg-sky-900"
+                                        >
+                                            Copy
+                                        </button>
+                                        {offer.batchGroupId ? (
+                                            <button
+                                            onClick={() => handleDeleteBatch(offer)}
+                                            disabled={isBatchDeleting}
+                                            className="px-3 py-1.5 rounded text-white
+                                                        bg-red-700 hover:bg-red-800
+                                                        disabled:opacity-60"
+                                            title="Delete all offers in this batch"
+                                            >
+                                            {isBatchDeleting ? 'Deleting…' : 'Delete batch'}
+                                            </button>
+                                        ) : (
+                                            <button
+                                            onClick={() => handleDeleteOffer(offer.id)}
+                                            className="px-3 py-1.5 rounded text-white
+                                                        bg-red-700 hover:bg-red-800"
+                                            >
+                                            Delete
+                                            </button>
+                                        )}
+                                        </>
+                                    )}
+                                    </div>
+                                </td>
+                            </tr>
+
+                            {/* Children (only when expanded) */}
+                            {expanded && offer.children.map(child => (
+                            <tr className="bg-gray-50 dark:bg-gray-900/30">
+                                <td className="px-3 py-2 pl-6 italic">└─ {child.externalNumber}</td>
+                                <td className="px-3 py-2">{child._loading}</td>
+                                <td className="px-3 py-2">{child._unloading}</td>
+                                <td className="px-3 py-2 text-center">
+                                    {canEditOrDelete(child) ? (
+                                    <div className="flex justify-center gap-2">
+                                        <button
+                                        onClick={() => handleEditOffer(child)}
+                                        className="px-3 py-1.5 rounded text-white
+                                                    bg-emerald-700 hover:bg-emerald-800"
+                                        >
+                                        Edit
+                                        </button>
+                                        <button
+                                        onClick={(e) => { e.stopPropagation(); handleCopyOffer(child); }}
+                                        className="px-3 py-1.5 rounded text-white
+                                                    bg-sky-800 hover:bg-sky-900"
+                                        >
+                                        Copy
+                                        </button>
+                                    </div>
+                                    ) : (
+                                    <span className="text-gray-400 italic" />
+                                    )}
+                                </td>
+                            </tr>
+
+                            ))}
+                        </React.Fragment>
+                        );
+                    })}
+                </tbody>
+            </table>
             )}
-        </Modal>
-
-
-      </form>
-
-      {/* Submitted Offers */}
-      <div style={{ flex: '1', background: '#ffffff', padding: '20px', borderRadius: '8px',boxShadow: '0 2px 8px rgba(185, 28, 28, 0.15)' }}>
-        {/*<h3 style={{ color: '#b91c1c' }}>Submitted Offers</h3>*/}
-        {offers.length === 0 ? (
-          <p>No offers submitted yet.</p>
-        ) : (
-            
-          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '14px' }}>
-            <thead>
-              <tr style={{ background: '#ff0a0aa6', position: 'sticky' }}>
-                <th style={{ padding: '10px', textAlign: 'left' }}>User</th>
-                <th style={{ padding: '10px', textAlign: 'left' }}>Loading</th>
-                <th style={{ padding: '10px', textAlign: 'left' }}>Unloading</th>
-                <th style={{ padding: '10px', textAlign: 'center' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-                {offers.map((offer, idx) => {
-                    const hasChildren = (offer.children?.length || 0) > 0;
-                    const groupKey = offer.batchGroupId || `single:${offer.id}`;
-                    const expanded = expandedGroups.has(groupKey);
-
-
-                    const rowBg = offer.isMine
-                    ? (idx % 2 === 0 ? '#f2f8fc' : '#ffffff')
-                    : '#fff6e0';
-
-                    return (
-                    <React.Fragment key={groupKey}>
-                        {/* Root row */}
-                        <tr style={{ backgroundColor: rowBg }}>
-                        <td style={{ padding:'8px' }}>
-                            {offer.externalNumber}
-                        </td>
-                        <td style={{ padding:'8px' }}>{offer._loading}</td>
-                        <td style={{ padding:'8px' }}>{offer._unloading}</td>
-                        <td style={{ textAlign:'center' }}>
-                            <div style={{ display:'flex', justifyContent:'center', gap:6, flexWrap:'wrap' }}>
-                            {hasChildren && (
-                                <button
-                                onClick={() => toggleGroup(groupKey)}
-                                style={{ padding:'5px 10px', background:'#9CA3AF', color:'#fff', border:'none', borderRadius:4 }}
-                                title={expanded ? 'Hide batch' : 'Show batch'}
-                                >
-                                {expanded ? '▲ Hide batch' : `▼ Show batch (${offer.children.length})`}
-                                </button>
-                            )}
-                            {canEditOrDelete(offer) && (
-                                <>
-                                <button
-                                    onClick={() => handleEditOffer(offer)}
-                                    style={{ padding:'5px 10px', background:'#15803d', color:'#fff', border:'none', borderRadius:4 }}
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleCopyOffer(offer); }}
-                                    style={{ padding:'5px 10px', background:'#1e4a7b', color:'#fff', border:'none', borderRadius:4 }}
-                                >
-                                    Copy
-                                </button>
-                                {/* 🔥 Delete the entire batch */}
-                                {offer.batchGroupId && (
-                                <button
-                                    onClick={() => handleDeleteBatch(offer)}
-                                    style={{ padding:'5px 10px', background:'#b91c1c', color:'#fff', border:'none', borderRadius:4 }}
-                                    disabled={isBatchDeleting}
-                                    title="Delete all offers in this batch"
-                                >
-                                    {isBatchDeleting ? 'Deleting…' : 'Delete batch'}
-                                </button>
-                                )}
-                                {!offer.batchGroupId && (
-                                <button
-                                    onClick={() => handleDeleteOffer(offer.id)}
-                                    style={{ padding:'5px 10px', background:'#b91c1c', color:'#fff', border:'none', borderRadius:4 }}
-                                >
-                                    Delete
-                                </button>
-                                )}
-                                </>
-                            )}
-                            </div>
-                        </td>
-                        </tr>
-
-                        {/* Children (only when expanded) */}
-                        {expanded && offer.children.map(child => (
-                        <tr key={child.id} style={{ background:'#fafafa' }}>
-                            <td style={{ padding:'8px', paddingLeft: '24px', fontStyle:'italic' }}>
-                            └─ {child.externalNumber}
-                            </td>
-                            <td style={{ padding:'8px' }}>{child._loading}</td>
-                            <td style={{ padding:'8px' }}>{child._unloading}</td>
-                            <td style={{ textAlign:'center' }}>
-                            {canEditOrDelete(child) ? (
-                                <div style={{ display:'flex', justifyContent:'center', gap:6 }}>
-                                <button
-                                    onClick={() => handleEditOffer(child)}
-                                    style={{ padding:'5px 10px', background:'#15803d', color:'#fff', border:'none', borderRadius:4 }}
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleCopyOffer(child); }}
-                                    style={{ padding:'5px 10px', background:'#1e4a7b', color:'#fff', border:'none', borderRadius:4 }}
-                                >
-                                    Copy
-                                </button>
-                                {/* ⛔️ Delete removed for children */}
-                                {/* <button
-                                    onClick={() => handleDeleteOffer(child.id)}
-                                    style={{ padding:'5px 10px', background:'#b91c1c', color:'#fff', border:'none', borderRadius:4 }}
-                                >
-                                    Delete
-                                </button> */}
-                                </div>
-                            ) : (
-                                <span style={{ color:'#9aa2af', fontStyle:'italic' }} />
-                            )}
-                            </td>
-                        </tr>
-                        ))}
-                    </React.Fragment>
-                    );
-                })}
-            </tbody>
-          </table>
-        )}
-      </div>
+        </div>
+        </div>
     </div>
-  </div>
-);
+    );
 
 }
 // microsoft login with rossik tools - intrebari - cand se creaza un cont de microsoft sa se creeze automat si un cont pe rossik tools?

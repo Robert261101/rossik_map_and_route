@@ -1004,493 +1004,938 @@ setTimeout(() => {
   }, [isOpen]);
 
   useEffect(() => {
-  const onKeyDown = (e) => {
-    if (e.key !== 'Escape') return;
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
 
-    const map = mapRef.current;
-    if (!map) return;
+      const map = mapRef.current;
+      if (!map) return;
 
-    // 1️⃣ cancel a drag-in-progress
-    const pending = pendingViaRef.current;
-    if (pending) {
-      if (pending.onMove) map.removeEventListener('pointermove', pending.onMove);
-      if (pending.onUp)   map.removeEventListener('pointerup', pending.onUp);
+      // 1️⃣ cancel a drag-in-progress
+      const pending = pendingViaRef.current;
+      if (pending) {
+        if (pending.onMove) map.removeEventListener('pointermove', pending.onMove);
+        if (pending.onUp)   map.removeEventListener('pointerup', pending.onUp);
 
-      map.removeObject(pending.marker);
-      viaMarkersRef.current = viaMarkersRef.current.filter(m => m !== pending.marker);
+        map.removeObject(pending.marker);
+        viaMarkersRef.current = viaMarkersRef.current.filter(m => m !== pending.marker);
 
-      const h = liveOverlaysRef.current.get(pending.legIdx);
-      if (h && typeof h.remove === 'function') h.remove();
-      liveOverlaysRef.current.delete(pending.legIdx);
-
-      if (behaviorRef.current) {
-        behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-      }
-      placedViaStackRef.current = placedViaStackRef.current.filter(e => e.marker !== pending.marker);
-      pendingViaRef.current = null;
-      return;
-    }
-
-    // 2️⃣ undo last placed via (only one item)
-    const stack = placedViaStackRef.current;
-    if (stack.length) {
-      const { id, legIdx, marker } = stack.pop();
-
-      // remove marker from map + local refs
-      map.removeObject(marker);
-      viaMarkersRef.current = viaMarkersRef.current.filter(m => m !== marker);
-
-      // remove the via point with that id
-      const remainingForLeg = viaPointsRef.current.filter(p => !(p.legIndex === legIdx && p.id === id));
-      setViaPoints(prev => prev.filter(p => p.id !== id));
-      setUndoCount(placedViaStackRef.current.length);
-      if (placedViaStackRef.current.length === 0) {
-        setMapHint("spawn"); // ⬅️ show hint again when none remain
-      }
-
-      // update preview for that leg:
-      const stillHasVias = remainingForLeg.some(p => p.legIndex === legIdx);
-      if (stillHasVias) {
-        // redraw preview with remaining vias
-        renderLiveForLeg(legIdx);
-      } else {
-        // no vias left → remove live overlay for this leg
-        const h = liveOverlaysRef.current.get(legIdx);
+        const h = liveOverlaysRef.current.get(pending.legIdx);
         if (h && typeof h.remove === 'function') h.remove();
-        liveOverlaysRef.current.delete(legIdx);
+        liveOverlaysRef.current.delete(pending.legIdx);
+
+        if (behaviorRef.current) {
+          behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+        }
+        placedViaStackRef.current = placedViaStackRef.current.filter(e => e.marker !== pending.marker);
+        pendingViaRef.current = null;
+        return;
       }
-    }
-  };
 
-  window.addEventListener('keydown', onKeyDown);
-  return () => window.removeEventListener('keydown', onKeyDown);
-}, []);
+      // 2️⃣ undo last placed via (only one item)
+      const stack = placedViaStackRef.current;
+      if (stack.length) {
+        const { id, legIdx, marker } = stack.pop();
+
+        // remove marker from map + local refs
+        map.removeObject(marker);
+        viaMarkersRef.current = viaMarkersRef.current.filter(m => m !== marker);
+
+        // remove the via point with that id
+        const remainingForLeg = viaPointsRef.current.filter(p => !(p.legIndex === legIdx && p.id === id));
+        setViaPoints(prev => prev.filter(p => p.id !== id));
+        setUndoCount(placedViaStackRef.current.length);
+        if (placedViaStackRef.current.length === 0) {
+          setMapHint("spawn"); // ⬅️ show hint again when none remain
+        }
+
+        // update preview for that leg:
+        const stillHasVias = remainingForLeg.some(p => p.legIndex === legIdx);
+        if (stillHasVias) {
+          // redraw preview with remaining vias
+          renderLiveForLeg(legIdx);
+        } else {
+          // no vias left → remove live overlay for this leg
+          const h = liveOverlaysRef.current.get(legIdx);
+          if (h && typeof h.remove === 'function') h.remove();
+          liveOverlaysRef.current.delete(legIdx);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
 
+
+  // return (
+  // <div className="App flex flex-col h-screen">
+  //   <div className={`flex flex-col flex-1 transition-colors duration-500 ${darkMode ? 'bg-gray-900 ' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
+  //     <DebugMouseOverlay />
+  //   <Header user = {user} />
+  //    {/* MAIN CONTENT */}
+  //     {/*<div className="flex flex-row flex-1 overflow-hidden">*/}
+  //     <div
+  //       className="
+  //         flex flex-row flex-1 overflow-hidden min-h-screen transition-colors
+  //         bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800
+  //         dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100
+  //       "
+  //     >
+
+  //       {/* LEFT SIDE */}
+  //       <div className="bg-burgundy-200 w-1/2 p-4 overflow-auto space-y-4">
+  //         {/* ROW 1: Address + Vehicle */}
+  //         <div className="flex space-x-4">
+  //           <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition ">
+  //             <h2 className="text-lg font-bold mb-2">Address</h2>
+  //             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+  //               <div >
+  //                 <label className="block mb-1 font-medium shadow-sm text-semibold text-gray-700">Enter the address:</label>
+  //                   <div className="w-full rounded bg-gray-1000 ring-2 ring-red-300 focus-within:ring-red-500 transition">
+  //                     <AutoCompleteInput
+  //                       apiKey={process.env.REACT_APP_HERE_API_KEY}
+  //                       value={addressQuery}                 // ← control the text
+  //                       onChange={setAddressQuery}           // ← update as user types
+  //                       onSelect={(picked) => {              // ← when a suggestion is chosen
+  //                         addAddress(picked);
+  //                         setAddressQuery("");               // ← clear the box
+  //                       }}
+  //                       className="w-full p-2 bg-red-50 border-none focus:outline-none"
+  //                     />
+  //                   </div>
+  //               </div>
+  //               {addresses.length === 0 && <p className="text-sm text-gray-500">No address entered.</p>}
+  //               {/* …inside your render… */}
+  //               <ul className="border rounded p-2 max-h-40 overflow-y-auto space-y-1">
+  //                 {addresses.map((pt, index) => {
+  //                   // 1. Split the original label into comma-parts:
+  //                   const parts = pt.label.split(",").map(s => s.trim());
+  //                   // 2. Extract & remove the trailing country name:
+  //                   const countryName = parts.pop();
+  //                   // 3. Derive a 2-letter country code (override via pt.country if you set it):
+  //                   const countryCode = (pt.country || countryName.slice(0,2)).toUpperCase();
+  //                   // 4. Ensure we have a postal code (fallback to “—” if lookup failed):
+  //                   const postal = pt.postal || "";
+  //                   // 5. If the very first element equals that postal, drop it:
+  //                   if (parts[0] === postal) parts.shift();
+  //                   // 6. Join the rest back into the “address” chunk:
+  //                   const addressOnly = parts.join(", ");
+  //                   // 7. Compose the final display string:
+  //                   let display = ""
+  //                   if(postal === ""){
+  //                     display = `${addressOnly}, ${countryName}`;
+  //                   } else {
+  //                     display = `${countryCode}-${postal} ${addressOnly}`;
+  //                   }
+
+  //                   return (
+  //                     <li key={index} className="flex justify-between items-center">
+  //                       <div className="text-sm text-black-800">{display}</div>
+  //                       <div className="flex gap-2">
+  //                         <button
+  //                           type="button"
+  //                           onClick={() => moveUp(index)}
+  //                           className="text-xs text-red-600 hover:underline"
+  //                         >Up</button>
+  //                         <button
+  //                           type="button"
+  //                           onClick={() => moveDown(index)}
+  //                           className="text-xs text-red-600 hover:underline"
+  //                         >Down</button>
+  //                         <button
+  //                           type="button"
+  //                           onClick={() => removeAddress(index)}
+  //                           className="text-xs text-red-600 hover:underline"
+  //                         >X</button>
+  //                       </div>
+  //                     </li>
+  //                   );
+  //                 })}
+  //               </ul>
+
+  //               <button
+  //                 type="submit"
+  //                 disabled={isLoading}
+  //                 className={`mt-3 ${isLoading ? "bg-red-400" : "bg-red-600 hover:bg-red-700"} text-white py-2 px-4 rounded font-semibold text-sm transition-colors`}
+  //               >
+  //                 {isLoading ? "Calculating..." : (hasCalculated ? "Update route" : "Calculate route")}
+  //               </button>
+  //             </form>
+  //           </div>
+  //           <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
+  //             <div className="flex justify-between items-center mb-2">
+  //               <h2 className="text-lg font-bold">Vehicle Parameters</h2>
+  //               <label className="inline-flex items-center text-sm">
+  //                 <input
+  //                   type="checkbox"
+  //                   className="form-checkbox mr-2"
+  //                   checked={allIn}
+  //                   onChange={e => setAllIn(e.target.checked)}
+  //                 />
+  //                 Fixed cost
+  //               </label>
+  //             </div>
+  //             <div className="grid grid-cols-1 gap-2">
+  //               <div>
+  //                 <label className="block text-sm font-bold mb-1">Number of axles</label> 
+  //                 <input
+  //                   type="number"
+  //                   name="axles"
+  //                   value={vehicleType.axles ?? ""}
+  //                   onChange={(e) => {
+  //                     const value = parseFloat(e.target.value);
+  //                     setVehicleType((prev) => ({ ...prev, axles: isNaN(value) ? prev.axles : value }));
+  //                   }}
+  //                   min="2"
+  //                   max="10"
+  //                   className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+  //                 />
+  //               </div>
+  //               <div>
+  //                 <label className="block text-sm font-bold mb-1">Tonnage (kg)</label>
+  //                 <input
+  //                   type="number"
+  //                   name="weight"
+  //                   value={vehicleType.weight ?? ""}
+  //                   onChange={(e) => {
+  //                     const value = parseFloat(e.target.value);
+  //                     setVehicleType((prev) => ({ ...prev, weight: isNaN(value) ? prev.weight : value }));
+  //                   }}
+  //                   min="1000"
+  //                   max="60000"
+  //                   className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+  //                 />
+  //               </div>
+  //                {!allIn ? (
+  //                  <div>
+  //                    <label className="block text-sm font-bold mb-1">Euro/km</label>
+  //                    <input
+  //                      type="number"
+  //                      inputMode="decimal"
+  //                      step="0.01"
+  //                      name="EuroPerKm"
+  //                      value={vehicleType.EuroPerKm ?? ""}
+  //                      onChange={e => {
+  //                        const raw = e.target.value.trim().replace(',', '.')
+  //                        const parsed = parseFloat(raw)
+  //                        setVehicleType(v => ({
+  //                          ...v,
+  //                          EuroPerKm: isNaN(parsed) ? v.EuroPerKm : parsed
+  //                        }))
+  //                      }}
+  //                      min="0"
+  //                      max="10"
+  //                      className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+  //                    />
+  //                  </div>
+  //                ) : (
+  //                  <div>
+  //                    <label className="block text-sm font-bold mb-1">Total Cost (EUR)</label>
+  //                    <input
+  //                      type="number"
+  //                      step="0.01"
+  //                      value={fixedTotalCost ?? ""}
+  //                      onChange={e => setFixedTotalCost(e.target.value)}
+  //                      className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+  //                    />
+  //                  </div>
+  //                )}
+  //               <div>
+  //                 {/* ROW 4: Buton salvare ruta */}
+  //                 {isManager && (
+  //                   <div className="flex gap-4 items-end">
+  //                     {/* Truck Plate Select */}
+  //                     <div className="flex-1">
+  //                       <label className="block text-sm font-bold mb-1">Truck Plate</label>
+  //                       <select
+  //                         className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus:ring-red-500 transition"
+  //                         value={plate}
+  //                         required
+  //                         onChange={e => setPlate(e.target.value)}
+  //                       >
+  //                         <option value="" disabled>
+  //                           Select your truck
+  //                         </option>
+  //                         {trucks.map(t => (
+  //                           <option key={t.id} value={t.id}>
+  //                             {t.plate}
+  //                           </option>
+  //                         ))}
+  //                       </select>
+  //                     </div>
+
+  //                     {/* Tour Identifier */}
+  //                     <div className="flex-1">
+  //                       <label className="block text-sm font-bold mb-1">Tour Number</label>
+  //                       <input
+  //                         className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus:ring-red-500 transition"
+  //                         placeholder="unique ID"
+  //                         value={identifier}
+  //                         onChange={e => setIdentifier(e.target.value)}
+  //                         required
+  //                       />
+  //                     </div>
+
+  //                     {/* Save Route Button */}
+  //                     <div>
+  //                       <button
+  //                         onClick={handleSaveRoute}
+  //                         className="bg-green-600 text-white font-bold px-4 py-2 rounded shadow hover:bg-green-700 transition"
+  //                       >
+  //                         Save Route
+  //                       </button>
+  //                     </div>
+  //                   </div>
+  //                 )}
+
+  //                 {isManager && saveMsg && (
+  //                   <p className="text-sm text-gray-700 italic mt-1">{saveMsg}</p>
+  //                 )}
+
+  //               </div>
+  //             </div>
+  //           </div>
+  //         </div>
+
+  //         {/* ROW 2: Alternative Routes */}
+  //         {routes.length > 0 && (
+  //           <div className="w-full bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
+  //             <h2 className="text-md font-semibold mb-2">Alternative Routes</h2>
+  //             <table className="min-w-full text-sm border border-red-200">
+  //               <thead>
+  //                 <tr className="bg-red-50">
+  //                   <th className="px-3 py-2 border">Route</th>
+  //                   <th className="px-3 py-2 border">Distance (km)</th>
+  //                   <th className="px-3 py-2 border">Segment distances</th>
+  //                   <th className="px-3 py-2 border">Time</th>
+  //                   {!allIn && (
+  //                     <th className="px-3 py-2 border">Price per Km (EUR)</th>
+  //                   )}
+  //                   <th className="px-3 py-2 border">Tolls (EUR)</th>
+  //                   {showPricePerDay && (
+  //                     <th className="px-3 py-2 border">Price / Day</th>
+  //                   )}
+  //                   <th className="px-3 py-2 border">Total Cost (EUR)</th>
+  //                 </tr>
+  //               </thead>
+  //               <tbody>
+  //                 {routes.map((rt, index) => {
+  //                   const { totalDuration, km, costPerKm } = computeRouteMetrics(rt);
+  //                   const hours = Math.floor(totalDuration/3600);
+  //                   const minutes = Math.floor((totalDuration%3600)/60);
+  //                   const displayTime = `${hours}h ${minutes}m`;
+  //                   const routeTax = routeTaxCosts[index]||0;
+  //                   const totalCost = allIn
+  //                     ? parseFloat(fixedTotalCost || 0)
+  //                     : costPerKm + routeTax + dayCost;
+
+  //                   const segs = getSegmentsForRoute(rt);
+  //                   // valoarea selectată pentru rândul curent
+  //                   const selected = selectedSegmentByIndex[index] ?? (segs[0]?.key || "");
+
+  //                   return (
+  //                     <tr key={index} className={`cursor-pointer ${selectedRouteIndex===index?"bg-red-50":""} hover:bg-red-50`} onClick={()=>handleRouteSelect(index)}>
+  //                       <td className="px-3 py-2 border text-center">Route {index+1}</td>
+  //                       <td className="px-3 py-2 border text-center">{km}</td>
+  //                       <td className="px-3 py-2 border text-center">
+  //                         {segs.length > 0 ? (
+  //                           <select
+  //                             className="border rounded px-2 py-1 w-full"
+  //                             value={selected}
+  //                             onChange={(e) =>
+  //                               setSelectedSegmentByIndex((s) => ({
+  //                                 ...s,
+  //                                 [index]: e.target.value,
+  //                               }))
+  //                             }
+  //                           >
+  //                             {segs.map((s) => (
+  //                               <option key={s.key} value={s.key}>
+  //                                 {s.display}
+  //                               </option>
+  //                             ))}
+  //                           </select>
+  //                         ) : (
+  //                           <span>-</span>
+  //                         )}
+  //                       </td>
+  //                       <td className="px-3 py-2 border text-center">{displayTime}</td>
+  //                       {!allIn && <td className="px-3 py-2 border text-center">{formatNum(costPerKm)}</td>}
+  //                       <td className="px-3 py-2 border text-center">{formatNum(routeTax)}</td>
+  //                       {showPricePerDay && (<td className="px-3 py-2 border text-center"> {formatNum(vehicleType.pricePerDay)}</td>)}
+  //                       <td className="px-3 py-2 border text-center">{formatNum(totalCost)}</td>
+  //                     </tr>
+  //                   );
+  //                 })}
+  //               </tbody>
+  //             </table>
+  //           </div>
+  //         )}
+
+
+  //         {/* ROW 3: List of aggregated costs + Route Results */}
+  //         {routes.length > 0 && (
+  //           <div className="flex space-x-4">
+  //             <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
+  //               <h3 className="text-md font-semibold mb-2">List of aggregated costs</h3>
+  //               {tollCosts[selectedRouteIndex] &&
+  //               tollCosts[selectedRouteIndex].tollList &&
+  //               tollCosts[selectedRouteIndex].tollList.length > 0 ? (
+  //                 <ul className="space-y-1 text-sm text-black-700 max-h-40 overflow-y-auto">
+  //                   {tollCosts[selectedRouteIndex].tollList.map((toll, idx) => (
+  //                     <li key={idx} className={`px-2 py-1 ${idx % 2 === 0 ? "bg-white" : "bg-red-100"}`}>
+  //                       {toll.name} - {toll.country}: {toll.cost.toFixed(2)} {toll.currency || "EUR"}
+  //                     </li>
+  //                   ))}
+  //                 </ul>
+  //               ) : (
+  //                 <p className="text-gray-500">Loading toll costs...</p>
+  //               )}
+  //             </div>
+
+  //             <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
+  //               <h3 className="text-md font-semibold mb-2">Route Results</h3>
+  //               {distance ? (
+  //                 <>
+  //                   <p className="text-sm text-gray-700">
+  //                     <strong>Distance:</strong> {distance} km
+  //                   </p>
+  //                   <p className="text-sm text-gray-700 flex items-center">
+  //                     <strong>Total trip time:</strong>&nbsp;{durationWithBreaks}
+  //                     <span
+  //                       className="ml-1 cursor-help text-blue-500"
+  //                       title={`Includes ${((secWithBreaks - rawDuration)/3600).toFixed(2)} hours breaks` }
+  //                     >ⓘ</span>
+  //                   </p>
+  //                   {!allIn && (
+  //                   <p className="text-sm text-gray-700">
+  //                     <strong>Price per Km:</strong>{" "}
+  //                     {formatNum(Number(distance) * vehicleType.EuroPerKm)} EUR
+  //                   </p>
+  //                   )}
+  //                   <p className="text-sm text-gray-700">
+  //                     <strong>Tolls:</strong> {formatNum(routeTaxCosts[selectedRouteIndex] || 0)} EUR
+  //                   </p>
+  //                   {showPricePerDay && (
+  //                     <p className="text-sm text-gray-700">
+  //                       <strong>Days × Rate:</strong> {days} d × {formatNum(vehicleType.pricePerDay)} = {formatNum(dayCost)} EUR
+  //                     </p>
+  //                   )}
+  //                   <p className="text-sm text-gray-700 font-semibold">
+  //                     <strong>Total Cost:</strong>{" "}
+  //                     {formatNum(
+  //                       allIn
+  //                       ? Number(fixedTotalCost || 0)
+  //                       : costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0) + dayCost
+  //                     )} EUR
+  //                   </p>
+  //                 </>
+  //               ) : (
+  //                 <p className="text-gray-500">There are no results available.</p>
+  //               )}
+  //             </div>
+  //           </div>
+  //         )}
+  //       </div>
+
+  //       {/* RIGHT SIDE - MAP */}
+  //       <div
+  //         id="mapContainer"
+  //         className="w-1/2 h-full relative overflow-hidden"
+  //       >
+  //         {(pendingLeg !== null || undoCount > 0) && (
+  //           <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[1000]">
+  //             <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium flex items-center gap-2">
+  //               <span className="inline-block w-5 h-5 rounded-md bg-white/15 grid place-items-center">⎋</span>
+  //               {pendingLeg !== null ? (
+  //                 <span>Drag to adjust. <b>Esc</b> cancels.</span>
+  //               ) : (
+  //                 <span>Press <b>Esc</b> to undo last via ({undoCount}).</span>
+  //               )}
+  //             </div>
+  //           </div>
+  //         )}
+  //         {/* Hints for spawn / drag */}
+  //         {mapHint === "spawn" && (
+  //           <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[999]">
+  //             <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium">
+  //               <b>Left-click</b> the route to spawn a via marker.
+  //             </div>
+  //           </div>
+  //         )}
+
+  //         {mapHint === "drag" && (
+  //           <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[999]">
+  //             <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium">
+  //               Use <b>Right Mouse Button</b> to drag the marker.
+  //             </div>
+  //           </div>
+  //         )}
+  //       </div>
+  //     </div>
+
+  //     {/* FOOTER */}
+  //     <footer className="bg-white border-t border-gray-200 p-4 text-center text-sm text-gray-500">
+  //       © 2025 Rossik Route Calculation
+  //     </footer>
+
+  //     {/* Montăm un TollCalculator (invizibil) pentru fiecare rută */}
+  //     <div style={{ display: "none" }}>
+  //       {routes.map((route, index) => (
+  //         <TollCalculator
+  //           key={index}
+  //           routeIndex={index}
+  //           startCoordinates={addresses.length >= 2 ? addresses[0] : null}
+  //           endCoordinates={addresses.length >= 2 ? addresses[addresses.length - 1] : null}
+  //           intermediatePoints={addresses.length > 2 ? addresses.slice(1, addresses.length - 1) : []}
+  //           vehicleType={vehicleType}
+  //           rawDuration={rawDuration}
+  //           rawDistance={rawDistance}
+  //           selectedRoute={route}
+  //           onTollUpdate={(tollData) => updateTollCostForRoute(index, tollData)}
+  //         />
+  //       ))}
+  //     </div>
+  //   </div>
+  //   </div>
+  // );
+  
   return (
-  <div className="App flex flex-col h-screen">
-    <div className={`flex flex-col flex-1 transition-colors duration-500 ${darkMode ? 'bg-gray-900 ' : 'bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800'}`}>
-      <DebugMouseOverlay />
-    <Header user = {user} />
-     {/* MAIN CONTENT */}
-      <div className="flex flex-row flex-1 overflow-hidden">
-        {/* LEFT SIDE */}
-        <div className="bg-burgundy-200 w-1/2 p-4 overflow-auto space-y-4">
-          {/* ROW 1: Address + Vehicle */}
-          <div className="flex space-x-4">
-            <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
-              <h2 className="text-lg font-bold mb-2">Address</h2>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-                <div >
-                  <label className="block mb-1 font-medium shadow-sm text-semibold text-gray-700">Enter the address:</label>
-                    <div className="w-full rounded bg-gray-1000 ring-2 ring-red-300 focus-within:ring-red-500 transition">
-                      <AutoCompleteInput
-                        apiKey={process.env.REACT_APP_HERE_API_KEY}
-                        value={addressQuery}                 // ← control the text
-                        onChange={setAddressQuery}           // ← update as user types
-                        onSelect={(picked) => {              // ← when a suggestion is chosen
-                          addAddress(picked);
-                          setAddressQuery("");               // ← clear the box
-                        }}
-                        className="w-full p-2 bg-red-50 border-none focus:outline-none"
-                      />
-                    </div>
-                </div>
-                {addresses.length === 0 && <p className="text-sm text-gray-500">No address entered.</p>}
-                {/* …inside your render… */}
-                <ul className="border rounded p-2 max-h-40 overflow-y-auto space-y-1">
-                  {addresses.map((pt, index) => {
-                    // 1. Split the original label into comma-parts:
-                    const parts = pt.label.split(",").map(s => s.trim());
-                    // 2. Extract & remove the trailing country name:
-                    const countryName = parts.pop();
-                    // 3. Derive a 2-letter country code (override via pt.country if you set it):
-                    const countryCode = (pt.country || countryName.slice(0,2)).toUpperCase();
-                    // 4. Ensure we have a postal code (fallback to “—” if lookup failed):
-                    const postal = pt.postal || "";
-                    // 5. If the very first element equals that postal, drop it:
-                    if (parts[0] === postal) parts.shift();
-                    // 6. Join the rest back into the “address” chunk:
-                    const addressOnly = parts.join(", ");
-                    // 7. Compose the final display string:
-                    let display = ""
-                    if(postal === ""){
-                      display = `${addressOnly}, ${countryName}`;
-                    } else {
-                      display = `${countryCode}-${postal} ${addressOnly}`;
-                    }
+    <div className="App flex flex-col h-screen">
+      <div
+        className="
+          flex flex-col flex-1 transition-colors duration-500
+          bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800
+          dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100
+        "
+      >
+        <DebugMouseOverlay />
+        <Header user = {user} />
+        {/* MAIN CONTENT */}
+        {/*<div className="flex flex-row flex-1 overflow-hidden">*/}
+        <div
+          className="
+            flex flex-row flex-1 overflow-hidden min-h-screen transition-colors
+            bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800
+            dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100
+          "
+        >
 
-                    return (
-                      <li key={index} className="flex justify-between items-center">
-                        <div className="text-sm text-black-800">{display}</div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => moveUp(index)}
-                            className="text-xs text-red-600 hover:underline"
-                          >Up</button>
-                          <button
-                            type="button"
-                            onClick={() => moveDown(index)}
-                            className="text-xs text-red-600 hover:underline"
-                          >Down</button>
-                          <button
-                            type="button"
-                            onClick={() => removeAddress(index)}
-                            className="text-xs text-red-600 hover:underline"
-                          >X</button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className={`mt-3 ${isLoading ? "bg-red-400" : "bg-red-600 hover:bg-red-700"} text-white py-2 px-4 rounded font-semibold text-sm transition-colors`}
-                >
-                  {isLoading ? "Calculating..." : (hasCalculated ? "Update route" : "Calculate route")}
-                </button>
-              </form>
-            </div>
-            <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
-              <div className="flex justify-between items-center mb-2">
-                <h2 className="text-lg font-bold">Vehicle Parameters</h2>
-                <label className="inline-flex items-center text-sm">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox mr-2"
-                    checked={allIn}
-                    onChange={e => setAllIn(e.target.checked)}
-                  />
-                  Fixed cost
-                </label>
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                <div>
-                  <label className="block text-sm font-bold mb-1">Number of axles</label> 
-                  <input
-                    type="number"
-                    name="axles"
-                    value={vehicleType.axles ?? ""}
-                    onChange={(e) => {
-                      const value = parseFloat(e.target.value);
-                      setVehicleType((prev) => ({ ...prev, axles: isNaN(value) ? prev.axles : value }));
-                    }}
-                    min="2"
-                    max="10"
-                    className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold mb-1">Tonnage (kg)</label>
-                  <input
-                    type="number"
-                    name="weight"
-                    value={vehicleType.weight ?? ""}
-                    onChange={(e) => {
-                      const value = parseFloat(e.target.value);
-                      setVehicleType((prev) => ({ ...prev, weight: isNaN(value) ? prev.weight : value }));
-                    }}
-                    min="1000"
-                    max="60000"
-                    className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
-                  />
-                </div>
-                 {!allIn ? (
-                   <div>
-                     <label className="block text-sm font-bold mb-1">Euro/km</label>
-                     <input
-                       type="number"
-                       inputMode="decimal"
-                       step="0.01"
-                       name="EuroPerKm"
-                       value={vehicleType.EuroPerKm ?? ""}
-                       onChange={e => {
-                         const raw = e.target.value.trim().replace(',', '.')
-                         const parsed = parseFloat(raw)
-                         setVehicleType(v => ({
-                           ...v,
-                           EuroPerKm: isNaN(parsed) ? v.EuroPerKm : parsed
-                         }))
-                       }}
-                       min="0"
-                       max="10"
-                       className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
-                     />
-                   </div>
-                 ) : (
-                   <div>
-                     <label className="block text-sm font-bold mb-1">Total Cost (EUR)</label>
-                     <input
-                       type="number"
-                       step="0.01"
-                       value={fixedTotalCost ?? ""}
-                       onChange={e => setFixedTotalCost(e.target.value)}
-                       className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus-within:ring-red-500 transition"
-                     />
-                   </div>
-                 )}
-                <div>
-                  {/* ROW 4: Buton salvare ruta */}
-                  {isManager && (
-                    <div className="flex gap-4 items-end">
-                      {/* Truck Plate Select */}
-                      <div className="flex-1">
-                        <label className="block text-sm font-bold mb-1">Truck Plate</label>
-                        <select
-                          className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus:ring-red-500 transition"
-                          value={plate}
-                          required
-                          onChange={e => setPlate(e.target.value)}
-                        >
-                          <option value="" disabled>
-                            Select your truck
-                          </option>
-                          {trucks.map(t => (
-                            <option key={t.id} value={t.id}>
-                              {t.plate}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Tour Identifier */}
-                      <div className="flex-1">
-                        <label className="block text-sm font-bold mb-1">Tour Number</label>
-                        <input
-                          className="w-full rounded bg-gray-50 ring-2 ring-red-300 focus:ring-red-500 transition"
-                          placeholder="unique ID"
-                          value={identifier}
-                          onChange={e => setIdentifier(e.target.value)}
-                          required
+          {/* LEFT SIDE */}
+          <div className="bg-burgundy-200 w-1/2 p-4 overflow-auto space-y-4">
+            {/* ROW 1: Address + Vehicle */}
+            <div className="flex space-x-4">
+              <div className="w-1/2 bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition ">
+                <h2 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Address</h2>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                  <div >
+                    <label className="block mb-1 font-medium shadow-sm text-semibold text-gray-700 dark:text-gray-300">Enter the address:</label>
+                      <div className="w-full rounded bg-gray-1000 ring-2 ring-red-300 focus-within:ring-red-500 transition">
+                        <AutoCompleteInput
+                          apiKey={process.env.REACT_APP_HERE_API_KEY}
+                          value={addressQuery}
+                          onChange={setAddressQuery}
+                          onSelect={(picked) => {
+                            addAddress(picked);
+                            setAddressQuery("");
+                          }}
+                          className="w-full p-2 bg-red-50 dark:bg-gray-700 dark:text-gray-100 border-none focus:outline-none"
                         />
                       </div>
+                  </div>
+                  {addresses.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400">No address entered.</p>}
+                  {/* …inside your render… */}
+                  <ul className="border border-gray-200 dark:border-gray-700 rounded p-2 max-h-40 overflow-y-auto space-y-1 bg-white dark:bg-gray-900/40">
+                    {addresses.map((pt, index) => {
+                      const parts = pt.label.split(",").map(s => s.trim());
+                      const countryName = parts.pop();
+                      const countryCode = (pt.country || countryName.slice(0,2)).toUpperCase();
+                      const postal = pt.postal || "";
+                      if (parts[0] === postal) parts.shift();
+                      const addressOnly = parts.join(", ");
+                      let display = "";
+                      if(postal === ""){
+                        display = `${addressOnly}, ${countryName}`;
+                      } else {
+                        display = `${countryCode}-${postal} ${addressOnly}`;
+                      }
 
-                      {/* Save Route Button */}
-                      <div>
-                        <button
-                          onClick={handleSaveRoute}
-                          className="bg-green-600 text-white font-bold px-4 py-2 rounded shadow hover:bg-green-700 transition"
-                        >
-                          Save Route
-                        </button>
-                      </div>
+                      return (
+                        <li key={index} className="flex justify-between items-center">
+                          <div className="text-sm text-gray-900 dark:text-gray-100">{display}</div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => moveUp(index)}
+                              className="text-xs text-red-600 hover:underline"
+                            >Up</button>
+                            <button
+                              type="button"
+                              onClick={() => moveDown(index)}
+                              className="text-xs text-red-600 hover:underline"
+                            >Down</button>
+                            <button
+                              type="button"
+                              onClick={() => removeAddress(index)}
+                              className="text-xs text-red-600 hover:underline"
+                            >X</button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className={`mt-3 ${isLoading ? "bg-red-400" : "bg-red-600 hover:bg-red-700"} text-white py-2 px-4 rounded font-semibold text-sm transition-colors`}
+                  >
+                    {isLoading ? "Calculating..." : (hasCalculated ? "Update route" : "Calculate route")}
+                  </button>
+                </form>
+              </div>
+              <div className="w-1/2 bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition">
+                <div className="flex justify-between items-center mb-2">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">Vehicle Parameters</h2>
+                  <label className="inline-flex items-center text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox mr-2"
+                      checked={allIn}
+                      onChange={e => setAllIn(e.target.checked)}
+                    />
+                    Fixed cost
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  <div>
+                    <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">Number of axles</label> 
+                    <input
+                      type="number"
+                      name="axles"
+                      value={vehicleType.axles ?? ""}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        setVehicleType((prev) => ({ ...prev, axles: isNaN(value) ? prev.axles : value }));
+                      }}
+                      min="2"
+                      max="10"
+                      className="w-full rounded bg-gray-50 dark:bg-gray-700 dark:text-gray-100 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">Tonnage (kg)</label>
+                    <input
+                      type="number"
+                      name="weight"
+                      value={vehicleType.weight ?? ""}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        setVehicleType((prev) => ({ ...prev, weight: isNaN(value) ? prev.weight : value }));
+                      }}
+                      min="1000"
+                      max="60000"
+                      className="w-full rounded bg-gray-50 dark:bg-gray-700 dark:text-gray-100 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+                    />
+                  </div>
+                  {!allIn ? (
+                    <div>
+                      <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">Euro/km</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        name="EuroPerKm"
+                        value={vehicleType.EuroPerKm ?? ""}
+                        onChange={e => {
+                          const raw = e.target.value.trim().replace(',', '.')
+                          const parsed = parseFloat(raw)
+                          setVehicleType(v => ({
+                            ...v,
+                            EuroPerKm: isNaN(parsed) ? v.EuroPerKm : parsed
+                          }))
+                        }}
+                        min="0"
+                        max="10"
+                        className="w-full rounded bg-gray-50 dark:bg-gray-700 dark:text-gray-100 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">Total Cost (EUR)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={fixedTotalCost ?? ""}
+                        onChange={e => setFixedTotalCost(e.target.value)}
+                        className="w-full rounded bg-gray-50 dark:bg-gray-700 dark:text-gray-100 ring-2 ring-red-300 focus-within:ring-red-500 transition"
+                      />
                     </div>
                   )}
+                  <div>
+                    {/* ROW 4: Buton salvare ruta */}
+                    {isManager && (
+                      <div className="flex gap-4 items-end">
+                        {/* Truck Plate Select */}
+                        <div className="flex-1">
+                          <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">Truck Plate</label>
+                          <select
+                            className="w-full rounded bg-gray-50 dark:bg-gray-700 dark:text-gray-100 ring-2 ring-red-300 focus:ring-red-500 transition"
+                            value={plate}
+                            required
+                            onChange={e => setPlate(e.target.value)}
+                          >
+                            <option value="" disabled>
+                              Select your truck
+                            </option>
+                            {trucks.map(t => (
+                              <option key={t.id} value={t.id}>
+                                {t.plate}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                  {isManager && saveMsg && (
-                    <p className="text-sm text-gray-700 italic mt-1">{saveMsg}</p>
-                  )}
+                        {/* Tour Identifier */}
+                        <div className="flex-1">
+                          <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">Tour Number</label>
+                          <input
+                            className="w-full rounded bg-gray-50 dark:bg-gray-700 dark:text-gray-100 ring-2 ring-red-300 focus:ring-red-500 transition"
+                            placeholder="unique ID"
+                            value={identifier}
+                            onChange={e => setIdentifier(e.target.value)}
+                            required
+                          />
+                        </div>
 
+                        {/* Save Route Button */}
+                        <div>
+                          <button
+                            onClick={handleSaveRoute}
+                            className="bg-green-600 text-white font-bold px-4 py-2 rounded shadow hover:bg-green-700 transition"
+                          >
+                            Save Route
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {isManager && saveMsg && (
+                      <p className="text-sm text-gray-700 dark:text-gray-300 italic mt-1">{saveMsg}</p>
+                    )}
+
+                  </div>
                 </div>
               </div>
             </div>
+
+            {/* ROW 2: Alternative Routes */}
+            {routes.length > 0 && (
+              <div className="w-full bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition">
+                <h2 className="text-md font-semibold mb-2 text-gray-900 dark:text-white">Alternative Routes</h2>
+                <table className="min-w-full text-sm border border-red-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 text-gray-900 dark:text-gray-100">
+                  <thead>
+                    <tr className="bg-red-50 dark:bg-gray-800">
+                      <th className="px-3 py-2 border dark:border-gray-700">Route</th>
+                      <th className="px-3 py-2 border dark:border-gray-700">Distance (km)</th>
+                      <th className="px-3 py-2 border dark:border-gray-700">Segment distances</th>
+                      <th className="px-3 py-2 border dark:border-gray-700">Time</th>
+                      {!allIn && (
+                        <th className="px-3 py-2 border dark:border-gray-700">Price per Km (EUR)</th>
+                      )}
+                      <th className="px-3 py-2 border dark:border-gray-700">Tolls (EUR)</th>
+                      {showPricePerDay && (
+                        <th className="px-3 py-2 border dark:border-gray-700">Price / Day</th>
+                      )}
+                      <th className="px-3 py-2 border dark:border-gray-700">Total Cost (EUR)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {routes.map((rt, index) => {
+                      const { totalDuration, km, costPerKm } = computeRouteMetrics(rt);
+                      const hours = Math.floor(totalDuration/3600);
+                      const minutes = Math.floor((totalDuration%3600)/60);
+                      const displayTime = `${hours}h ${minutes}m`;
+                      const routeTax = routeTaxCosts[index]||0;
+                      const totalCost = allIn
+                        ? parseFloat(fixedTotalCost || 0)
+                        : costPerKm + routeTax + dayCost;
+
+                      const segs = getSegmentsForRoute(rt);
+                      const selected = selectedSegmentByIndex[index] ?? (segs[0]?.key || "");
+
+                      return (
+                        <tr
+                          key={index}
+                          className={`cursor-pointer ${selectedRouteIndex===index?"bg-red-50 dark:bg-gray-900/40":""} hover:bg-red-50 dark:hover:bg-gray-800`}
+                          onClick={()=>handleRouteSelect(index)}
+                        >
+                          <td className="px-3 py-2 border dark:border-gray-700 text-center">Route {index+1}</td>
+                          <td className="px-3 py-2 border dark:border-gray-700 text-center">{km}</td>
+                          <td className="px-3 py-2 border dark:border-gray-700 text-center">
+                            {segs.length > 0 ? (
+                              <select
+                                className="border dark:border-gray-600 rounded px-2 py-1 w-full bg-white dark:bg-gray-700 dark:text-gray-100"
+                                value={selected}
+                                onChange={(e) =>
+                                  setSelectedSegmentByIndex((s) => ({
+                                    ...s,
+                                    [index]: e.target.value,
+                                  }))
+                                }
+                              >
+                                {segs.map((s) => (
+                                  <option key={s.key} value={s.key}>
+                                    {s.display}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span>-</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 border dark:border-gray-700 text-center">{displayTime}</td>
+                          {!allIn && <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(costPerKm)}</td>}
+                          <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(routeTax)}</td>
+                          {showPricePerDay && (<td className="px-3 py-2 border dark:border-gray-700 text-center"> {formatNum(vehicleType.pricePerDay)}</td>)}
+                          <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(totalCost)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+
+            {/* ROW 3: List of aggregated costs + Route Results */}
+            {routes.length > 0 && (
+              <div className="flex space-x-4">
+                <div className="w-1/2 bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition">
+                  <h3 className="text-md font-semibold mb-2 text-gray-900 dark:text-white">List of aggregated costs</h3>
+                  {tollCosts[selectedRouteIndex] &&
+                  tollCosts[selectedRouteIndex].tollList &&
+                  tollCosts[selectedRouteIndex].tollList.length > 0 ? (
+                    <ul className="space-y-1 text-sm text-gray-900 dark:text-gray-100 max-h-40 overflow-y-auto bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded p-2">
+                      {tollCosts[selectedRouteIndex].tollList.map((toll, idx) => (
+                        <li key={idx} className={`px-2 py-1 ${idx % 2 === 0 ? "bg-white dark:bg-gray-800/60" : "bg-red-100 dark:bg-gray-800/40"}`}>
+                          {toll.name} - {toll.country}: {toll.cost.toFixed(2)} {toll.currency || "EUR"}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-500 dark:text-gray-400">Loading toll costs...</p>
+                  )}
+                </div>
+
+                <div className="w-1/2 bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition">
+                  <h3 className="text-md font-semibold mb-2 text-gray-900 dark:text-white">Route Results</h3>
+                  {distance ? (
+                    <>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        <strong>Distance:</strong> {distance} km
+                      </p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 flex items-center">
+                        <strong>Total trip time:</strong>&nbsp;{durationWithBreaks}
+                        <span
+                          className="ml-1 cursor-help text-blue-500"
+                          title={`Includes ${((secWithBreaks - rawDuration)/3600).toFixed(2)} hours breaks` }
+                        >ⓘ</span>
+                      </p>
+                      {!allIn && (
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        <strong>Price per Km:</strong>{" "}
+                        {formatNum(Number(distance) * vehicleType.EuroPerKm)} EUR
+                      </p>
+                      )}
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        <strong>Tolls:</strong> {formatNum(routeTaxCosts[selectedRouteIndex] || 0)} EUR
+                      </p>
+                      {showPricePerDay && (
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                          <strong>Days × Rate:</strong> {days} d × {formatNum(vehicleType.pricePerDay)} = {formatNum(dayCost)} EUR
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-700 dark:text-gray-300 font-semibold">
+                        <strong>Total Cost:</strong>{" "}
+                        {formatNum(
+                          allIn
+                          ? Number(fixedTotalCost || 0)
+                          : costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0) + dayCost
+                        )} EUR
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-gray-500 dark:text-gray-400">There are no results available.</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* ROW 2: Alternative Routes */}
-          {routes.length > 0 && (
-            <div className="w-full bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
-              <h2 className="text-md font-semibold mb-2">Alternative Routes</h2>
-              <table className="min-w-full text-sm border border-red-200">
-                <thead>
-                  <tr className="bg-red-50">
-                    <th className="px-3 py-2 border">Route</th>
-                    <th className="px-3 py-2 border">Distance (km)</th>
-                    <th className="px-3 py-2 border">Segment distances</th>
-                    <th className="px-3 py-2 border">Time</th>
-                    {!allIn && (
-                      <th className="px-3 py-2 border">Price per Km (EUR)</th>
-                    )}
-                    <th className="px-3 py-2 border">Tolls (EUR)</th>
-                    {showPricePerDay && (
-                      <th className="px-3 py-2 border">Price / Day</th>
-                    )}
-                    <th className="px-3 py-2 border">Total Cost (EUR)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {routes.map((rt, index) => {
-                    const { totalDuration, km, costPerKm } = computeRouteMetrics(rt);
-                    const hours = Math.floor(totalDuration/3600);
-                    const minutes = Math.floor((totalDuration%3600)/60);
-                    const displayTime = `${hours}h ${minutes}m`;
-                    const routeTax = routeTaxCosts[index]||0;
-                    const totalCost = allIn
-                      ? parseFloat(fixedTotalCost || 0)
-                      : costPerKm + routeTax + dayCost;
-
-                    const segs = getSegmentsForRoute(rt);
-                    // valoarea selectată pentru rândul curent
-                    const selected = selectedSegmentByIndex[index] ?? (segs[0]?.key || "");
-
-                    return (
-                      <tr key={index} className={`cursor-pointer ${selectedRouteIndex===index?"bg-red-50":""} hover:bg-red-50`} onClick={()=>handleRouteSelect(index)}>
-                        <td className="px-3 py-2 border text-center">Route {index+1}</td>
-                        <td className="px-3 py-2 border text-center">{km}</td>
-                        <td className="px-3 py-2 border text-center">
-                          {segs.length > 0 ? (
-                            <select
-                              className="border rounded px-2 py-1 w-full"
-                              value={selected}
-                              onChange={(e) =>
-                                setSelectedSegmentByIndex((s) => ({
-                                  ...s,
-                                  [index]: e.target.value,
-                                }))
-                              }
-                            >
-                              {segs.map((s) => (
-                                <option key={s.key} value={s.key}>
-                                  {s.display}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span>-</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 border text-center">{displayTime}</td>
-                        {!allIn && <td className="px-3 py-2 border text-center">{formatNum(costPerKm)}</td>}
-                        <td className="px-3 py-2 border text-center">{formatNum(routeTax)}</td>
-                        {showPricePerDay && (<td className="px-3 py-2 border text-center"> {formatNum(vehicleType.pricePerDay)}</td>)}
-                        <td className="px-3 py-2 border text-center">{formatNum(totalCost)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-
-          {/* ROW 3: List of aggregated costs + Route Results */}
-          {routes.length > 0 && (
-            <div className="flex space-x-4">
-              <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
-                <h3 className="text-md font-semibold mb-2">List of aggregated costs</h3>
-                {tollCosts[selectedRouteIndex] &&
-                tollCosts[selectedRouteIndex].tollList &&
-                tollCosts[selectedRouteIndex].tollList.length > 0 ? (
-                  <ul className="space-y-1 text-sm text-black-700 max-h-40 overflow-y-auto">
-                    {tollCosts[selectedRouteIndex].tollList.map((toll, idx) => (
-                      <li key={idx} className={`px-2 py-1 ${idx % 2 === 0 ? "bg-white" : "bg-red-100"}`}>
-                        {toll.name} - {toll.country}: {toll.cost.toFixed(2)} {toll.currency || "EUR"}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-gray-500">Loading toll costs...</p>
-                )}
+          {/* RIGHT SIDE - MAP */}
+          <div
+            id="mapContainer"
+            className="w-1/2 h-full relative overflow-hidden"
+          >
+            {(pendingLeg !== null || undoCount > 0) && (
+              <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[1000]">
+                <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium flex items-center gap-2">
+                  <span className="inline-block w-5 h-5 rounded-md bg-white/15 grid place-items-center">⎋</span>
+                  {pendingLeg !== null ? (
+                    <span>Drag to adjust. <b>Esc</b> cancels.</span>
+                  ) : (
+                    <span>Press <b>Esc</b> to undo last via ({undoCount}).</span>
+                  )}
+                </div>
               </div>
-
-              <div className="w-1/2 bg-white p-4 rounded shadow-sm ring-2 ring-red-300 hover:ring-red-500 transition">
-                <h3 className="text-md font-semibold mb-2">Route Results</h3>
-                {distance ? (
-                  <>
-                    <p className="text-sm text-gray-700">
-                      <strong>Distance:</strong> {distance} km
-                    </p>
-                    <p className="text-sm text-gray-700 flex items-center">
-                      <strong>Total trip time:</strong>&nbsp;{durationWithBreaks}
-                      <span
-                        className="ml-1 cursor-help text-blue-500"
-                        title={`Includes ${((secWithBreaks - rawDuration)/3600).toFixed(2)} hours breaks` }
-                      >ⓘ</span>
-                    </p>
-                    {!allIn && (
-                    <p className="text-sm text-gray-700">
-                      <strong>Price per Km:</strong>{" "}
-                      {formatNum(Number(distance) * vehicleType.EuroPerKm)} EUR
-                    </p>
-                    )}
-                    <p className="text-sm text-gray-700">
-                      <strong>Tolls:</strong> {formatNum(routeTaxCosts[selectedRouteIndex] || 0)} EUR
-                    </p>
-                    {showPricePerDay && (
-                      <p className="text-sm text-gray-700">
-                        <strong>Days × Rate:</strong> {days} d × {formatNum(vehicleType.pricePerDay)} = {formatNum(dayCost)} EUR
-                      </p>
-                    )}
-                    <p className="text-sm text-gray-700 font-semibold">
-                      <strong>Total Cost:</strong>{" "}
-                      {formatNum(
-                        allIn
-                        ? Number(fixedTotalCost || 0)
-                        : costPerKmForSelected() + (routeTaxCosts[selectedRouteIndex] || 0) + dayCost
-                      )} EUR
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-gray-500">There are no results available.</p>
-                )}
+            )}
+            {/* Hints for spawn / drag */}
+            {mapHint === "spawn" && (
+              <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[999]">
+                <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium">
+                  <b>Left-click</b> the route to spawn a via marker.
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {mapHint === "drag" && (
+              <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[999]">
+                <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium">
+                  Use <b>Right Mouse Button</b> to drag the marker.
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* RIGHT SIDE - MAP */}
-        <div
-          id="mapContainer"
-          className="w-1/2 h-full relative overflow-hidden"
-        >
-          {(pendingLeg !== null || undoCount > 0) && (
-            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[1000]">
-              <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium flex items-center gap-2">
-                <span className="inline-block w-5 h-5 rounded-md bg-white/15 grid place-items-center">⎋</span>
-                {pendingLeg !== null ? (
-                  <span>Drag to adjust. <b>Esc</b> cancels.</span>
-                ) : (
-                  <span>Press <b>Esc</b> to undo last via ({undoCount}).</span>
-                )}
-              </div>
-            </div>
-          )}
-          {/* Hints for spawn / drag */}
-          {mapHint === "spawn" && (
-            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[999]">
-              <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium">
-                <b>Left-click</b> the route to spawn a via marker.
-              </div>
-            </div>
-          )}
+        {/* FOOTER */}
+        <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+          © 2025 Rossik Route Calculation
+        </footer>
 
-          {mapHint === "drag" && (
-            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[999]">
-              <div className="px-3 py-2 rounded-xl shadow-lg bg-black/70 text-white text-xs sm:text-sm font-medium">
-                Use <b>Right Mouse Button</b> to drag the marker.
-              </div>
-            </div>
-          )}
+        {/* Montăm un TollCalculator (invizibil) pentru fiecare rută */}
+        <div style={{ display: "none" }}>
+          {routes.map((route, index) => (
+            <TollCalculator
+              key={index}
+              routeIndex={index}
+              startCoordinates={addresses.length >= 2 ? addresses[0] : null}
+              endCoordinates={addresses.length >= 2 ? addresses[addresses.length - 1] : null}
+              intermediatePoints={addresses.length > 2 ? addresses.slice(1, addresses.length - 1) : []}
+              vehicleType={vehicleType}
+              rawDuration={rawDuration}
+              rawDistance={rawDistance}
+              selectedRoute={route}
+              onTollUpdate={(tollData) => updateTollCostForRoute(index, tollData)}
+            />
+          ))}
         </div>
       </div>
-
-      {/* FOOTER */}
-      <footer className="bg-white border-t border-gray-200 p-4 text-center text-sm text-gray-500">
-        © 2025 Rossik Route Calculation
-      </footer>
-
-      {/* Montăm un TollCalculator (invizibil) pentru fiecare rută */}
-      <div style={{ display: "none" }}>
-        {routes.map((route, index) => (
-          <TollCalculator
-            key={index}
-            routeIndex={index}
-            startCoordinates={addresses.length >= 2 ? addresses[0] : null}
-            endCoordinates={addresses.length >= 2 ? addresses[addresses.length - 1] : null}
-            intermediatePoints={addresses.length > 2 ? addresses.slice(1, addresses.length - 1) : []}
-            vehicleType={vehicleType}
-            rawDuration={rawDuration}
-            rawDistance={rawDistance}
-            selectedRoute={route}
-            onTollUpdate={(tollData) => updateTollCostForRoute(index, tollData)}
-          />
-        ))}
-      </div>
-    </div>
     </div>
   );
+
 };
 
 export default MainPage;
