@@ -1,16 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import 'leaflet/dist/leaflet.css';
 import AutoCompleteInput from "../AutoCompleteInput";
 import TollCalculator from "../TollCalculator";
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
-import Sun from 'lucide-react/dist/esm/icons/sun';
-import Moon from 'lucide-react/dist/esm/icons/moon';
-import { Link } from "react-router-dom";
-import RossikLogo from '../VektorLogo_Rossik_rot.gif';
 import { formatNum } from "../utils/number";
 import { addLegalBreaks } from "../utils/driverTime";
-import { debounce } from 'lodash'
 import { fetchPostalCode } from "./helpers/reversePostal.js";
 import DebugMouseOverlay from "../components/mouseOverlay.js";
 import { extractCityFromLabel } from "../utils/segments.js";
@@ -21,13 +15,10 @@ import Header from "../components/header.js";
 const MainPage = ({ user })  => {
   const [allIn, setAllIn] = useState(false);
   const [fixedTotalCost, setFixedTotalCost] = useState(''); // only used when allIn===true
-  const [activeTab, setActiveTab] = useState("input"); // "input" | "results"
   const [addresses, setAddresses] = useState([]);
   const [distance, setDistance] = useState(null);
   const [routes, setRoutes] = useState([]); // Array cu rutele alternative
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
   const [vehicleType, setVehicleType] = useState({
     axles: 5,
     weight: 40000,
@@ -44,9 +35,7 @@ const MainPage = ({ user })  => {
   const mapRef = useRef(null);
   const markerGroupRef = useRef(null);
   const navigate = useNavigate();
-  let apiCallCount = 0;
   const isManager = ['transport_manager','team_lead','admin'].includes(user.role);
-  const [darkMode, setDarkMode] = React.useState(false);
 
   //de aici am butonul de salvare rute
   const [trucks, setTrucks] = useState([]);        // lista de { id, plate }
@@ -132,19 +121,10 @@ const MainPage = ({ user })  => {
     : 0;
 
   const showPricePerDay = vehicleType.pricePerDay != null;
-  const days = Math.ceil(rawDuration / 86400);
+  const days = rawDuration != null ? Math.ceil(rawDuration / 86400) : 0;
   const dayCost = showPricePerDay
     ? days * vehicleType.pricePerDay
     : 0;
-
-
-  const formatName = (email = "") => {
-    const local = email.split("@")[0];            // "robert.balacescu"
-    const parts = local.split(".");                // ["robert","balacescu"]
-    return parts
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");                                  // ["Robert","Balacescu"] → "Robert Balacescu"
-  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -152,7 +132,6 @@ const MainPage = ({ user })  => {
     navigate('/login');
   };
 
-  const token = localStorage.getItem('token');
   const handleSaveRoute = async () => {
     if (addresses.length < 2) {
       alert('Need at least start and end addresses');
@@ -267,15 +246,10 @@ const MainPage = ({ user })  => {
       .slice(0, 2)
       .toUpperCase();
 
-    setAddresses(prev => [
-      ...prev,
-      { 
-        ...coordsWithLabel,
-        postal: code || "",
-        country: countryCode, 
-        city,
-      }
-    ]);
+    setAddresses(prev => {
+      const next = [...prev, { ...coordsWithLabel, postal: code || "", country: countryCode, city }];
+      return next.slice(0, 2); // hard-cap at 2 (origin, destination)
+    });
     console.log('picked address: ', coordsWithLabel)
   };
   const moveUp = (index) => {
@@ -325,8 +299,6 @@ const getRoute = async (pts = addresses) => {
     url += `&vehicle[grossWeight]=${vehicleType.weight}`;
     url += `&truck[limitedWeight]=7500`;
     url += `&tolls[emissionType]=euro6`;
-
-    
 
     // 2️⃣ Fetch & parse
     const response = await fetch(url);
@@ -379,8 +351,6 @@ const getRoute = async (pts = addresses) => {
     const hh = Math.floor(totalDur / 3600);
     const mm = Math.floor((totalDur % 3600) / 60);
     setDuration(`${hh}h ${mm}m`);
-
-    setActiveTab("results");
 
   } catch (err) {
     console.error("Error fetching route:", err);
@@ -475,7 +445,6 @@ const handleSubmit = async (e) => {
   const coords = [...addresses];
 
   setIsLoading(true);
-  apiCallCount++;
   try {
     await getRoute(coords);
     setHasCalculated(true);
@@ -534,7 +503,7 @@ const handleSubmit = async (e) => {
     return () => {
       window.removeEventListener("resize", () => map.getViewPort().resize());
     };
-  }, [tollCosts, selectedRouteIndex]);
+  }, []);
   
   // cost per km pt ruta selectată
   const costPerKmForSelected = () => {
@@ -590,7 +559,7 @@ const handleSubmit = async (e) => {
   
     mapRef.current.addObject(group);
     markerGroupRef.current = group;
-  }, [addresses, mapRef.current]);
+  }, [addresses]);
   
   useEffect(() => {
     (async () => {
@@ -661,25 +630,6 @@ const handleSubmit = async (e) => {
       displayRoute(routes[fastestIdx]);
     }
   }, [routes]);  // Re-run whenever the routes array changes
-
-  // close dropdown when clicking outside of the arrow button
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen]);
 
   return (
     <div className="App flex flex-col h-screen">
