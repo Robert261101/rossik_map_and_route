@@ -46,7 +46,45 @@ const MainPage = ({ user })  => {
 
   // at the top of MainPage
   const [addressQuery, setAddressQuery] = useState("");
+
+  // ===== VIA PHASE 1: state scaffolding =====
+  const [viaStops, setViaStops] = useState([]);         // [{id, lat, lng}] in order
+  const [viaStack, setViaStack] = useState([]);         // [id, ...] for LIFO delete
+  const [viaDraft, setViaDraft] = useState(null);       // {lat, lng} while dragging-to-add (ghost)
+  const [selectedViaId, setSelectedViaId] = useState(null); // which via is “selected” for delete
+  // ==========================================
+
+  const ghostMarkerRef = useRef(null);
+  const behaviorRef = useRef(null);
+  const viaGroupRef = useRef(null);
+  const fullLineStringRef = useRef(null);
+
+  const viaStopsRef = useRef(viaStops);
+  const addressesRef = useRef(addresses);
+
+  useEffect(() => { viaStopsRef.current = viaStops; }, [viaStops]);
+  useEffect(() => { addressesRef.current = addresses; }, [addresses]);
   
+  // HUD hint state
+  const [hudMsg, setHudMsg] = useState("");
+  const [hudVisible, setHudVisible] = useState(false);
+  const hudTimerRef = useRef(null);
+
+  // Small helper to show a hint for N ms (default 5s)
+  const showHint = (msg, ms = 5000) => {
+    if (!msg) return;
+    setHudMsg(msg);
+    setHudVisible(true);
+    if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+    hudTimerRef.current = setTimeout(() => setHudVisible(false), ms);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+    };
+  }, []);
+
   const resetRouteState = () => {
    // clear computed data
    setRoutes([]);
@@ -60,6 +98,13 @@ const MainPage = ({ user })  => {
    setRawDuration(null);
    setHasCalculated(false);
    setSaveMsg("");
+
+     // ===== VIA PHASE 1: clear via state =====
+    setViaStops([]);
+    setViaStack([]);
+    setViaDraft(null);
+    setSelectedViaId(null);
+    // ========================================
 
    // clear map artifacts
    const map = mapRef.current;
@@ -86,6 +131,52 @@ const MainPage = ({ user })  => {
      zoom: 6
    });
 };
+
+// ===== VIA PHASE 1: placeholder handlers =====
+const cancelViaDraft = () => {
+  if (ghostMarkerRef.current && mapRef.current) {
+    mapRef.current.removeObject(ghostMarkerRef.current);
+    ghostMarkerRef.current = null;
+  }
+  setViaDraft(null);
+};
+
+const deleteSelectedVia = () => {
+  if (!selectedViaId) return;
+  setViaStops(stops => {
+    const newStops = stops.filter(v => v.id !== selectedViaId);
+    // reroute with updated vias
+    if (addresses.length >= 2) getRoute([...addresses], newStops);
+    return newStops;
+  });
+  setViaStack(stack => stack.filter(id => id !== selectedViaId));
+  setSelectedViaId(null);
+  // later: trigger reroute
+  // console.debug('Deleted selected via');
+};
+
+const popLastVia = () => {
+  setViaStack(stack => {
+    if (stack.length === 0) return stack;
+    const lastId = stack[stack.length - 1];
+  setViaStops(stops => {
+    const newStops = stops.filter(v => v.id !== lastId);
+    // reroute with updated vias
+    if (addresses.length >= 2) getRoute([...addresses], newStops);
+    return newStops;
+  });
+  return stack.slice(0, -1);
+  });
+};
+
+// We’ll call this when we actually create a via point (Phase 3)
+const _registerVia = (via) => {
+  // via = {id, lat, lng}
+  setViaStops(stops => [...stops, via]);
+  setViaStack(stack => [...stack, via.id]);
+  setSelectedViaId(via.id);
+};
+// =============================================
 
 
   const [selectedSegmentByIndex, setSelectedSegmentByIndex] = useState({});
@@ -274,7 +365,7 @@ const MainPage = ({ user })  => {
   };
 
   // Obținere rute
-const getRoute = async (pts = addresses) => {
+const getRoute = async (pts = addresses, vias = viaStops) => {
   setIsLoading(true);
 
   try {
@@ -285,6 +376,15 @@ const getRoute = async (pts = addresses) => {
     url += `&origin=${origin.lat},${origin.lng}`;
 
     url += `&destination=${destination.lat},${destination.lng}`;
+    // add intermediate via stops in order
+    if (Array.isArray(vias) && vias.length > 0) {
+      for (const v of vias) {
+        if (typeof v.lat === 'number' && typeof v.lng === 'number') {
+          url += `&via=${v.lat},${v.lng}`;
+        }
+      }
+    }
+
     // return what we need
     url += `&return=polyline,summary,actions,instructions,tolls`;
     url += `&alternatives=3`;
@@ -324,6 +424,15 @@ const getRoute = async (pts = addresses) => {
     setRouteTaxCosts(Array(sorted.length).fill(0));
     setTollCosts(Array(sorted.length).fill({ totalCost: 0, tollList: [] }));
     setSelectedRouteIndex(0);
+
+    // If no vias yet, gently teach the gesture
+    if ((viaStopsRef?.current ?? viaStops).length === 0) {
+      showHint("Left-click and hold on the route to place a via");
+    } else {
+      const n = (viaStopsRef?.current ?? viaStops).length;
+      showHint(n === 1 ? "Press ESC to remove the via"
+                       : "Press ESC to remove the last via");
+    }
 
     // 5️⃣ Render the fastest one on the map
     displayRoute(sorted[0]);
@@ -395,10 +504,93 @@ const displayRoute = (route) => {
       fullLineString.pushLatLngAlt(arr[i], arr[i + 1], arr[i + 2]);
     }
   });
+  fullLineStringRef.current = fullLineString;
   const poly = new window.H.map.Polyline(fullLineString, {
     style: { strokeColor: 'blue', lineWidth: 4 }
   });
   map.addObject(poly);
+
+  // ===== VIA PHASE 2/3: ghost via drag scaffold + commit =====
+  poly.addEventListener('pointerdown', (evt) => {
+    evt.stopPropagation();
+    evt.preventDefault();
+
+    // freeze map panning while we drag the ghost
+    if (behaviorRef.current) {
+      try {
+        behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+        behaviorRef.current.disable(window.H.mapevents.Behavior.KINETIC);
+      } catch {}
+    }
+
+    const { viewportX, viewportY } = evt.currentPointer || {};
+    if (typeof viewportX !== 'number') return;
+
+    const map = mapRef.current;
+    const geo = map.screenToGeo(viewportX, viewportY);
+    setViaDraft({ lat: geo.lat, lng: geo.lng });
+
+    // Create ghost DOM marker if none
+    if (!ghostMarkerRef.current) {
+      const ghostEl = document.createElement('div');
+      ghostEl.style.width = '14px';
+      ghostEl.style.height = '14px';
+      ghostEl.style.borderRadius = '50%';
+      ghostEl.style.background = 'rgba(30,144,255,0.6)';
+      ghostEl.style.boxShadow = '0 0 6px rgba(30,144,255,0.6)';
+      ghostEl.style.transform = 'translate(-50%,-50%)';
+      const ghostIcon = new window.H.map.DomIcon(ghostEl);
+      const marker = new window.H.map.DomMarker(geo, { icon: ghostIcon });
+      ghostMarkerRef.current = marker;
+      map.addObject(marker);
+    }
+
+    // start listening to pointermove while dragging
+    const onMove = (moveEvt) => {
+      const { viewportX: x, viewportY: y } = moveEvt.currentPointer;
+      const g = map.screenToGeo(x, y);
+      setViaDraft({ lat: g.lat, lng: g.lng });
+      if (ghostMarkerRef.current) ghostMarkerRef.current.setGeometry(g);
+    };
+
+    const onUp = async () => {
+      map.removeEventListener('pointermove', onMove);
+      map.removeEventListener('pointerup', onUp);
+      if (behaviorRef.current) {
+        try {
+          behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+          behaviorRef.current.enable(window.H.mapevents.Behavior.KINETIC);
+        } catch {}
+      }
+    // Commit the via: turn ghost into a real via stop and reroute
+     let committed = null;
+     if (ghostMarkerRef.current) {
+       const { lat, lng } = ghostMarkerRef.current.getGeometry();
+       committed = { id: `via_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, lat, lng };
+     }
+     // Always clear the ghost from the map/UI
+     if (ghostMarkerRef.current) { map.removeObject(ghostMarkerRef.current); ghostMarkerRef.current = null; }
+     setViaDraft(null);
+
+     if (committed) {
+       // register into ordered list + LIFO stack
+       _registerVia(committed);
+       // IMPORTANT: use the up-to-date list (we can read from function form)
+       // schedule the reroute on the next tick so state updates settle
+       setTimeout(() => {
+         // read freshest addresses/vias from refs/state
+         const pts = [...addressesRef.current];
+         const viasNow = [...(viaStopsRef.current ?? []), committed];
+         getRoute(pts, viasNow);
+       }, 0);
+     }
+     showHint("Press ESC to remove the last via", 4000);
+    };
+
+    map.addEventListener('pointermove', onMove);
+    map.addEventListener('pointerup', onUp);
+  }, true);
+  // ==============================================
 
   // fit bounds
   const bounds = fullLineString.getBoundingBox();
@@ -406,7 +598,163 @@ const displayRoute = (route) => {
   if (bounds) {
     map.getViewModel().setLookAtData({ bounds });
   }
+  // Paint via dots right after the new polyline settles
+  setTimeout(renderViaMarkers, 0);
 };
+
+// Render persistent via markers from viaStops
+const renderViaMarkers = () => {
+  const map = mapRef.current;
+  if (!map) return;
+
+  // remove old group
+  if (viaGroupRef.current) {
+    try { map.removeObject(viaGroupRef.current); } catch {}
+    viaGroupRef.current = null;
+  }
+
+  if (!viaStops.length) return;
+
+  const group = new window.H.map.Group();
+
+  viaStops.forEach((v, idx) => {
+    // Build a tiny DOM marker (selected = thicker/bright)
+    const el = document.createElement('div');
+    el.style.width = selectedViaId === v.id ? '16px' : '14px';
+    el.style.height = selectedViaId === v.id ? '16px' : '14px';
+    el.style.borderRadius = '50%';
+    el.style.transform = 'translate(-50%,-50%)';
+    el.style.background = selectedViaId === v.id
+      ? 'rgba(0,160,255,0.95)'
+      : 'rgba(0,160,255,0.65)';
+    el.style.boxShadow = selectedViaId === v.id
+      ? '0 0 10px rgba(0,160,255,0.9)'
+      : '0 0 6px rgba(0,160,255,0.6)';
+    el.style.border = selectedViaId === v.id
+      ? '2px solid white'
+      : '1px solid rgba(255,255,255,0.8)';
+    el.style.cursor = 'pointer';
+
+    // Optional tiny index badge
+    const badge = document.createElement('div');
+    badge.textContent = String(idx + 1);
+    badge.style.position = 'absolute';
+    badge.style.top = '-18px';
+    badge.style.left = '50%';
+    badge.style.transform = 'translateX(-50%)';
+    badge.style.padding = '1px 4px';
+    badge.style.fontSize = '10px';
+    badge.style.lineHeight = '12px';
+    badge.style.borderRadius = '6px';
+    badge.style.background = 'rgba(0,0,0,0.7)';
+    badge.style.color = 'white';
+    badge.style.userSelect = 'none';
+    el.appendChild(badge);
+
+    const icon = new window.H.map.DomIcon(el);
+    const m = new window.H.map.DomMarker({ lat: v.lat, lng: v.lng }, { icon, volatility: true });
+
+    // Select on click/tap
+    m.addEventListener('pointerdown', (evt) => {
+      evt.stopPropagation();
+      setSelectedViaId(v.id);
+    }, true);
+
+    // --- Drag to reorder ---
+   let dragging = false;
+   const onPointerDown = (evt) => {
+     evt.stopPropagation();
+     dragging = true;
+     el.style.cursor = 'grabbing';
+     if (behaviorRef.current) {
+       try {
+         behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+         behaviorRef.current.disable(window.H.mapevents.Behavior.KINETIC);
+       } catch {}
+     }
+     // capture moves on the map so the marker follows
+     map.addEventListener('pointermove', onPointerMove, true);
+     map.addEventListener('pointerup', onPointerUp, true);
+   };
+
+   const onPointerMove = (moveEvt) => {
+     if (!dragging) return;
+     const { viewportX, viewportY } = moveEvt.currentPointer || {};
+     if (typeof viewportX !== 'number') return;
+     const g = map.screenToGeo(viewportX, viewportY);
+     try { m.setGeometry(g); } catch {}
+   };
+
+   const onPointerUp = () => {
+     if (!dragging) return;
+     dragging = false;
+     el.style.cursor = 'grab';
+     map.removeEventListener('pointermove', onPointerMove, true);
+     map.removeEventListener('pointerup', onPointerUp, true);
+     if (behaviorRef.current) {
+       try {
+         behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+         behaviorRef.current.enable(window.H.mapevents.Behavior.KINETIC);
+       } catch {}
+     }
+
+     // Commit: update this via's coords, then reorder all vias by progress on the route
+     const g = m.getGeometry();
+     const updated = viaStops.map(x => x.id === v.id ? { ...x, lat: g.lat, lng: g.lng } : x);
+
+     // compute progress for each via
+     const withProgress = updated.map(x => ({
+       ...x,
+       __p: routeProgressIndex(x.lat, x.lng),
+     }));
+     // sort by progress along the route (ascending)
+     withProgress.sort((a,b) => a.__p - b.__p);
+     const reordered = withProgress.map(({__p, ...rest}) => rest);
+
+     setViaStops(reordered);
+     // reroute once with the new order
+     if (addresses.length >= 2) getRoute([...addresses], reordered);
+   };
+
+   // attach drag handlers on the marker DOM target
+   m.addEventListener('pointerdown', onPointerDown, true);
+
+    // Handy tooltip
+    m.setData({ title: `Via #${idx + 1}  (ESC to remove)` });
+    m.addEventListener('pointerenter', () => {
+      try { map.getElement().style.cursor = 'pointer'; } catch {}
+    });
+    m.addEventListener('pointerleave', () => {
+      try { map.getElement().style.cursor = ''; } catch {}
+    });
+
+    group.addObject(m);
+  });
+
+  map.addObject(group);
+  viaGroupRef.current = group;
+};
+
+const routeProgressIndex = (lat, lng) => {
+  const ls = fullLineStringRef.current;
+  if (!ls) return 0;
+
+  const arr = ls.getLatLngAltArray(); // [lat, lng, alt, lat, lng, alt, ...]
+  let bestIdx = 0;
+  let bestDist = Infinity;
+
+  for (let i = 0; i < arr.length; i += 3) {
+    const dLat = arr[i] - lat;
+    const dLng = arr[i + 1] - lng;
+    const d = dLat * dLat + dLng * dLng; // squared distance is fine
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i / 3; // vertex index
+    }
+  }
+  return bestIdx;
+};
+
 
   // Selectare rută
   const handleRouteSelect = (index) => {
@@ -485,7 +833,10 @@ const handleSubmit = async (e) => {
     );
 
     map.getElement().addEventListener('contextmenu', e => e.preventDefault());
-    new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
+
+    // ⬇️ THIS is the spot: store Behavior in behaviorRef
+    const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
+    behaviorRef.current = behavior; // <— important
 
 
     const ui = window.H.ui.UI.createDefault(map, defaultLayers);
@@ -498,10 +849,11 @@ const handleSubmit = async (e) => {
     setTimeout(() => {
       map.getViewPort().resize();
     }, 0);
-  
-    window.addEventListener("resize", () => map.getViewPort().resize());
+
+    const onResize = () => map.getViewPort().resize();
+    window.addEventListener("resize", onResize);
     return () => {
-      window.removeEventListener("resize", () => map.getViewPort().resize());
+      window.removeEventListener("resize", onResize);
     };
   }, []);
   
@@ -560,7 +912,68 @@ const handleSubmit = async (e) => {
     mapRef.current.addObject(group);
     markerGroupRef.current = group;
   }, [addresses]);
-  
+
+  // ===== VIA PHASE 1: global ESC handler =====
+useEffect(() => {
+  const isEditable = (el) => {
+    if (!el) return false;
+    const tag = el.tagName?.toLowerCase?.();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key !== 'Escape') return;
+    // don’t hijack ESC while user is typing
+    if (isEditable(document.activeElement)) return;
+
+    if (viaDraft) {
+      cancelViaDraft();
+      return;
+    }
+    if (selectedViaId) {
+      deleteSelectedVia();
+      return;
+    }
+    if (viaStack.length > 0) {
+      popLastVia();
+      return;
+    }
+    // nothing to do — no-ops
+  };
+
+  window.addEventListener('keydown', onKeyDown, true);
+  return () => window.removeEventListener('keydown', onKeyDown, true);
+}, [viaDraft, selectedViaId, viaStack.length]); 
+// ===========================================
+
+  useEffect(() => {
+    renderViaMarkers();
+  }, [routes, selectedRouteIndex, selectedViaId]);
+
+  useEffect(() => {
+    if (!selectedViaId) return;
+    const stillExists = viaStops.some(v => v.id === selectedViaId);
+    if (!stillExists) setSelectedViaId(null);
+  }, [viaStops, selectedViaId]);
+
+  useEffect(() => {
+    renderViaMarkers();
+  }, [viaStops]);
+
+  useEffect(() => {
+    if (!routes.length) return; // only after we have a route
+    if (viaStops.length === 0) {
+      // don’t spam if user just closed it manually; short display
+      showHint("Left-click and hold on the route to place a via", 3500);
+    } else {
+      const n = viaStops.length;
+      showHint(n === 1 ? "Press ESC to remove the via"
+                      : "Press ESC to remove the last via", 4000);
+    }
+  }, [viaStops.length, routes.length]);
+
   useEffect(() => {
     (async () => {
       // 1️⃣ fetch the user’s team & role
@@ -1009,6 +1422,40 @@ const handleSubmit = async (e) => {
             id="mapContainer"
             className="w-1/2 h-full relative overflow-hidden"
           >
+          </div>
+          {/* Hints HUD */}
+          <div
+            aria-live="polite"
+            style={{
+              position: "absolute",
+              left: 12,
+              bottom: 12,
+              maxWidth: 320,
+              zIndex: 10,
+              pointerEvents: "none",
+              transition: "opacity 240ms ease, transform 240ms ease",
+              opacity: hudVisible ? 1 : 0,
+              transform: `translateY(${hudVisible ? 0 : 6}px)`,
+            }}
+          >
+            {hudMsg && (
+              <div
+                style={{
+                  backdropFilter: "blur(6px)",
+                  WebkitBackdropFilter: "blur(6px)",
+                  background: "rgba(17, 24, 39, 0.72)", // slate-900 with alpha
+                  color: "white",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 12,
+                  padding: "8px 12px",
+                  boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
+                  fontSize: 13,
+                  lineHeight: "18px",
+                }}
+              >
+                {hudMsg}
+              </div>
+            )}
           </div>
         </div>
 
