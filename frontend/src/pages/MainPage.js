@@ -1422,41 +1422,43 @@ useEffect(() => {
             id="mapContainer"
             className="w-1/2 h-full relative overflow-hidden"
           >
+            {/* Hints HUD (inside the map, top-center) */}
+            <div
+              aria-live="polite"
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "calc(12px + env(safe-area-inset-top, 0px))",
+                transform: `translate(-50%, ${hudVisible ? "0" : "-6px"})`,
+                zIndex: 1000,
+                pointerEvents: "none",
+                transition: "opacity 200ms ease, transform 200ms ease",
+                opacity: hudVisible ? 1 : 0,
+                maxWidth: 420,
+              }}
+            >
+              {hudMsg && (
+                <div
+                  style={{
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)",
+                    background: "rgba(17, 24, 39, 0.72)", // slate-900 w/ alpha
+                    color: "white",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 12,
+                    padding: "8px 12px",
+                    boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
+                    fontSize: 13,
+                    lineHeight: "18px",
+                    textAlign: "center",
+                  }}
+                >
+                  {hudMsg}
+                </div>
+              )}
+            </div>
           </div>
-          {/* Hints HUD */}
-          <div
-            aria-live="polite"
-            style={{
-              position: "absolute",
-              left: 12,
-              bottom: 12,
-              maxWidth: 320,
-              zIndex: 10,
-              pointerEvents: "none",
-              transition: "opacity 240ms ease, transform 240ms ease",
-              opacity: hudVisible ? 1 : 0,
-              transform: `translateY(${hudVisible ? 0 : 6}px)`,
-            }}
-          >
-            {hudMsg && (
-              <div
-                style={{
-                  backdropFilter: "blur(6px)",
-                  WebkitBackdropFilter: "blur(6px)",
-                  background: "rgba(17, 24, 39, 0.72)", // slate-900 with alpha
-                  color: "white",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: 12,
-                  padding: "8px 12px",
-                  boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
-                  fontSize: 13,
-                  lineHeight: "18px",
-                }}
-              >
-                {hudMsg}
-              </div>
-            )}
-          </div>
+
         </div>
 
         {/* FOOTER */}
