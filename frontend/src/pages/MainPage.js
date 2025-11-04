@@ -164,13 +164,15 @@ const buildOrderedVias = (pts, legs) => {
   const nLegs  = Math.max(nStops - 1, 0);
 
   for (let i = 0; i < nLegs; i++) {
-    // 1) per-leg custom vias first
-    const arr = Array.isArray(legs?.[i]) ? legs[i] : [];
-    for (const v of arr) {
-      if (typeof v.lat === 'number' && typeof v.lng === 'number') {
-        out.push({ lat: v.lat, lng: v.lng });
-      }
-    }
+     // 1) per-leg custom vias, auto-sorted along leg direction
+     const arr = Array.isArray(legs?.[i]) ? legs[i] : [];
+     const legStart = pts[i];
+     const legEnd   = pts[i + 1];
+     const sorted = sortViasAlongLeg(
+       arr.filter(v => typeof v.lat === 'number' && typeof v.lng === 'number'),
+       legStart, legEnd
+     );
+     for (const v of sorted) out.push({ lat: v.lat, lng: v.lng });
     // 2) then the mandatory stop at the end of this leg (B for leg A→B, etc.)
     // (But do NOT push the final destination here; it will be the &destination)
     if (i < nLegs - 1) {
@@ -288,6 +290,25 @@ const popLastVia = () => {
     return stack.slice(0, -1);
   });
 };
+
+// Sort vias by their progress along the straight line from leg start -> leg end.
+// We project each via onto the start->end vector and sort by that scalar "t".
+const sortViasAlongLeg = (vias, legStart, legEnd) => {
+  if (!Array.isArray(vias) || vias.length <= 1) return vias || [];
+
+  const ax = legEnd.lng - legStart.lng;
+  const ay = legEnd.lat - legStart.lat;
+  const denom = ax*ax + ay*ay || 1;
+
+  const progress = (p) => {
+    const px = p.lng - legStart.lng;
+    const py = p.lat - legStart.lat;
+    return (px*ax + py*ay) / denom; // smaller -> closer to start, larger -> closer to end
+  };
+
+  return vias.slice().sort((a, b) => progress(a) - progress(b));
+};
+
 
 // Register a new via into a specific leg
 const _registerVia = (legIdx, via) => {
