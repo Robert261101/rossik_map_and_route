@@ -157,6 +157,29 @@ const ensureLegSlots = (legs, count) => {
 
 const getActiveLegIdx = () => activeLegIdxRef.current;
 
+// Expand a HERE bbox by a factor (e.g., 1.08 = +8% on each half-extent)
+const inflateRect = (rect, factor = 1.10) => {
+  const c = rect.getCenter();
+  const top    = rect.getTop();
+  const left   = rect.getLeft();
+  const bottom = rect.getBottom();
+  const right  = rect.getRight();
+
+  const halfLat = Math.max(top - c.lat, c.lat - bottom);
+  const halfLng = Math.max(c.lng - left, right - c.lng);
+
+  const newHalfLat = halfLat * factor;
+  const newHalfLng = halfLng * factor;
+
+  const newTop    = c.lat + newHalfLat;
+  const newBottom = c.lat - newHalfLat;
+  const newLeft   = c.lng - newHalfLng;
+  const newRight  = c.lng + newHalfLng;
+
+  return new window.H.geo.Rect(newTop, newLeft, newBottom, newRight);
+};
+
+
 // NEW: build ordered vias including mandatory intermediate stops
 const buildOrderedVias = (pts, legs) => {
   const out = [];
@@ -718,11 +741,12 @@ const displayedRoute = (route) => {
   // ==============================================
 
   // fit bounds
-  const bounds = fullLineString.getBoundingBox();
-
-  if (bounds) {
-    map.getViewModel().setLookAtData({ bounds });
-  }
+const bounds = fullLineString.getBoundingBox();
+if (bounds) {
+   // Tweak factor: 1.06 (subtle) … 1.15 (more generous)
+   const padded = inflateRect(bounds, 1.10);
+   map.getViewModel().setLookAtData({ bounds: padded });
+ }
   // Paint via dots right after the new polyline settles
   setTimeout(renderViaMarkers, 0);
 };
