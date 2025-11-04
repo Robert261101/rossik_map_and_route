@@ -490,12 +490,12 @@ async function handleCopy(id) {
   
 
   return (
-   <div  className=" min-h-screen transition-colors bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800 dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100 "  style={{ fontFamily: "Arial, sans-serif" }} >
+    <div  className=" min-h-screen transition-colors bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800 dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100 "  style={{ fontFamily: "Arial, sans-serif" }} >
       <Header user={user} />
       <div className="flex items-start gap-5 px-3 py-4">
         {/* FORM */}
         <form onSubmit={handleSubmit} className={`flex-1 ${panel}`}>
-          <h3 style={{ color: "#8a1414", marginTop: 0 }}>Vehicle availability</h3>
+          <h3 style={{ fontWeight: 700, color: "#FCA5A5", marginTop: 0 }}>Vehicle availability</h3>
 
           {/* Addresses */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -507,7 +507,7 @@ async function handleCopy(id) {
                 value={loadingLoc}
                 onSelect={handleSelectLoading}
               />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
                 <input type="date" value={loadStartDate} onChange={(e) => setLoadStartDate(e.target.value)} className={field} />
                 <input type="time" value={loadStartTime} onChange={(e) => setLoadStartTime(e.target.value)} step="60" className={field} />
                 <input type="date" value={loadEndDate} onChange={(e) => setLoadEndDate(e.target.value)} className={field} />
@@ -542,7 +542,7 @@ async function handleCopy(id) {
 
           {/* Requirements */}
           <fieldset className="p-3 rounded-lg border border-gray-300 dark:border-gray-700 mb-4 bg-white dark:bg-gray-900/40">
-            <legend style={{ fontWeight: 700, color: "#8a1414" }}>Requirements</legend>
+            <legend style={{ fontWeight: 700, color: "#FCA5A5" }}>Requirements</legend>
 
             {/* Vehicle type (radio) */}
             <div style={{ marginBottom: 8 }}>
@@ -555,7 +555,7 @@ async function handleCopy(id) {
             </div>
 
             {/* Trailer type */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <label>
                 <span style={{ fontWeight: 700 }}>Trailer Type</span>
                 <select value={trailerType} onChange={(e) => setTrailerType(Number(e.target.value))} className={field}>
@@ -571,7 +571,7 @@ async function handleCopy(id) {
             </div>
 
             {/* Numeric fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
               <label>
                 <span style={{ fontWeight: 700 }}>Weight (t)</span>
                 <input value={capacityT} onChange={(e) => setCapacityT(e.target.value)} className={field} />
@@ -607,18 +607,18 @@ async function handleCopy(id) {
             <label><strong>Comments</strong></label>
             <input value={comments} onChange={(e) => setComments(e.target.value)} className={field} />
           </div>
-          <button type="submit" disabled={submitting} className={btnCls} >
+          <button type="submit" disabled={submitting} style={{ ...btn, opacity: submitting ? 0.7 : 1 }}>
             {submitting ? "Publishing…" : "Publish"}
           </button>
         </form>
 
         {/* Tiny list of submitted vehicles (local) */}
         <div className={`flex-1 ${panel}`}>
-          <h3 style={{ color: "#8a1414", marginTop: 0 }}>Published vehicles</h3>
+          <h3 style={{ fontWeight: 700, color: "#FCA5A5", marginTop: 0 }}>Published vehicles</h3>
           {vehicles.length === 0 ? (
             <p>No vehicles yet.</p>
           ) : (
-            <table className="w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 text-gray-900 dark:text-gray-100">
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr className="bg-red-50 dark:bg-gray-800">
                   <th className="px-3 py-2 text-left border-b border-gray-200 dark:border-gray-700">Owner</th>
@@ -626,15 +626,16 @@ async function handleCopy(id) {
                   <th className="px-3 py-2 text-left border-b border-gray-200 dark:border-gray-700">Unloading</th>
                   <th className="px-3 py-2 text-center border-b border-gray-200 dark:border-gray-700">Action</th>
                 </tr>
+
               </thead>
               <tbody>
                 {vehicles.map((v) => (
-                  <tr key={v.id} className="odd:bg-white even:bg-gray-50 dark:odd:bg-gray-800/40 dark:even:bg-gray-800/20">
-                    <td className="px-3 py-2">{v.owner}</td>
-                    <td className="px-3 py-2">{v.loading}</td>
-                    <td className="px-3 py-2">{v.unloading}</td>
-                    <td className="px-3 py-2 text-center">
-                      <div className="flex gap-2 justify-center flex-wrap">
+                  <tr key={v.id} className="odd:bg-white even:bg-gray-50 dark:odd:bg-gray-800/40 dark:even:bg-gray-800/20"> 
+                    <td style={{ padding: 8 }}>{v.owner}</td>
+                    <td style={{ padding: 8 }}>{v.loading}</td>
+                    <td style={{ padding: 8 }}>{v.unloading}</td>
+                    <td style={{ padding: 8, textAlign: "center" }}>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
                         <button type="button" onClick={() => handleCopy(v.id)} className="px-4 py-2 rounded font-bold text-white bg-sky-800 hover:bg-sky-900">
                           Copy
                         </button>
