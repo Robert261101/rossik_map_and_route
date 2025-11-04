@@ -67,37 +67,41 @@ const bodyTypes = {
 // };
 
 const Modal = memo(function Modal({ open, title, onClose, children }) {
-  if (!open) return null;
+    if (!open) return null;
 
-  const backdrop = {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-  };
-  const card = {
-    background: '#fff', borderRadius: 8, width: 'min(560px, 92vw)',
-    boxShadow: '0 10px 24px rgba(0,0,0,0.25)', padding: 16
-  };
-  const xBtn = {
-    border: 'none', background: 'transparent', fontSize: 20, lineHeight: 1,
-    cursor: 'pointer', padding: 4, color: '#b91c1c'
-  };
+    const backdrop = {
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+    };
+    const card = {
+        backgroundColor: '#1f2937',
+        borderRadius: '0.5rem',
+        padding: '1rem',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+        transition: 'background-color 0.3s ease, color 0.3s ease',
+        };
+    const xBtn = {
+        border: 'none', background: 'transparent', fontSize: 20, lineHeight: 1,
+        cursor: 'pointer', padding: 4, color: '#b91c1c'
+    };
 
-  return (
-    <div style={backdrop} onMouseDown={onClose}>
-      <div
-        style={card}
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={e => e.stopPropagation()} // keep clicks inside from closing
-      >
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-          <h4 style={{margin:0}}>{title}</h4>
-          <button type="button" onClick={onClose} aria-label="Close" style={xBtn}>✕</button>
+    return (
+        <div style={backdrop} onMouseDown={onClose}>
+        <div
+            style={card}
+            className=" bg-white text-gray-900 border border-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={e => e.stopPropagation()} // keep clicks inside from closing
+        >
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+            <h4 style={{margin:0}}>{title}</h4>
+            <button type="button" onClick={onClose} aria-label="Close" style={xBtn}>✕</button>
+            </div>
+            {children}
         </div>
-        {children}
-      </div>
-    </div>
-  );
+        </div>
+    );
 });
 
 
@@ -1823,60 +1827,60 @@ export default function SpotGoPage({ user }) {
 
             {/* Address Fields */}
             <div className="flex flex-wrap items-start gap-7 mb-5 pb-4 border-b border-dashed border-slate-800/70 dark:border-slate-200/20">
-            <div className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900/40">
-            <label style={{ fontWeight: 'bold' }}>Loading Address:</label><br />
-                <AutoCompleteInput key={`loading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
-                {loadingLocation && (
-                <div style={{ marginTop: 8 }}>
-                    <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
-                        <input
-                            type="checkbox"
-                            checked={multiLoading}
-                            // disabled={postMultipleUnloading}   // keep “only one” rule
-                            onChange={e => {
-                                const on = e.target.checked;
-                                setMultiLoading(on);
-                                if (on && !batchCfgReady) {
-                                    setShowMultiConfig(true); // open once; after Save we won’t open again
-                                }
-                            }}
-                        />
-                        <strong>Post multiple</strong>
-                    </label>
+                <div className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900/40">
+                <label style={{ fontWeight: 'bold' }}>Loading Address:</label><br />
+                    <AutoCompleteInput key={`loading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={loadingLocation} onSelect={handleLoadingSelect} />
+                    {loadingLocation && (
+                    <div style={{ marginTop: 8 }}>
+                        <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                            <input
+                                type="checkbox"
+                                checked={multiLoading}
+                                // disabled={postMultipleUnloading}   // keep “only one” rule
+                                onChange={e => {
+                                    const on = e.target.checked;
+                                    setMultiLoading(on);
+                                    if (on && !batchCfgReady) {
+                                        setShowMultiConfig(true); // open once; after Save we won’t open again
+                                    }
+                                }}
+                            />
+                            <strong>Post multiple</strong>
+                        </label>
+                    </div>
+                    )}
                 </div>
-                )}
-            </div>
 
-            <div className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900/40">
-                <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
-                <AutoCompleteInput key={`unloading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
-                {unloadingLocation && (
-                <div style={{ marginTop: 8 }}>
-                    <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
-                        <input
-                            type="checkbox"
-                            checked={multiUnloading}
-                            // disabled={postMultipleLoading}    // keep “only one” rule
-                            onChange={e => {
-                                const on = e.target.checked;
-                                setMultiUnloading(on);
-                                if (on && !batchCfgReady) {
-                                    setShowMultiConfig(true);
-                                }
-                            }}
-                        />
-                        <strong>Post multiple</strong>
-                    </label>
+                <div className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900/40">
+                    <label style={{ fontWeight: 'bold' }}>Unloading Address:</label><br />
+                    <AutoCompleteInput key={`unloading-${resetKey}`} apiKey={process.env.REACT_APP_HERE_API_KEY} value={unloadingLocation} onSelect={handleUnloadingSelect} />
+                    {unloadingLocation && (
+                    <div style={{ marginTop: 8 }}>
+                        <label style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                            <input
+                                type="checkbox"
+                                checked={multiUnloading}
+                                // disabled={postMultipleLoading}    // keep “only one” rule
+                                onChange={e => {
+                                    const on = e.target.checked;
+                                    setMultiUnloading(on);
+                                    if (on && !batchCfgReady) {
+                                        setShowMultiConfig(true);
+                                    }
+                                }}
+                            />
+                            <strong>Post multiple</strong>
+                        </label>
+                    </div>
+                    )}
+
                 </div>
-                )}
-
-            </div>
             </div>
 
             {/* Date & Time Inputs */}
             <div className="mb-5 pb-4 border-b border-dashed border-slate-800/70 dark:border-slate-200/20 flex flex-wrap gap-7">
                 <fieldset className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40">
-                    <legend style={{ fontWeight: 'bold', color: '#8a1414ff' }}>Loading Time</legend>
+                    <legend style={{ fontWeight: 'bold', color: '#FCA5A5' }}>Loading Time</legend>
                     <label>Start:</label>
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                         <input type="date" value={loadStartDate} onChange={e => setLoadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
@@ -1903,7 +1907,7 @@ export default function SpotGoPage({ user }) {
                 </fieldset>
 
                 <fieldset className="flex-1 min-w-[300px] p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40">
-                    <legend style={{ fontWeight: 'bold', color: '#8a1414ff' }}>Unloading Time</legend>
+                    <legend style={{ fontWeight: 'bold', color: '#FCA5A5' }}>Unloading Time</legend>
                     <label>Start:</label>
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                         <input type="date" value={unloadStartDate} onChange={e => setUnloadStartDate(e.target.value)} onFocus={handleFocus} onBlur={handleBlur} className={`${field} flex-1`} />
