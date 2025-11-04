@@ -44,31 +44,46 @@ const MainPage = ({ user })  => {
   const [saveMsg, setSaveMsg] = useState('');
   const [durationWithBreaks, setDurationWithBreaks] = useState(null);
 
-  // at the top of MainPage
   const [addressQuery, setAddressQuery] = useState("");
 
-  // ===== VIA PHASE 1: state scaffolding =====
-  const [viaStops, setViaStops] = useState([]);         // [{id, lat, lng}] in order
-  const [viaStack, setViaStack] = useState([]);         // [id, ...] for LIFO delete
-  const [viaDraft, setViaDraft] = useState(null);       // {lat, lng} while dragging-to-add (ghost)
-  const [selectedViaId, setSelectedViaId] = useState(null); // which via is “selected” for delete
+  // ===== VIA PHASE 1: state scaffolding (per-leg) =====
+  // viaStopsByLeg: Array of arrays, length = max(addresses.length - 1, 0)
+  // Example for A->B->C: [ [vias on A-B], [vias on B-C] ]
+  const [viaStopsByLeg, setViaStopsByLeg] = useState([]); // [[{id,lat,lng},...], ...]
+  const [viaStack, setViaStack] = useState([]);           // [{legIdx, id}, ...] for LIFO delete
+  const [viaDraft, setViaDraft] = useState(null);         // {lat, lng} while dragging-to-add (ghost)
+  const [selectedVia, setSelectedVia] = useState(null);   // {legIdx, id} selected for delete
   // ==========================================
+
+  const [activeLegIdx, setActiveLegIdx] = useState(0);
 
   const ghostMarkerRef = useRef(null);
   const behaviorRef = useRef(null);
   const viaGroupRef = useRef(null);
   const fullLineStringRef = useRef(null);
 
-  const viaStopsRef = useRef(viaStops);
-  const addressesRef = useRef(addresses);
+  const activeLegIdxRef = useRef(0);
+  useEffect(() => { activeLegIdxRef.current = activeLegIdx; }, [activeLegIdx]);
 
-  useEffect(() => { viaStopsRef.current = viaStops; }, [viaStops]);
+  const addressesRef = useRef(addresses);
+  const viaStopsByLegRef = useRef(viaStopsByLeg);
+
   useEffect(() => { addressesRef.current = addresses; }, [addresses]);
+  useEffect(() => { viaStopsByLegRef.current = viaStopsByLeg; }, [viaStopsByLeg]);
   
   // HUD hint state
   const [hudMsg, setHudMsg] = useState("");
   const [hudVisible, setHudVisible] = useState(false);
   const hudTimerRef = useRef(null);
+
+  const syncLegArrays = (count) => {
+    // grow/shrink to `count` legs
+    setViaStopsByLeg(prev => {
+      const copy = prev.slice(0, count).map(arr => arr || []);
+      while (copy.length < count) copy.push([]);
+      return copy;
+    });
+  };
 
   // Small helper to show a hint for N ms (default 5s)
   const showHint = (msg, ms = 5000) => {
@@ -78,6 +93,95 @@ const MainPage = ({ user })  => {
     if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
     hudTimerRef.current = setTimeout(() => setHudVisible(false), ms);
   };
+
+  // Decode a section's flexible polyline to a flat [lat,lng,lat,lng,...] array
+const sectionLatLngs = (sec) => {
+  const ls = window.H.geo.LineString.fromFlexiblePolyline(sec.polyline);
+  return ls.getLatLngAltArray(); // [lat,lng,alt,...]; we use every 3rd item
+};
+
+// Squared distance between two lat/lng points (good enough for nearest tests)
+const d2 = (aLat, aLng, bLat, bLng) => {
+  const dlat = aLat - bLat, dlng = aLng - bLng;
+  return dlat * dlat + dlng * dlng;
+};
+
+// Find index of the route.section that is closest to (lat,lng)
+const nearestSectionIndex = (lat, lng, route) => {
+  let best = { idx: 0, d2: Infinity };
+  (route.sections || []).forEach((sec, idx) => {
+    const arr = sectionLatLngs(sec);
+    for (let i = 0; i < arr.length; i += 3) {
+      const candLat = arr[i], candLng = arr[i + 1];
+      const dd = d2(lat, lng, candLat, candLng);
+      if (dd < best.d2) best = { idx, d2: dd };
+    }
+  });
+  return best.idx;
+};
+
+// Map a section index to a leg index using the current per-leg via counts.
+// Each leg i has (viaCount[i] + 1) sections.
+const sectionIndexToLegIndex = (sectionIdx, viaStopsByLeg, addresses) => {
+  const nLegs = Math.max((addresses?.length || 0) - 1, 0);
+  const viaCounts = Array.from({ length: nLegs }, (_, i) => (viaStopsByLeg?.[i]?.length || 0));
+  let cursor = 0;
+  for (let i = 0; i < nLegs; i++) {
+    const take = viaCounts[i] + 1;
+    const start = cursor;
+    const end = cursor + take - 1; // inclusive
+    if (sectionIdx >= start && sectionIdx <= end) return i;
+    cursor += take;
+  }
+  return Math.max(0, Math.min(nLegs - 1, sectionIdx)); // fallback safety
+};
+
+
+  // Given addresses and per-leg vias, produce a flat, ordered list: [vias on A->B, then on B->C, ...]
+const flattenViasInOrder = (pts, legs) => {
+  const nLegs = Math.max((pts?.length || 0) - 1, 0);
+  const out = [];
+  for (let i = 0; i < nLegs; i++) {
+    const arr = Array.isArray(legs?.[i]) ? legs[i] : [];
+    for (const v of arr) if (typeof v.lat === 'number' && typeof v.lng === 'number') out.push(v);
+  }
+  return out;
+};
+
+// Ensure viaStopsByLeg has exactly (addresses.length - 1) arrays
+const ensureLegSlots = (legs, count) => {
+  const copy = (legs || []).slice(0, count).map(a => a || []);
+  while (copy.length < count) copy.push([]);
+  return copy;
+};
+
+const getActiveLegIdx = () => activeLegIdxRef.current;
+
+// NEW: build ordered vias including mandatory intermediate stops
+const buildOrderedVias = (pts, legs) => {
+  const out = [];
+  const nStops = Math.max((pts?.length || 0), 0);
+  const nLegs  = Math.max(nStops - 1, 0);
+
+  for (let i = 0; i < nLegs; i++) {
+    // 1) per-leg custom vias first
+    const arr = Array.isArray(legs?.[i]) ? legs[i] : [];
+    for (const v of arr) {
+      if (typeof v.lat === 'number' && typeof v.lng === 'number') {
+        out.push({ lat: v.lat, lng: v.lng });
+      }
+    }
+    // 2) then the mandatory stop at the end of this leg (B for leg A→B, etc.)
+    // (But do NOT push the final destination here; it will be the &destination)
+    if (i < nLegs - 1) {
+      const mandatoryStop = pts[i + 1];
+      if (mandatoryStop && typeof mandatoryStop.lat === 'number' && typeof mandatoryStop.lng === 'number') {
+        out.push({ lat: mandatoryStop.lat, lng: mandatoryStop.lng });
+      }
+    }
+  }
+  return out;
+};
 
   useEffect(() => {
     return () => {
@@ -100,10 +204,10 @@ const MainPage = ({ user })  => {
    setSaveMsg("");
 
      // ===== VIA PHASE 1: clear via state =====
-    setViaStops([]);
+    setViaStopsByLeg([]);
     setViaStack([]);
     setViaDraft(null);
-    setSelectedViaId(null);
+    setSelectedVia(null);
     // ========================================
 
    // clear map artifacts
@@ -142,49 +246,63 @@ const cancelViaDraft = () => {
 };
 
 const deleteSelectedVia = () => {
-  if (!selectedViaId) return;
-  setViaStops(stops => {
-    const newStops = stops.filter(v => v.id !== selectedViaId);
-    // reroute with updated vias
-    if (addresses.length >= 2) getRoute([...addresses], newStops);
-    return newStops;
+  if (!selectedVia?.id && selectedVia?.legIdx == null) return;
+
+  const { legIdx, id } = selectedVia;
+
+  setViaStopsByLeg(prev => {
+    const base = ensureLegSlots(prev, Math.max((addressesRef.current?.length || 0) - 1, 0));
+    base[legIdx] = (base[legIdx] || []).filter(v => v.id !== id);
+    return base;
   });
-  setViaStack(stack => stack.filter(id => id !== selectedViaId));
-  setSelectedViaId(null);
-  // later: trigger reroute
-  // console.debug('Deleted selected via');
+
+  setViaStack(stack => stack.filter(x => !(x.legIdx === legIdx && x.id === id)));
+
+  setSelectedVia(null);
+
+  // re-route after state settles
+  setTimeout(() => {
+    if (addressesRef.current?.length >= 2) {
+      getRoute([...addressesRef.current], viaStopsByLegRef.current);
+    }
+  }, 0);
 };
 
 const popLastVia = () => {
   setViaStack(stack => {
     if (stack.length === 0) return stack;
-    const lastId = stack[stack.length - 1];
-  setViaStops(stops => {
-    const newStops = stops.filter(v => v.id !== lastId);
-    // reroute with updated vias
-    if (addresses.length >= 2) getRoute([...addresses], newStops);
-    return newStops;
-  });
-  return stack.slice(0, -1);
+    const last = stack[stack.length - 1]; // {legIdx, id}
+
+    setViaStopsByLeg(prev => {
+      const base = ensureLegSlots(prev, Math.max((addressesRef.current?.length || 0) - 1, 0));
+      base[last.legIdx] = (base[last.legIdx] || []).filter(v => v.id !== last.id);
+      return base;
+    });
+
+    setTimeout(() => {
+      if (addressesRef.current?.length >= 2) {
+        getRoute([...addressesRef.current], viaStopsByLegRef.current);
+      }
+    }, 0);
+
+    return stack.slice(0, -1);
   });
 };
 
-// We’ll call this when we actually create a via point (Phase 3)
-const _registerVia = (via) => {
-  // via = {id, lat, lng}
-  setViaStops(stops => [...stops, via]);
-  setViaStack(stack => [...stack, via.id]);
-  setSelectedViaId(via.id);
+// Register a new via into a specific leg
+const _registerVia = (legIdx, via) => {
+  setViaStopsByLeg(prev => {
+    const base = ensureLegSlots(prev, Math.max((addressesRef.current?.length || 0) - 1, 0));
+    base[legIdx] = [...(base[legIdx] || []), via];
+    return base;
+  });
+  setViaStack(stack => [...stack, { legIdx, id: via.id }]);
+  setSelectedVia({ legIdx, id: via.id });
 };
-// =============================================
 
 
   const [selectedSegmentByIndex, setSelectedSegmentByIndex] = useState({});
 
-  // când lista de rute se schimbă, resetăm selecțiile
-  useEffect(() => {
-    setSelectedSegmentByIndex({});
-  }, [routes]);
 
   // Segmente etichetate cu orașele din `addresses`
   function getSegmentsForRoute(rt) {
@@ -339,7 +457,7 @@ const _registerVia = (via) => {
 
     setAddresses(prev => {
       const next = [...prev, { ...coordsWithLabel, postal: code || "", country: countryCode, city }];
-      return next.slice(0, 2); // hard-cap at 2 (origin, destination)
+      return next // hard-cap at 2 (origin, destination)
     });
     console.log('picked address: ', coordsWithLabel)
   };
@@ -364,32 +482,25 @@ const _registerVia = (via) => {
     }
   };
 
-  // Obținere rute
-const getRoute = async (pts = addresses, vias = viaStops) => {
+const getRoute = async (pts = addresses, viasByLeg = viaStopsByLegRef.current) => {
   setIsLoading(true);
-
   try {
     const origin = pts[0];
     const destination = pts[pts.length - 1];
 
     let url = `https://router.hereapi.com/v8/routes?apikey=${process.env.REACT_APP_HERE_API_KEY}`;
     url += `&origin=${origin.lat},${origin.lng}`;
-
     url += `&destination=${destination.lat},${destination.lng}`;
-    // add intermediate via stops in order
-    if (Array.isArray(vias) && vias.length > 0) {
-      for (const v of vias) {
-        if (typeof v.lat === 'number' && typeof v.lng === 'number') {
-          url += `&via=${v.lat},${v.lng}`;
-        }
-      }
+
+    const orderedVias = buildOrderedVias(pts, viasByLeg);
+    for (const v of orderedVias) {
+      url += `&via=${v.lat},${v.lng}`;
     }
 
-    // return what we need
     url += `&return=polyline,summary,actions,instructions,tolls`;
     url += `&alternatives=3`;
 
-    // truck profile
+    // truck profile…
     url += `&transportMode=truck`;
     url += `&vehicle[weightPerAxle]=11500`;
     url += `&vehicle[height]=400`;
@@ -400,67 +511,51 @@ const getRoute = async (pts = addresses, vias = viaStops) => {
     url += `&truck[limitedWeight]=7500`;
     url += `&tolls[emissionType]=euro6`;
 
-    // 2️⃣ Fetch & parse
     const response = await fetch(url);
     const data = await response.json();
-
     if (!data.routes || data.routes.length === 0) {
       console.error("No routes found:", data);
       alert("No routes found. Try different points.");
       return;
     }
 
-    // 3️⃣ Sort by raw duration
     const sorted = data.routes
-      .map(route => ({
-        route,
-        duration: route.sections.reduce((sum, s) => sum + (s.summary?.duration || 0), 0)
-      }))
+      .map(route => ({ route, duration: route.sections.reduce((s, x) => s + (x.summary?.duration || 0), 0) }))
       .sort((a, b) => a.duration - b.duration)
       .map(item => item.route);
 
-    // 4️⃣ Initialize state
     setRoutes(sorted);
     setRouteTaxCosts(Array(sorted.length).fill(0));
     setTollCosts(Array(sorted.length).fill({ totalCost: 0, tollList: [] }));
-    setSelectedRouteIndex(0);
+    setSelectedRouteIndex(idx => (idx == null ? 0 : Math.max(0, Math.min(idx, sorted.length - 1))));
 
-    // If no vias yet, gently teach the gesture
-    if ((viaStopsRef?.current ?? viaStops).length === 0) {
+
+    const legCount = Math.max((addressesRef.current?.length || 0) - 1, 0);
+    syncLegArrays(legCount);
+
+    // Teach the gesture based on per-leg vias
+    const hasAnyVia = (viaStopsByLegRef.current || []).some(arr => (arr?.length || 0) > 0);
+    if (!hasAnyVia) {
       showHint("Left-click and hold on the route to place a via");
     } else {
-      const n = (viaStopsRef?.current ?? viaStops).length;
-      showHint(n === 1 ? "Press ESC to remove the via"
-                       : "Press ESC to remove the last via");
+      const n = (viaStopsByLegRef.current || []).reduce((acc, arr) => acc + (arr?.length || 0), 0);
+      showHint(n === 1 ? "Press ESC to remove the via" : "Press ESC to remove the last via");
     }
 
-    // 5️⃣ Render the fastest one on the map
-    displayRoute(sorted[0]);
-
-
-    // 6️⃣ Extract summary for the first route
+    // draw fastest, compute summaries…
+    displayedRoute(sorted[0]);
     const first = sorted[0];
-    let totalDist = 0;
-    let totalDur = 0;
+    let totalDist = 0, totalDur = 0;
     first.sections.forEach(sec => {
-      if (sec.summary) {
-        totalDist += sec.summary.length;
-        totalDur  += sec.summary.duration;
-      }
+      if (sec.summary) { totalDist += sec.summary.length; totalDur += sec.summary.duration; }
     });
     setDistance((totalDist / 1000).toFixed(2));
     setRawDistance(totalDist);
     setRawDuration(totalDur);
 
     const breaks = addLegalBreaks(totalDur);
-    const h = Math.floor(breaks / 3600);
-    const m = Math.floor((breaks % 3600) / 60);
-    setDurationWithBreaks(`${h}h ${m}m`);
-
-    const hh = Math.floor(totalDur / 3600);
-    const mm = Math.floor((totalDur % 3600) / 60);
-    setDuration(`${hh}h ${mm}m`);
-
+    setDurationWithBreaks(`${Math.floor(breaks / 3600)}h ${Math.floor((breaks % 3600) / 60)}m`);
+    setDuration(`${Math.floor(totalDur / 3600)}h ${Math.floor((totalDur % 3600) / 60)}m`);
   } catch (err) {
     console.error("Error fetching route:", err);
     alert("Error calculating route. Please try again.");
@@ -469,23 +564,29 @@ const getRoute = async (pts = addresses, vias = viaStops) => {
   }
 };
 
-  // Split the full route.sections into N−1 “legs” (one per interval between stops)
-  const buildLegs = (routeSections) => {
-    const stops = addresses.length;
-    const total = routeSections.length;
-    const per = Math.floor(total / (stops - 1));
-    const legs = [];
-    for (let i = 0; i < stops - 1; i++) {
-      const start = i * per;
-      // last leg takes any remainder
-      const end = (i === stops - 2) ? total : (i + 1) * per;
-      legs.push(routeSections.slice(start, end));
-    }
-    return legs;
-  };
+ // Split sections by via counts: leg i has (vias[i] + 1) sections
+const buildLegs = (routeSections) => {
+  const nLegs = Math.max((addressesRef.current?.length || 0) - 1, 0);
+  const viaCounts = Array.from({ length: nLegs }, (_, i) => (viaStopsByLegRef.current?.[i]?.length || 0));
+  const needed = viaCounts.map(c => c + 1);
+
+  const legs = [];
+  let cursor = 0;
+  for (let i = 0; i < nLegs; i++) {
+    const take = needed[i];
+    const slice = routeSections.slice(cursor, cursor + take);
+    legs.push(slice);
+    cursor += take;
+  }
+  // Safety: any leftover sections (rare) go to the last leg
+  if (cursor < routeSections.length && legs.length > 0) {
+    legs[legs.length - 1] = legs[legs.length - 1].concat(routeSections.slice(cursor));
+  }
+  return legs;
+};
 
   // Afișare rută pe hartă
-const displayRoute = (route) => {
+const displayedRoute = (route) => {
   if (!mapRef.current) return;
   const map = mapRef.current;
 
@@ -562,29 +663,32 @@ const displayRoute = (route) => {
           behaviorRef.current.enable(window.H.mapevents.Behavior.KINETIC);
         } catch {}
       }
-    // Commit the via: turn ghost into a real via stop and reroute
-     let committed = null;
-     if (ghostMarkerRef.current) {
-       const { lat, lng } = ghostMarkerRef.current.getGeometry();
-       committed = { id: `via_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, lat, lng };
-     }
-     // Always clear the ghost from the map/UI
-     if (ghostMarkerRef.current) { map.removeObject(ghostMarkerRef.current); ghostMarkerRef.current = null; }
-     setViaDraft(null);
+      // Commit the via: turn ghost into a real via stop and reroute
+      let committed = null;
+      if (ghostMarkerRef.current) {
+        const { lat, lng } = ghostMarkerRef.current.getGeometry();
+        committed = { id: `via_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, lat, lng };
+      }
+      if (ghostMarkerRef.current) { map.removeObject(ghostMarkerRef.current); ghostMarkerRef.current = null; }
+      setViaDraft(null);
 
-     if (committed) {
-       // register into ordered list + LIFO stack
-       _registerVia(committed);
-       // IMPORTANT: use the up-to-date list (we can read from function form)
-       // schedule the reroute on the next tick so state updates settle
-       setTimeout(() => {
-         // read freshest addresses/vias from refs/state
-         const pts = [...addressesRef.current];
-         const viasNow = [...(viaStopsRef.current ?? []), committed];
-         getRoute(pts, viasNow);
-       }, 0);
-     }
-     showHint("Press ESC to remove the last via", 4000);
+      if (committed) {
+        // 🔎 Figure out which section is closest to the drop, then map section→leg
+        const sectionIdx = nearestSectionIndex(committed.lat, committed.lng, route);
+        const legIdx = sectionIndexToLegIndex(
+          sectionIdx,
+          viaStopsByLegRef.current,
+          addressesRef.current
+        );
+
+        console.log('[via] commit on leg', legIdx, 'coords:', committed.lat, committed.lng);
+        _registerVia(legIdx, committed);
+        setTimeout(() => {
+          const pts = [...addressesRef.current];
+          getRoute(pts, viaStopsByLegRef.current);
+        }, 0);
+      }
+      showHint("Press ESC to remove the last via", 4000);
     };
 
     map.addEventListener('pointermove', onMove);
@@ -607,133 +711,122 @@ const renderViaMarkers = () => {
   const map = mapRef.current;
   if (!map) return;
 
-  // remove old group
   if (viaGroupRef.current) {
     try { map.removeObject(viaGroupRef.current); } catch {}
     viaGroupRef.current = null;
   }
 
-  if (!viaStops.length) return;
+  const legs = viaStopsByLegRef.current || [];
+  const totalCount = legs.reduce((a, arr) => a + (arr?.length || 0), 0);
+  if (totalCount === 0) return;
 
   const group = new window.H.map.Group();
+  let globalCounter = 0;
 
-  viaStops.forEach((v, idx) => {
-    // Build a tiny DOM marker (selected = thicker/bright)
-    const el = document.createElement('div');
-    el.style.width = selectedViaId === v.id ? '16px' : '14px';
-    el.style.height = selectedViaId === v.id ? '16px' : '14px';
-    el.style.borderRadius = '50%';
-    el.style.transform = 'translate(-50%,-50%)';
-    el.style.background = selectedViaId === v.id
-      ? 'rgba(0,160,255,0.95)'
-      : 'rgba(0,160,255,0.65)';
-    el.style.boxShadow = selectedViaId === v.id
-      ? '0 0 10px rgba(0,160,255,0.9)'
-      : '0 0 6px rgba(0,160,255,0.6)';
-    el.style.border = selectedViaId === v.id
-      ? '2px solid white'
-      : '1px solid rgba(255,255,255,0.8)';
-    el.style.cursor = 'pointer';
+  legs.forEach((arr, legIdx) => {
+    (arr || []).forEach((v, idxInLeg) => {
+      const isSelected = !!(selectedVia && selectedVia.legIdx === legIdx && selectedVia.id === v.id);
 
-    // Optional tiny index badge
-    const badge = document.createElement('div');
-    badge.textContent = String(idx + 1);
-    badge.style.position = 'absolute';
-    badge.style.top = '-18px';
-    badge.style.left = '50%';
-    badge.style.transform = 'translateX(-50%)';
-    badge.style.padding = '1px 4px';
-    badge.style.fontSize = '10px';
-    badge.style.lineHeight = '12px';
-    badge.style.borderRadius = '6px';
-    badge.style.background = 'rgba(0,0,0,0.7)';
-    badge.style.color = 'white';
-    badge.style.userSelect = 'none';
-    el.appendChild(badge);
+      const el = document.createElement('div');
+      el.style.width = isSelected ? '16px' : '14px';
+      el.style.height = isSelected ? '16px' : '14px';
+      el.style.borderRadius = '50%';
+      el.style.transform = 'translate(-50%,-50%)';
+      el.style.background = isSelected ? 'rgba(0,160,255,0.95)' : 'rgba(0,160,255,0.65)';
+      el.style.boxShadow = isSelected ? '0 0 10px rgba(0,160,255,0.9)' : '0 0 6px rgba(0,0,0,0.3)';
+      el.style.border = isSelected ? '2px solid white' : '1px solid rgba(255,255,255,0.8)';
+      el.style.cursor = 'pointer';
 
-    const icon = new window.H.map.DomIcon(el);
-    const m = new window.H.map.DomMarker({ lat: v.lat, lng: v.lng }, { icon, volatility: true });
+      const badge = document.createElement('div');
+      const displayIdx = ++globalCounter;
+      badge.textContent = `${displayIdx}`;
+      badge.style.position = 'absolute';
+      badge.style.top = '-18px';
+      badge.style.left = '50%';
+      badge.style.transform = 'translateX(-50%)';
+      badge.style.padding = '1px 4px';
+      badge.style.fontSize = '10px';
+      badge.style.lineHeight = '12px';
+      badge.style.borderRadius = '6px';
+      badge.style.background = 'rgba(0,0,0,0.7)';
+      badge.style.color = 'white';
+      badge.style.userSelect = 'none';
+      el.appendChild(badge);
 
-    // Select on click/tap
-    m.addEventListener('pointerdown', (evt) => {
-      evt.stopPropagation();
-      setSelectedViaId(v.id);
-    }, true);
+      const icon = new window.H.map.DomIcon(el);
+      const m = new window.H.map.DomMarker({ lat: v.lat, lng: v.lng }, { icon, volatility: true });
 
-    // --- Drag to reorder ---
-   let dragging = false;
-   const onPointerDown = (evt) => {
-     evt.stopPropagation();
-     dragging = true;
-     el.style.cursor = 'grabbing';
-     if (behaviorRef.current) {
-       try {
-         behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
-         behaviorRef.current.disable(window.H.mapevents.Behavior.KINETIC);
-       } catch {}
-     }
-     // capture moves on the map so the marker follows
-     map.addEventListener('pointermove', onPointerMove, true);
-     map.addEventListener('pointerup', onPointerUp, true);
-   };
+      // select
+      m.addEventListener('pointerdown', (evt) => {
+        evt.stopPropagation();
+        setSelectedVia({ legIdx, id: v.id });
+      }, true);
 
-   const onPointerMove = (moveEvt) => {
-     if (!dragging) return;
-     const { viewportX, viewportY } = moveEvt.currentPointer || {};
-     if (typeof viewportX !== 'number') return;
-     const g = map.screenToGeo(viewportX, viewportY);
-     try { m.setGeometry(g); } catch {}
-   };
+      // drag-move within the same leg (reorder by progress)
+      let dragging = false;
+      const onPointerDown = (evt) => {
+        evt.stopPropagation();
+        dragging = true;
+        el.style.cursor = 'grabbing';
+        if (behaviorRef.current) {
+          try {
+            behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+            behaviorRef.current.disable(window.H.mapevents.Behavior.KINETIC);
+          } catch {}
+        }
+        map.addEventListener('pointermove', onPointerMove, true);
+        map.addEventListener('pointerup', onPointerUp, true);
+      };
+      const onPointerMove = (moveEvt) => {
+        if (!dragging) return;
+        const { viewportX, viewportY } = moveEvt.currentPointer || {};
+        if (typeof viewportX !== 'number') return;
+        const g = map.screenToGeo(viewportX, viewportY);
+        try { m.setGeometry(g); } catch {}
+      };
+      const onPointerUp = () => {
+        if (!dragging) return;
+        dragging = false;
+        el.style.cursor = 'grab';
+        map.removeEventListener('pointermove', onPointerMove, true);
+        map.removeEventListener('pointerup', onPointerUp, true);
+        if (behaviorRef.current) {
+          try {
+            behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+            behaviorRef.current.enable(window.H.mapevents.Behavior.KINETIC);
+          } catch {}
+        }
 
-   const onPointerUp = () => {
-     if (!dragging) return;
-     dragging = false;
-     el.style.cursor = 'grab';
-     map.removeEventListener('pointermove', onPointerMove, true);
-     map.removeEventListener('pointerup', onPointerUp, true);
-     if (behaviorRef.current) {
-       try {
-         behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-         behaviorRef.current.enable(window.H.mapevents.Behavior.KINETIC);
-       } catch {}
-     }
+        const g = m.getGeometry();
+       // Build next state synchronously, then apply and route with *that* snapshot
+       const legCount = Math.max((addressesRef.current?.length || 0) - 1, 0);
+       const base = ensureLegSlots(viaStopsByLegRef.current, legCount).map(arr => [...arr]);
+       const arrNow = (base[legIdx] || []).map(x => x.id === v.id ? { ...x, lat: g.lat, lng: g.lng } : x);
+       const withP = arrNow.map(x => ({ ...x, __p: routeProgressIndex(x.lat, x.lng) }));
+       withP.sort((a, b) => a.__p - b.__p);
+       base[legIdx] = withP.map(({ __p, ...rest }) => rest);
 
-     // Commit: update this via's coords, then reorder all vias by progress on the route
-     const g = m.getGeometry();
-     const updated = viaStops.map(x => x.id === v.id ? { ...x, lat: g.lat, lng: g.lng } : x);
+       // Commit to state + ref
+       setViaStopsByLeg(base);
+       viaStopsByLegRef.current = base;
 
-     // compute progress for each via
-     const withProgress = updated.map(x => ({
-       ...x,
-       __p: routeProgressIndex(x.lat, x.lng),
-     }));
-     // sort by progress along the route (ascending)
-     withProgress.sort((a,b) => a.__p - b.__p);
-     const reordered = withProgress.map(({__p, ...rest}) => rest);
+       // Re-route using the *new* legs
+       if (addressesRef.current?.length >= 2) {
+         getRoute([...addressesRef.current], base);
+       }
+      };
 
-     setViaStops(reordered);
-     // reroute once with the new order
-     if (addresses.length >= 2) getRoute([...addresses], reordered);
-   };
+      m.addEventListener('pointerdown', onPointerDown, true);
+      m.setData({ title: `Via ${legIdx + 1}.${idxInLeg + 1} (ESC to remove)` });
 
-   // attach drag handlers on the marker DOM target
-   m.addEventListener('pointerdown', onPointerDown, true);
-
-    // Handy tooltip
-    m.setData({ title: `Via #${idx + 1}  (ESC to remove)` });
-    m.addEventListener('pointerenter', () => {
-      try { map.getElement().style.cursor = 'pointer'; } catch {}
+      group.addObject(m);
     });
-    m.addEventListener('pointerleave', () => {
-      try { map.getElement().style.cursor = ''; } catch {}
-    });
-
-    group.addObject(m);
   });
 
   map.addObject(group);
   viaGroupRef.current = group;
 };
+
 
 const routeProgressIndex = (lat, lng) => {
   const ls = fullLineStringRef.current;
@@ -759,7 +852,8 @@ const routeProgressIndex = (lat, lng) => {
   // Selectare rută
   const handleRouteSelect = (index) => {
     setSelectedRouteIndex(index);
-    displayRoute(routes[index]);
+    // setSelectedSegmentByIndex(s => ({ ...s, [index]: s[index] ?? "0" }));
+    displayedRoute(routes[index]);
     if (routes[index].sections && routes[index].sections.length > 0) {
       let totalDistance = 0;
       let totalDuration = 0;
@@ -867,7 +961,16 @@ const handleSubmit = async (e) => {
   useEffect(() => {
     if (!mapRef.current) return;
     if (addresses.length === 0) return;
-  
+
+    // keep via arrays sized to leg count
+    const legCount = Math.max(addresses.length - 1, 0);
+    syncLegArrays(legCount);
+
+    // keep active leg in range
+    if (activeLegIdx >= legCount) {
+      setActiveLegIdx(Math.max(legCount - 1, 0));
+    }
+
     if (markerGroupRef.current) {
       mapRef.current.removeObject(markerGroupRef.current);
     }
@@ -932,7 +1035,7 @@ useEffect(() => {
       cancelViaDraft();
       return;
     }
-    if (selectedViaId) {
+    if (selectedVia?.id) {
       deleteSelectedVia();
       return;
     }
@@ -945,34 +1048,35 @@ useEffect(() => {
 
   window.addEventListener('keydown', onKeyDown, true);
   return () => window.removeEventListener('keydown', onKeyDown, true);
-}, [viaDraft, selectedViaId, viaStack.length]); 
+}, [viaDraft, selectedVia?.id, viaStack.length]); 
 // ===========================================
 
   useEffect(() => {
     renderViaMarkers();
-  }, [routes, selectedRouteIndex, selectedViaId]);
+  }, [routes, selectedRouteIndex, selectedVia?.id]);
 
   useEffect(() => {
-    if (!selectedViaId) return;
-    const stillExists = viaStops.some(v => v.id === selectedViaId);
-    if (!stillExists) setSelectedViaId(null);
-  }, [viaStops, selectedViaId]);
+    if (!selectedVia) return;
+    const exists = viaStopsByLeg.some(
+      (arr, i) => i === selectedVia.legIdx && (arr || []).some(v => v.id === selectedVia.id)
+    );
+    if (!exists) setSelectedVia(null);
+  }, [viaStopsByLeg, selectedVia]);
 
   useEffect(() => {
     renderViaMarkers();
-  }, [viaStops]);
+  }, [viaStopsByLeg]);
 
   useEffect(() => {
-    if (!routes.length) return; // only after we have a route
-    if (viaStops.length === 0) {
-      // don’t spam if user just closed it manually; short display
+    if (!routes.length) return;
+    const totalVias = (viaStopsByLeg || []).reduce((acc, arr) => acc + (arr?.length || 0), 0);
+    if (totalVias === 0) {
       showHint("Left-click and hold on the route to place a via", 3500);
     } else {
-      const n = viaStops.length;
-      showHint(n === 1 ? "Press ESC to remove the via"
-                      : "Press ESC to remove the last via", 4000);
+      showHint(totalVias === 1 ? "Press ESC to remove the via"
+                              : "Press ESC to remove the last via", 4000);
     }
-  }, [viaStops.length, routes.length]);
+  }, [viaStopsByLeg, routes.length]);
 
   useEffect(() => {
     (async () => {
@@ -1040,7 +1144,7 @@ useEffect(() => {
     // Only switch if it’s a different route
     if (fastestIdx !== selectedRouteIndex) {
       setSelectedRouteIndex(fastestIdx);
-      displayRoute(routes[fastestIdx]);
+      displayedRoute(routes[fastestIdx]);
     }
   }, [routes]);  // Re-run whenever the routes array changes
 
@@ -1306,7 +1410,9 @@ useEffect(() => {
                         : costPerKm + routeTax + dayCost;
 
                       const segs = getSegmentsForRoute(rt);
-                      const selected = selectedSegmentByIndex[index] ?? (segs[0]?.key || "");
+                      const selected = String(
+                        index === selectedRouteIndex ? activeLegIdx : 0
+                      );
 
                       return (
                         <tr
@@ -1321,12 +1427,7 @@ useEffect(() => {
                               <select
                                 className="border dark:border-gray-600 rounded px-2 py-1 w-full bg-white dark:bg-gray-700 dark:text-gray-100"
                                 value={selected}
-                                onChange={(e) =>
-                                  setSelectedSegmentByIndex((s) => ({
-                                    ...s,
-                                    [index]: e.target.value,
-                                  }))
-                                }
+                                onChange={(e) => setActiveLegIdx(Number(e.target.value))}
                               >
                                 {segs.map((s) => (
                                   <option key={s.key} value={s.key}>
