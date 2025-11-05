@@ -45,6 +45,7 @@ const MainPage = ({ user })  => {
   const [durationWithBreaks, setDurationWithBreaks] = useState(null);
 
   const [addressQuery, setAddressQuery] = useState("");
+  const [resetKey, setResetKey] = useState(0);
 
   // ===== VIA PHASE 1: state scaffolding (per-leg) =====
   // viaStopsByLeg: Array of arrays, length = max(addresses.length - 1, 0)
@@ -53,7 +54,7 @@ const MainPage = ({ user })  => {
   const [viaStack, setViaStack] = useState([]);           // [{legIdx, id}, ...] for LIFO delete
   const [viaDraft, setViaDraft] = useState(null);         // {lat, lng} while dragging-to-add (ghost)
   const [selectedVia, setSelectedVia] = useState(null);   // {legIdx, id} selected for delete
-  // ==========================================
+  // =================================================================
 
   const [activeLegIdx, setActiveLegIdx] = useState(0);
 
@@ -1225,12 +1226,14 @@ useEffect(() => {
                     <label className="block mb-1 font-medium shadow-sm text-semibold text-gray-700 dark:text-gray-300">Enter the address:</label>
                       <div className="w-full rounded bg-gray-1000 ring-2 ring-red-300 focus-within:ring-red-500 transition">
                         <AutoCompleteInput
+                          key={resetKey}                // <- forces remount = no stale value
                           apiKey={process.env.REACT_APP_HERE_API_KEY}
                           value={addressQuery}
                           onChange={setAddressQuery}
                           onSelect={(picked) => {
                             addAddress(picked);
                             setAddressQuery("");
+                            setResetKey(k => k + 1);
                           }}
                           className="w-full p-2 bg-red-50 dark:bg-gray-700 dark:text-gray-100 border-none focus:outline-none"
                         />
