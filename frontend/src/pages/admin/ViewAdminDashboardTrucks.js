@@ -1,9 +1,20 @@
-// src/pages/admin/ViewAdminDashboardTrucks.js
 import React from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh }) {
   const hasPricePerDay = trucks.some(t => t.pricePerDay != null);
+
+  React.useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    // lock scroll
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
 
   // Handler to edit Euro/km
   const handleEdit = async (truck) => {
@@ -13,9 +24,7 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
     );
     if (raw === null) return; // user cancelled
 
-    // Convert comma to dot and trim
     const input = raw.trim().replace(',', '.');
-    // If empty after trimming, restore default 0.1
     const parsed = input === '' ? 0.1 : parseFloat(input);
 
     if (isNaN(parsed)) {
@@ -29,13 +38,19 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
     if (error) {
       alert('Update failed: ' + error.message);
     } else {
-      // Refresh the truck list in the parent
       onRefresh();
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose(); // backdrop click closes
+      }}
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg w-full max-w-3xl relative">
         <button
           onClick={onClose}
@@ -46,7 +61,9 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
+
         <h2 className="text-2xl font-bold mb-4 text-center">Truck List</h2>
+
         <div className="overflow-y-auto max-h-[70vh]">
           <table className="w-full text-left border-collapse">
             <thead className="uppercase text-sm">
@@ -60,8 +77,10 @@ export default function ViewAdminDashboardTrucks({ trucks, onClose, onRefresh })
             </thead>
             <tbody>
               {trucks.map(t => (
-                <tr key={t.id}
-                    className="odd:bg-gray-100 even:bg-white dark:odd:bg-gray-700 dark:even:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                <tr
+                  key={t.id}
+                  className="odd:bg-gray-100 even:bg-white dark:odd:bg-gray-700 dark:even:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                >
                   <td className="p-2">{t.plate}</td>
                   <td className="p-2">{t.team_name || '—'}</td>
                   <td className="p-2">
