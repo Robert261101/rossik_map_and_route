@@ -1227,7 +1227,16 @@ useEffect(() => {
                       }
 
                       return (
-                        <li key={index} className="flex justify-between items-center">
+                        <li
+                          key={index}
+                          className="
+                            py-2 px-2 rounded-md
+                            odd:bg-gray-100 even:bg-white
+                            dark:odd:bg-gray-800 dark:even:bg-gray-900
+                            hover:bg-gray-200 dark:hover:bg-gray-600
+                            transition
+                          "
+                        >
                           <div className="text-sm text-gray-900 dark:text-gray-100">{display}</div>
                           <div className="flex gap-2">
                             <button
