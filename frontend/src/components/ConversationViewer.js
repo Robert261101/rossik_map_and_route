@@ -104,14 +104,7 @@ export default function ConversationViewer({ convo, onClose }) {
                   className="rounded-lg max-h-64 border border-gray-200 dark:border-neutral-700"
                 />
               ) : (
-                <a
-                  className="underline underline-offset-2 hover:opacity-80"
-                  href={m.media_url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open media
-                </a>
+                <a href={m.media_url} target="_blank" rel="noopener noreferrer">Open media</a>
               )}
             </div>
           ) : null}

@@ -15,12 +15,6 @@ export default function AdminDashboard({ user }) {
   const [users, setUsers] = React.useState([]);
   const [trucks, setTrucks] = React.useState([]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('token');
-    navigate('/login');
-  };
-
   const fetchUsers = async () => {
     const { data, error } = await supabase
       .from('users')

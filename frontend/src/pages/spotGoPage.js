@@ -1739,20 +1739,6 @@ export default function SpotGoPage({ user }) {
     const isAdmin    = roleStr === 'admin';
     const isTeamlead = roleStr === 'team_lead' || roleStr === 'teamlead';
 
-    const isTeamMemberOffer = (o) => {
-        const e = (o?.submittedByEmail || '').toLowerCase();
-        return e && teamMemberEmails.has(e);
-    };
-
-    const canManageOffer = (o) => {
-    if (!o) return false;
-    return !!(
-        o.isMine ||
-        isAdmin ||
-        (isTeamlead && isTeamMemberOffer(o))   // <— restrict team lead to their team
-    );
-    };
-
     useEffect(() => {
     let alive = true;
     (async () => {
@@ -2289,12 +2275,6 @@ export default function SpotGoPage({ user }) {
                         const hasChildren = (offer.children?.length || 0) > 0;
                         const groupKey = offer.batchGroupId || `single:${offer.id}`;
                         const expanded = expandedGroups.has(groupKey);
-
-
-                        const rowBg = offer.isMine
-                        ? (idx % 2 === 0 ? '#f2f8fc' : '#ffffff')
-                        : '#fff6e0';
-
                         return (
                         <React.Fragment key={groupKey}>
                             {/* Root row */}

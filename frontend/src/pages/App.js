@@ -20,8 +20,6 @@ import SpotGoPage from './spotGoPage';
 import RossikTools from './LandingPage'
 import SpotGoTrucks from './spotGoTrucks'
 import ConversationsPage from './ConversationsPage'
-import ReactDOM from 'react-dom'
-import { ThemeProvider } from '../contexts/ThemeContext'
 
 export default function App() {
   const [user, setUser] = useState(null)

@@ -47,16 +47,6 @@ export default function ConversationsPage({ user }) {
     }
   };
 
-  async function searchRoutes(term) {
-    const { data, error } = await supabase
-      .from('routes')
-      .select('identifier')
-      .ilike('identifier', `%${term}%`)
-      .limit(10);
-    if (error) throw error;
-    return data || [];
-  }
-
   // 1) initial load
   useEffect(() => {
     if (loadingRef.current) return;

@@ -63,27 +63,6 @@ const VEHICLE_CAPABILITY_CODES = {
   8: "multiTemp",
 };
 
-// Freight exchanges → sources
-const sourcesMap = {
-  1: "Trans.eu",
-  2: "Timocom",
-  3: "Teleroute",
-  4: "Cargo.lt",
-  5: "LardiTrans",
-  6: "Spedition.Net",
-  7: "Della.eu",
-  8: "Cargopedia",
-  9: "123Cargo",
-  10: "FaFa",
-  11: "Spedimo",
-  12: "Nexogen",
-  13: "WTransnet",
-  14: "Roolz",
-  15: "Haulage Exchange",
-  16: "Transporeon Marketplace",
-  100: "Inside Only",
-};
-
 const panel =
   "rounded-lg p-5 border bg-white text-gray-900 " +
   "border-gray-200 shadow-xl " +
@@ -94,11 +73,6 @@ const field =
   "border border-gray-300 bg-gray-50 text-gray-900 " +
   "placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 " +
   "dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400";
-
-const btnCls =
-  "px-4 py-2 rounded font-bold text-white " +
-  "bg-red-700 hover:bg-red-800 disabled:opacity-70";
-
 
 // From email -> "Firstname Lastname"
 const fullNameFromEmail = (email = '') => {
@@ -134,7 +108,6 @@ function cityFromAddress(addr) {
   const parts = label.split(",");
   return parts.length >= 2 ? parts[parts.length - 2].trim() : "Unknown";
 }
-const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
 const parseDbDate = s => (s ? new Date(s).toISOString().slice(0,10) : new Date().toISOString().slice(0,10));
 const parseDbHHMM = s => (s ? new Date(s).toISOString().slice(11,16) : "08:00");
@@ -225,12 +198,6 @@ export default function SpotGoTrucks({ user }) {
   }, [loadEndDate, isPrefilling]);
 
 
-  const baseInput = {
-    padding: "6px 10px",
-    borderRadius: 5,
-    border: "1px solid rgba(185,28,28,.2)",
-    width: "100%",
-  };
   const btn = {
     padding: "10px 16px",
     background: "#b91c1c",

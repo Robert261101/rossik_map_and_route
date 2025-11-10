@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 
 // Caching pentru prețurile de rovinietă (dacă este necesar)
 let rovinietaPricesCache = null;
@@ -14,9 +14,6 @@ const fetchRovinietaPrices = async () => {
     return null;
   }
 };
-
-//TODO: cel mai ieftin pret/timp de ex: 3 de o zi < una de 7
-//TODO: vinieta expira la 12 noaptea, este / zi calendaristica
 
 const countryCalculators = {
   ROU: async (tollData, _duration, vehicleAxles) => {
@@ -127,28 +124,6 @@ const convertToEuro = async (amount, currency) => {
   return currency === "EUR" ? amount : amount / rates[currency];
 };
 
-const detectCountriesFromRoute = (route) => {
-  const countries = new Set();
-  if (route.sections) {
-    route.sections.forEach((section) => {
-      if (section.tollSystems) {
-        section.tollSystems.forEach((system) => {
-          if (system.countryCode) {
-            countries.add(system.countryCode);
-          }
-        });
-      }
-      if (section.tolls) {
-        section.tolls.forEach((toll) => {
-          if (toll.countryCode) {
-            countries.add(toll.countryCode);
-          }
-        });
-      }
-    });
-  }
-  return Array.from(countries);
-};
 
 const TollCalculator = ({
   routeIndex = 0,
@@ -161,101 +136,12 @@ const TollCalculator = ({
   onTollUpdate,
   selectedRoute, // Dacă este transmis, folosim această rută pentru calculul taxelor
 }) => {
-  const [tollDetails, setTollDetails] = useState({ totalCost: 0, tollList: [] });
+  const [, setTollDetails] = useState({ totalCost: 0, tollList: [] });
   // Folosim un useRef pentru a reține id-urile rutelor deja procesate
   const processedRoutes = useRef(new Set());
 
-  // Funcția ta processTollData rămâne aceeași
-  const processTollData = async (route) => {
-    try {
-      // console.log("Processing toll data for route:", route);
-      
-      // Folosim rawDuration (sau 1 dacă nu e valid)
-      const totalDuration = rawDuration && rawDuration > 0 ? rawDuration : 1;
-      
-      // Definim țările pentru care se aplică costuri de tip vignietă
-      const targetCountries = ["LUX", "ROU", "NLD"];
-      const countryDurations = {};
-      if (route.sections) {
-        route.sections.forEach((section) => {
-          if (section.tollSystems && section.tollSystems.length > 0 && section.summary) {
-            section.tollSystems.forEach((system) => {
-              const cc = system.countryCode;
-              if (targetCountries.includes(cc)) {
-                countryDurations[cc] = Math.max(countryDurations[cc] || 0, section.summary.duration);
-              }
-            });
-          }
-        });
-      }
-      
-      // Setăm numărul de zile pentru vigniete (în acest exemplu, 1 zi pe țară)
-      const countryDays = {};
-      targetCountries.forEach((cc) => {
-        countryDays[cc] = 1;
-      });
-      
-      let tollList = [];
-      
-      // Verificăm dacă există array-ul tolls în secțiuni
-      const hasTolls = route.sections && route.sections.some(
-        (section) => section.tolls && section.tolls.length > 0
-      );
-      
-      if (hasTolls) {
-        // Procesare din array-ul "tolls"
-        tollList = await processTollsFallback(route);
-      } else {
-        tollList = [];
-      }
-      
-      let totalCost = 0;
-      // Deduplicare: pentru țările din targetCountries, adăugăm costul o singură dată
-      const addedCountries = new Set();
-      tollList.forEach((toll) => {
-        if (targetCountries.includes(toll.country)) {
-          if (!addedCountries.has(toll.country)) {
-            totalCost += toll.cost;
-            addedCountries.add(toll.country);
-          }
-        } else {
-          totalCost += toll.cost;
-        }
-      });
-      
-      const hours = Math.floor(totalDuration / 3600);
-      const minutes = Math.floor((totalDuration % 3600) / 60);
-      const formattedDuration = `${hours}h ${minutes}m`;
-            
-      const newTollDetails = {
-        totalCost,
-        tollList,
-        duration: formattedDuration,
-      };
-
-      console.log(`🛣️ [Route ${routeIndex+1}] Toll Breakdown:`)
-      tollList.forEach(toll => {
-        // use the actual booth names if provided…
-        const places = toll.tollCollectionLocations
-          ?.map(loc => loc.name)
-          .filter(Boolean)
-          .join(' → ')
-          || toll.name;
-        console.log(
-          `[${routeIndex+1}] ${places.padEnd(25)} | ${toll.country} | €${toll.cost.toFixed(2)}`
-        );
-
-      });
-
-      setTollDetails(newTollDetails);
-      onTollUpdate(newTollDetails);
-    } catch (error) {
-      console.error("Error processing toll data:", error);
-    }
-  };
-
-  // Fallback pentru procesarea taxelor din array-ul "tolls"
-  const processTollsFallback = async (route) => {
+   // Fallback pentru procesarea taxelor din array-ul "tolls" - memoized
+  const processTollsFallback = useCallback(async (route) => {
     let tollMap = {};
     if (!route.sections) return [];
     
@@ -333,7 +219,93 @@ const TollCalculator = ({
       }
     }
     return Object.values(tollMap);
-  };
+  }, [rawDuration, vehicleType?.axles]);
+  // Funcția ta processTollData - memoized and depends on the fallback
+  const processTollData = useCallback(async (route) => {
+
+    try {
+      // console.log("Processing toll data for route:", route);
+      
+      // Folosim rawDuration (sau 1 dacă nu e valid)
+      const totalDuration = rawDuration && rawDuration > 0 ? rawDuration : 1;
+      
+      // Definim țările pentru care se aplică costuri de tip vignietă
+      const targetCountries = ["LUX", "ROU", "NLD"];
+      const countryDurations = {};
+      if (route.sections) {
+        route.sections.forEach((section) => {
+          if (section.tollSystems && section.tollSystems.length > 0 && section.summary) {
+            section.tollSystems.forEach((system) => {
+              const cc = system.countryCode;
+              if (targetCountries.includes(cc)) {
+                countryDurations[cc] = Math.max(countryDurations[cc] || 0, section.summary.duration);
+              }
+            });
+          }
+        });
+      }
+      
+      // Setăm numărul de zile pentru vigniete (în acest exemplu, 1 zi pe țară)
+      const countryDays = {};
+      targetCountries.forEach((cc) => {
+        countryDays[cc] = 1;
+      });
+      
+      let tollList = [];
+      
+      // Verificăm dacă există array-ul tolls în secțiuni
+      const hasTolls = route.sections && route.sections.some(
+        (section) => section.tolls && section.tolls.length > 0
+      );
+      
+      tollList = hasTolls ? await processTollsFallback(route) : [];
+      
+      let totalCost = 0;
+      // Deduplicare: pentru țările din targetCountries, adăugăm costul o singură dată
+      const addedCountries = new Set();
+      tollList.forEach((toll) => {
+        if (targetCountries.includes(toll.country)) {
+          if (!addedCountries.has(toll.country)) {
+            totalCost += toll.cost;
+            addedCountries.add(toll.country);
+          }
+        } else {
+          totalCost += toll.cost;
+        }
+      });
+      
+      const hours = Math.floor(totalDuration / 3600);
+      const minutes = Math.floor((totalDuration % 3600) / 60);
+      const formattedDuration = `${hours}h ${minutes}m`;
+            
+      const newTollDetails = {
+        totalCost,
+        tollList,
+        duration: formattedDuration,
+      };
+
+      console.log(`🛣️ [Route ${routeIndex+1}] Toll Breakdown:`)
+      tollList.forEach(toll => {
+        // use the actual booth names if provided…
+        const places = toll.tollCollectionLocations
+          ?.map(loc => loc.name)
+          .filter(Boolean)
+          .join(' → ')
+          || toll.name;
+        console.log(
+          `[${routeIndex+1}] ${places.padEnd(25)} | ${toll.country} | €${toll.cost.toFixed(2)}`
+        );
+
+      });
+
+      setTollDetails(newTollDetails);
+      onTollUpdate(newTollDetails);
+    } catch (error) {
+      console.error("Error processing toll data:", error);
+    }
+  }, [onTollUpdate, processTollsFallback, rawDuration, routeIndex, vehicleType?.axles]);
+
+  const selectedRouteId = selectedRoute?.id;
 
   useEffect(() => {
     // console.log("TollCalculator - Dependencies updated", {
@@ -345,10 +317,10 @@ const TollCalculator = ({
     //   vehicleAxles: vehicleType?.axles
     // });
 
-    if (selectedRoute && selectedRoute.id) {
+    if (selectedRouteId) {
       // Dacă ruta deja a fost procesată, nu o mai procesăm
-      if (processedRoutes.current.has(selectedRoute.id)) return;
-      processedRoutes.current.add(selectedRoute.id);
+      if (processedRoutes.current.has(selectedRouteId)) return;
+      processedRoutes.current.add(selectedRouteId);
       processTollData(selectedRoute);
     } else if (startCoordinates && endCoordinates && rawDuration && rawDistance) {
       const fetchTollData = async () => {
@@ -389,7 +361,8 @@ const TollCalculator = ({
     vehicleType,
     rawDuration,
     rawDistance,
-    selectedRoute?.id
+    selectedRouteId,
+    processTollData
   ]);
 
   return null;

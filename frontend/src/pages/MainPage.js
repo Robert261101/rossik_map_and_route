@@ -137,26 +137,12 @@ const sectionIndexToLegIndex = (sectionIdx, viaStopsByLeg, addresses) => {
   return Math.max(0, Math.min(nLegs - 1, sectionIdx)); // fallback safety
 };
 
-
-  // Given addresses and per-leg vias, produce a flat, ordered list: [vias on A->B, then on B->C, ...]
-const flattenViasInOrder = (pts, legs) => {
-  const nLegs = Math.max((pts?.length || 0) - 1, 0);
-  const out = [];
-  for (let i = 0; i < nLegs; i++) {
-    const arr = Array.isArray(legs?.[i]) ? legs[i] : [];
-    for (const v of arr) if (typeof v.lat === 'number' && typeof v.lng === 'number') out.push(v);
-  }
-  return out;
-};
-
 // Ensure viaStopsByLeg has exactly (addresses.length - 1) arrays
 const ensureLegSlots = (legs, count) => {
   const copy = (legs || []).slice(0, count).map(a => a || []);
   while (copy.length < count) copy.push([]);
   return copy;
 };
-
-const getActiveLegIdx = () => activeLegIdxRef.current;
 
 // Expand a HERE bbox by a factor (e.g., 1.08 = +8% on each half-extent)
 const inflateRect = (rect, factor = 1.10) => {
@@ -345,10 +331,6 @@ const _registerVia = (legIdx, via) => {
   setSelectedVia({ legIdx, id: via.id });
 };
 
-
-  const [selectedSegmentByIndex, setSelectedSegmentByIndex] = useState({});
-
-
   // Segmente etichetate cu orașele din `addresses`
   function getSegmentsForRoute(rt) {
     if (!rt?.sections?.length || addresses.length < 2) return [];
@@ -379,12 +361,6 @@ const _registerVia = (legIdx, via) => {
   const dayCost = showPricePerDay
     ? days * vehicleType.pricePerDay
     : 0;
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('token');
-    navigate('/login');
-  };
 
   const handleSaveRoute = async () => {
     if (addresses.length < 2) {
@@ -977,13 +953,7 @@ const handleSubmit = async (e) => {
     // ⬇️ THIS is the spot: store Behavior in behaviorRef
     const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
     behaviorRef.current = behavior; // <— important
-
-
-    const ui = window.H.ui.UI.createDefault(map, defaultLayers);
-  
-    // Important: asigurăm vector base layer activ
-    const mapSettings = ui.getControl('mapsettings');
-  
+    
     mapRef.current = map;
     
     setTimeout(() => {
@@ -1041,7 +1011,7 @@ const handleSubmit = async (e) => {
     
       // Fix: asigurăm că dimensiunea DOM-ului e gata
       document.body.appendChild(el);
-      const { offsetWidth, offsetHeight } = el;
+      const { offsetWidth } = el;
       document.body.removeChild(el);
 
       el.style.marginLeft = `-${offsetWidth/2}px`;   // center horizontally

@@ -10,7 +10,6 @@ import Header from '../components/header';
 import ConversationViewer from '../components/ConversationViewer';
 
 export default function HistoryPage({ user }) {
-  const navigate = useNavigate();
   const [savedRoutes, setSavedRoutes] = useState([]);
   const [expandedIds, setExpandedIds] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -246,13 +245,6 @@ export default function HistoryPage({ user }) {
       truck_plate: best.truck_plate || null,
     });
   }
-
-  const toggleExpand = (id, e) => {
-    e.stopPropagation();
-    setExpandedIds(curr =>
-      curr.includes(id) ? curr.filter(x => x !== id) : [...curr, id]
-    );
-  };
 
   // Keep the table-bottom CSS var in sync for the map’s top edge
   useEffect(() => {

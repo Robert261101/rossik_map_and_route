@@ -1,13 +1,11 @@
 // src/pages/admin/DeleteTruck.js
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useNavigate } from 'react-router-dom';
 import Header from '../../components/header';
 
 export default function DeleteTruck({ user }) {
   const [trucks, setTrucks] = useState([]);
   const [selectedTruckId, setSelectedTruckId] = useState('');
-  const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
