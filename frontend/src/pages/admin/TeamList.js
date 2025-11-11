@@ -117,13 +117,25 @@ export default function TeamList({ user }) {
     const [a='', b=''] = local.split('.');
     return `${a[0]||''}${b[0]||''}`.toUpperCase() || 'U';
   };
-  const roleBadge = (role) =>
-    role === 'admin'
-      ? 'bg-red-500/15 text-red-300 ring-1 ring-red-500/30'
-      : role === 'team_lead'
-      ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
-      : 'bg-gray-500/15 text-gray-300 ring-1 ring-gray-500/30';
-
+  const roleBadge = (role) => {
+    switch (role) {
+      case 'admin':
+        return `
+          bg-red-500/15 text-red-500 ring-1 ring-red-500
+          dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/50
+        `;
+      case 'team_lead':
+        return `
+          bg-emerald-500/15 text-emerald-500 ring-1 ring-emerald-500
+          dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/50
+        `;
+      default:
+        return `
+          bg-gray-500/15 text-gray-500 ring-1 ring-gray-500
+          dark:bg-gray-500/15 dark:text-gray-300 dark:ring-gray-500/50  
+        `;
+    }
+  };
 
   return (
     <div
@@ -217,10 +229,18 @@ export default function TeamList({ user }) {
                       return formatName(a.username).localeCompare(formatName(b.username));
                     })
                     .map((m) => (
-                      <li key={m.id} className="py-2">
+                      <li
+                          key={m.id}
+                          className="
+                            py-2 px-2 rounded-md
+                            dark:bg-gray-700 dark:bg-gray-800
+                            hover:bg-gray-200 dark:hover:bg-gray-600
+                            transition
+                          "
+                        >
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="h-7 w-7 rounded-full bg-gray-200 dark:bg-gray-700
+                            <div className="h-7 w-7 rounded-full bg-gray-300 dark:bg-gray-700
                                             flex items-center justify-center text-xs font-semibold
                                             text-gray-700 dark:text-gray-100">
                               {initials(m.username)}
