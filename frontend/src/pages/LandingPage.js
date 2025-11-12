@@ -9,10 +9,32 @@ const tiles = [
   { label: 'Transporeon', to: null,             img: null,                      alt: 'Transporeon' },
 ];
 
+function useMediaQuery(query) {
+  const [matches, setMatches] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return; // SSR safety
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange(); // set initial
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+
+  return matches;
+}
+
+// Tailwind: sm starts at 640px → “mobile” is < 640px
+export function useIsMobile() {
+  return useMediaQuery("(max-width: 639px)");
+}
+
+
 export default function RossikTools({ user }) {
   const navigate = useNavigate();
 
   const Box = ({ to, img, alt, label }) => {
+    const isMobile = useIsMobile();
     const hasNav = Boolean(to);
     const open = () => { if (hasNav) navigate(to); };
     const Base = hasNav ? 'button' : 'div';
@@ -36,7 +58,7 @@ export default function RossikTools({ user }) {
             <img
               src={img}
               alt={alt}
-              className="h-full w-full object-contain sm:object-cover select-none pointer-events-none"
+              className={`h-full w-full block ${isMobile ? "object-cover" : "object-cover"} select-none pointer-events-none`}
               draggable="false"
               loading="lazy"
               decoding="async"

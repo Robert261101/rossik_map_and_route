@@ -77,6 +77,23 @@ const MainPage = ({ user })  => {
   const [hudVisible, setHudVisible] = useState(false);
   const hudTimerRef = useRef(null);
 
+  // ——— mobile breakpoint (Tailwind: <640px) ———
+  function useIsMobile() {
+    const [m, setM] = React.useState(false);
+    React.useEffect(() => {
+      const mq = window.matchMedia("(max-width: 639px)");
+      const f = () => setM(mq.matches);
+      f();
+      mq.addEventListener("change", f);
+      return () => mq.removeEventListener("change", f);
+    }, []);
+    return m;
+  }
+
+  const isMobile = useIsMobile();
+  const [mapOpen, setMapOpen] = React.useState(false);
+
+
   const syncLegArrays = (count) => {
     // grow/shrink to `count` legs
     setViaStopsByLeg(prev => {
@@ -935,38 +952,87 @@ const handleSubmit = async (e) => {
     });
   };
   
-  useEffect(() => {
-    if (mapRef.current) return; 
+  // useEffect(() => {
+  //   if (mapRef.current) return; 
   
-    const platform = new window.H.service.Platform({
-      apikey: process.env.REACT_APP_HERE_API_KEY,
-    });
-    const defaultLayers = platform.createDefaultLayers();
-    const map = new window.H.Map(
-      document.getElementById("mapContainer"),
-      defaultLayers.vector.normal.map,
-      { zoom: 6, center: { lat: 44.4268, lng: 26.1025 } }
-    );
+  //   const platform = new window.H.service.Platform({
+  //     apikey: process.env.REACT_APP_HERE_API_KEY,
+  //   });
+  //   const defaultLayers = platform.createDefaultLayers();
+  //   const map = new window.H.Map(
+  //     document.getElementById("mapContainer"),
+  //     defaultLayers.vector.normal.map,
+  //     { zoom: 6, center: { lat: 44.4268, lng: 26.1025 } }
+  //   );
 
-    map.getElement().addEventListener('contextmenu', e => e.preventDefault());
+  //   map.getElement().addEventListener('contextmenu', e => e.preventDefault());
 
-    // ⬇️ THIS is the spot: store Behavior in behaviorRef
-    const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
-    behaviorRef.current = behavior; // <— important
+  //   // ⬇️ THIS is the spot: store Behavior in behaviorRef
+  //   const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
+  //   behaviorRef.current = behavior; // <— important
     
-    mapRef.current = map;
+  //   mapRef.current = map;
     
-    setTimeout(() => {
-      map.getViewPort().resize();
-    }, 0);
+  //   setTimeout(() => {
+  //     map.getViewPort().resize();
+  //   }, 0);
 
-    const onResize = () => map.getViewPort().resize();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-    };
-  }, []);
-  
+  //   const onResize = () => map.getViewPort().resize();
+  //   window.addEventListener("resize", onResize);
+  //   return () => {
+  //     window.removeEventListener("resize", onResize);
+  //   };
+  // }, []);
+
+const initMapIfNeeded = React.useCallback((elId) => {
+  const el = document.getElementById(elId);
+    if (!el) return;
+
+  // If the map exists but is attached to a different element, dispose it
+  if (mapRef.current && mapRef.current.getElement && mapRef.current.getElement() !== el) {
+    try { mapRef.current.dispose(); } catch {}
+    mapRef.current = null;
+  }
+  if (mapRef.current) return; // already mounted on the right element
+
+   const platform = new window.H.service.Platform({ apikey: process.env.REACT_APP_HERE_API_KEY });
+   const defaultLayers = platform.createDefaultLayers();
+   const map = new window.H.Map(
+     el,
+     defaultLayers.vector.normal.map,
+     { zoom: 6, center: { lat: 44.4268, lng: 26.1025 } }
+   );
+
+   map.getElement().addEventListener('contextmenu', e => e.preventDefault());
+   const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
+   behaviorRef.current = behavior;
+   mapRef.current = map;
+
+   // first resize tick
+   setTimeout(() => map.getViewPort().resize(), 0);
+   const onResize = () => map.getViewPort().resize();
+   window.addEventListener("resize", onResize);
+   // Note: if you ever unmount the page entirely, remove the listener.
+ }, []);
+ 
+ // Desktop: init immediately
+ React.useEffect(() => {
+   if (!isMobile) initMapIfNeeded("mapContainerDesktop");
+ }, [isMobile, initMapIfNeeded]);
+ // Mobile: init when the sheet opens
+ React.useEffect(() => {
+   if (!isMobile) return;
+   if (!mapOpen) return;
+   initMapIfNeeded("mapContainerMobile");
+   // avoid scroll behind the sheet
+   document.body.style.overflow = "hidden";
+   const t = setTimeout(() => mapRef.current?.getViewPort?.().resize?.(), 250);
+   return () => {
+     document.body.style.overflow = "";
+     clearTimeout(t);
+   };
+ }, [isMobile, mapOpen, initMapIfNeeded]);
+
   // cost per km pt ruta selectată
   const costPerKmForSelected = () => {
     if (selectedRouteIndex === null || routes.length === 0) return 0;
@@ -1179,17 +1245,17 @@ useEffect(() => {
         {/*<div className="flex flex-row flex-1 overflow-hidden">*/}
         <div
           className="
-            flex flex-row flex-1 overflow-hidden min-h-screen transition-colors
-            bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800
-            dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100
+          flex flex-col sm:flex-row flex-1 overflow-hidden min-h-screen transition-colors
+          bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800
+          dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100
           "
         >
 
           {/* LEFT SIDE */}
-          <div className="bg-burgundy-200 w-1/2 p-4 overflow-auto space-y-4">
+          <div className="bg-burgundy-200 w-full sm:w-1/2 p-4 overflow-auto space-y-4">
             {/* ROW 1: Address + Vehicle */}
-            <div className="flex space-x-4">
-              <div className="w-1/2 bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition ">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="w-full sm:w-1/2 bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition ">
                 <h2 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Address</h2>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                   <div >
@@ -1269,7 +1335,7 @@ useEffect(() => {
                   </button>
                 </form>
               </div>
-              <div className="w-1/2 bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition">
+              <div className="w-full sm:w-1/2 bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition">
                 <div className="flex justify-between items-center mb-2">
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">Vehicle Parameters</h2>
                   <label className="inline-flex items-center text-sm text-gray-700 dark:text-gray-300">
@@ -1408,77 +1474,82 @@ useEffect(() => {
             {routes.length > 0 && (
               <div className="w-full bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition">
                 <h2 className="text-md font-semibold mb-2 text-gray-900 dark:text-white">Alternative Routes</h2>
-                <table className="min-w-full text-sm border border-red-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 text-gray-900 dark:text-gray-100">
-                  <thead>
-                    <tr className="bg-red-50 dark:bg-gray-800">
-                      <th className="px-3 py-2 border dark:border-gray-700">Route</th>
-                      <th className="px-3 py-2 border dark:border-gray-700">Distance (km)</th>
-                      <th className="px-3 py-2 border dark:border-gray-700">Segment distances</th>
-                      <th className="px-3 py-2 border dark:border-gray-700">Time</th>
-                      {!allIn && (
-                        <th className="px-3 py-2 border dark:border-gray-700">Price per Km (EUR)</th>
-                      )}
-                      <th className="px-3 py-2 border dark:border-gray-700">Tolls (EUR)</th>
-                      {showPricePerDay && (
-                        <th className="px-3 py-2 border dark:border-gray-700">Price / Day</th>
-                      )}
-                      <th className="px-3 py-2 border dark:border-gray-700">Total Cost (EUR)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {routes.map((rt, index) => {
-                      const { totalDuration, km, costPerKm } = computeRouteMetrics(rt);
-                      const hours = Math.floor(totalDuration/3600);
-                      const minutes = Math.floor((totalDuration%3600)/60);
-                      const displayTime = `${hours}h ${minutes}m`;
-                      const routeTax = routeTaxCosts[index]||0;
-                      const totalCost = allIn
-                        ? parseFloat(fixedTotalCost || 0)
-                        : costPerKm + routeTax + dayCost;
 
-                      const segs = getSegmentsForRoute(rt);
-                      const selected = String(
-                        index === selectedRouteIndex ? activeLegIdx : 0
-                      );
-
-                      return (
-                        <tr
-                          key={index}
-                          className={`cursor-pointer ${selectedRouteIndex===index?"bg-red-50 dark:bg-gray-900/40":""} hover:bg-red-50 dark:hover:bg-gray-800`}
-                          onClick={()=>handleRouteSelect(index)}
-                        >
-                          <td className="px-3 py-2 border dark:border-gray-700 text-center">Route {index+1}</td>
-                          <td className="px-3 py-2 border dark:border-gray-700 text-center">{km}</td>
-                          <td className="px-3 py-2 border dark:border-gray-700 text-center">
-                            {segs.length > 0 ? (
-                              <select
-                                className="border dark:border-gray-600 rounded px-2 py-1 w-full bg-white dark:bg-gray-700 dark:text-gray-100"
-                                value={selected}
-                                onChange={(e) => setActiveLegIdx(Number(e.target.value))}
-                              >
-                                {segs.map((s) => (
-                                  <option key={s.key} value={s.key}>
-                                    {s.display}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <span>-</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 border dark:border-gray-700 text-center">{displayTime}</td>
-                          {!allIn && <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(costPerKm)}</td>}
-                          <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(routeTax)}</td>
-                          {showPricePerDay && (<td className="px-3 py-2 border dark:border-gray-700 text-center"> {formatNum(vehicleType.pricePerDay)}</td>)}
-                          <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(totalCost)}</td>
+                {/* 👇 horizontal scroll container (mobile) */}
+                <div className="relative -mx-2 sm:mx-0">
+                  <div className="overflow-x-auto px-2">
+                    <table className="min-w-[900px] sm:min-w-full text-sm border border-red-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-red-50 dark:bg-gray-800">
+                          <th className="px-3 py-2 border dark:border-gray-700">Route</th>
+                          <th className="px-3 py-2 border dark:border-gray-700">Distance (km)</th>
+                          <th className="px-3 py-2 border dark:border-gray-700">Segment distances</th>
+                          <th className="px-3 py-2 border dark:border-gray-700">Time</th>
+                          {!allIn && (
+                            <th className="px-3 py-2 border dark:border-gray-700">Price per Km (EUR)</th>
+                          )}
+                          <th className="px-3 py-2 border dark:border-gray-700">Tolls (EUR)</th>
+                          {showPricePerDay && (
+                            <th className="px-3 py-2 border dark:border-gray-700">Price / Day</th>
+                          )}
+                          <th className="px-3 py-2 border dark:border-gray-700">Total Cost (EUR)</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {routes.map((rt, index) => {
+                          const { totalDuration, km, costPerKm } = computeRouteMetrics(rt);
+                          const hours = Math.floor(totalDuration / 3600);
+                          const minutes = Math.floor((totalDuration % 3600) / 60);
+                          const displayTime = `${hours}h ${minutes}m`;
+                          const routeTax = routeTaxCosts[index] || 0;
+                          const totalCost = allIn
+                            ? parseFloat(fixedTotalCost || 0)
+                            : costPerKm + routeTax + dayCost;
+
+                          const segs = getSegmentsForRoute(rt);
+                          const selected = String(index === selectedRouteIndex ? activeLegIdx : 0);
+
+                          return (
+                            <tr
+                              key={index}
+                              className={`cursor-pointer ${selectedRouteIndex === index ? "bg-red-50 dark:bg-gray-900/40" : ""} hover:bg-red-50 dark:hover:bg-gray-800`}
+                              onClick={() => handleRouteSelect(index)}
+                            >
+                              <td className="px-3 py-2 border dark:border-gray-700 text-center">Route {index + 1}</td>
+                              <td className="px-3 py-2 border dark:border-gray-700 text-center">{km}</td>
+                              <td className="px-3 py-2 border dark:border-gray-700 text-center">
+                                {segs.length > 0 ? (
+                                  <select
+                                    className="border dark:border-gray-600 rounded px-2 py-1 w-44 sm:w-full bg-white dark:bg-gray-700 dark:text-gray-100"
+                                    value={selected}
+                                    onChange={(e) => setActiveLegIdx(Number(e.target.value))}
+                                  >
+                                    {segs.map((s) => (
+                                      <option key={s.key} value={s.key}>
+                                        {s.display}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span>-</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 border dark:border-gray-700 text-center">{displayTime}</td>
+                              {!allIn && <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(costPerKm)}</td>}
+                              <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(routeTax)}</td>
+                              {showPricePerDay && (
+                                <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(vehicleType.pricePerDay)}</td>
+                              )}
+                              <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(totalCost)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
-
 
             {/* ROW 3: List of aggregated costs + Route Results */}
             {routes.length > 0 && (
@@ -1547,8 +1618,8 @@ useEffect(() => {
 
           {/* RIGHT SIDE - MAP */}
           <div
-            id="mapContainer"
-            className="w-1/2 h-full relative overflow-hidden"
+            id="mapContainerDesktop"
+            className="hidden sm:block sm:w-1/2 h-full relative overflow-hidden"
           >
             {/* Hints HUD (inside the map, top-center) */}
             <div
@@ -1586,7 +1657,64 @@ useEffect(() => {
               )}
             </div>
           </div>
+          {isMobile && (
+            <button
+              onClick={() => setMapOpen(true)}
+              aria-controls="map-sheet"
+              aria-expanded={mapOpen}
+              className="fixed bottom-5 right-5 z-40 h-14 w-14 rounded-full shadow-2xl
+                          bg-[#a82424] text-white flex items-center justify-center
+                          focus:outline-none focus:ring-2 focus:ring-white/40"
+              title="Open map"
+            >
+              {/* simple map glyph */}
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z" stroke="currentColor" strokeWidth="2"/>
+                <path d="M9 3v15M15 6v15" stroke="currentColor" strokeWidth="2"/>
+              </svg>
+            </button>
+          )}
+          {isMobile && (
+            <div
+              id="map-sheet"
+              className={`fixed inset-0 z-50 md:hidden transition
+                          ${mapOpen ? "pointer-events-auto" : "pointer-events-none"}`}
+            >
+              {/* Backdrop */}
+              <button
+                onClick={() => setMapOpen(false)}
+                aria-label="Close map"
+                className={`absolute inset-0 bg-black/40 transition-opacity
+                            ${mapOpen ? "opacity-100" : "opacity-0"}`}
+              />
 
+              {/* Slide-up panel */}
+              <div
+                className={`absolute left-0 right-0 bottom-0 h-[80dvh]
+                            bg-white/95 dark:bg-gray-900/95 backdrop-blur
+                            border-t border-black/10 dark:border-white/10
+                            rounded-t-2xl shadow-2xl overflow-hidden
+                            transform transition-transform duration-300
+                            ${mapOpen ? "translate-y-0" : "translate-y-[105%]"}`}
+              >
+                <div className="absolute top-3 right-3 z-10">
+                  <button
+                    onClick={() => setMapOpen(false)}
+                    className="h-10 w-10 rounded-lg border border-black/10 dark:border-white/20
+                                flex items-center justify-center bg-white/80 dark:bg-gray-800/80"
+                    aria-label="Close map"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2"/>
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Mobile map container */}
+                <div id="mapContainerMobile" className="h-full w-full" />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* FOOTER */}

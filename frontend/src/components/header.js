@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { ChevronDown, Menu, X, LogOut, History, MessageSquare, Wrench, Shield, Users } from "lucide-react";
+import { ChevronDown, Menu, X, LogOut, Wrench, Shield, Users } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 // tiny cn util
@@ -40,6 +40,15 @@ export default function Header({ user }) {
     window.addEventListener("pointerdown", onClick);
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("pointerdown", onClick); };
   }, [toolsOpen]);
+
+  const mobileItem =
+    "w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left " +
+    "transition focus:outline-none focus:ring-2 focus:ring-[#a82424]/30 " +
+    // light
+    "hover:bg-gray-200 " +
+    // dark
+    "dark:bg-gray-800/60 dark:hover:bg-gray-700/70";
+
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -159,10 +168,10 @@ export default function Header({ user }) {
               onClick={() => setMobileOpen(false)}
             />
             {/* panel */}
-            <div className="absolute right-0 top-0 h-full w-[86%] max-w-sm
-                bg-white dark:bg-gray-900
-                text-gray-900 dark:text-gray-100
-                shadow-2xl p-4 pt-5 flex flex-col">
+              <div className="absolute right-0 top-0 h-full w-[86%] max-w-sm
+                  bg-white/95 dark:bg-gray-900/95 backdrop-blur-md
+                  text-gray-900 dark:text-gray-100
+                  shadow-2xl p-4 pt-5 flex flex-col border-l border-black/10 dark:border-white/10">
 
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
@@ -171,7 +180,7 @@ export default function Header({ user }) {
                 </div>
                 <button
                   onClick={() => setMobileOpen(false)}
-                  className="h-10 w-10 rounded-lg flex items-center justify-center border border-black/10 dark:border-white/10"
+                  className="h-10 w-10 rounded-lg flex items-center justify-center border border-black/10 dark:border-white"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -181,37 +190,28 @@ export default function Header({ user }) {
                 <ul className="space-y-1">
                   {user?.role === "admin" && (
                     <li>
-                      <button onClick={handleAdmin} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left text-inherit hover:bg-black/5 dark:hover:bg-white/5">
+                      <button onClick={handleAdmin} className={mobileItem}>
                         <Shield className="h-4 w-4" /> Admin Panel
                       </button>
                     </li>
                   )}
                   {(user?.role === "admin" || user?.role === "team_lead") && (
                     <li>
-                      <button onClick={handleTeams} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left text-inherit hover:bg-black/5 dark:hover:bg-white/5">
+                      <button onClick={handleTeams} className={mobileItem}>
                         <Users className="h-4 w-4" /> Teams
                       </button>
                     </li>
                   )}
-                  <li>
-                    <button onClick={handleConversations} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left hover:bg-black/5 dark:hover:bg-white/5 dark:hover:bg-white/5">
-                      <MessageSquare className="h-4 w-4" /> Conversations
-                    </button>
-                  </li>
-                  <li>
-                    <button onClick={handleHistory} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left text-inherit hover:bg-black/5 dark:hover:bg-white/5">
-                      <History className="h-4 w-4" /> History
-                    </button>
-                  </li>
-
                   <li className="pt-2">
                     <div className="px-3 pb-1 text-xs uppercase tracking-wide text-gray-600 dark:text-gray-400">Tools</div>
-                    <button onClick={handleSpotGo} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left text-inherit hover:bg-black/5 dark:hover:bg-white/5">
+                    <div className="flex flex-col gap-2">
+                    <button onClick={handleSpotGo} className={mobileItem}>
                       <Wrench className="h-4 w-4" /> SpotGo
                     </button>
-                    <button onClick={handleMapGuide} className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left hover:bg:black/5 dark:hover:bg-white/5">
+                    <button onClick={handleMapGuide} className={mobileItem}>
                       <Wrench className="h-4 w-4" /> Map &amp; Guide
                     </button>
+                    </div>
                   </li>
                 </ul>
               </nav>
