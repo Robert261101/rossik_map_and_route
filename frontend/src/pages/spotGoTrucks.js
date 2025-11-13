@@ -459,7 +459,7 @@ async function handleCopy(id) {
   return (
     <div  className=" min-h-screen transition-colors bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800 dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100 "  style={{ fontFamily: "Arial, sans-serif" }} >
       <Header user={user} />
-      <div className="flex items-start gap-5 px-3 py-4">
+      <div className="flex flex-col lg:flex-row items-start gap-5 px-3 py-4">
         {/* FORM */}
         <form onSubmit={handleSubmit} className={`flex-1 ${panel}`}>
           <h3 style={{ fontWeight: 700, color: "#FCA5A5", marginTop: 0 }}>Vehicle availability</h3>
@@ -580,7 +580,7 @@ async function handleCopy(id) {
         </form>
 
         {/* Tiny list of submitted vehicles (local) */}
-        <div className={`flex-1 ${panel}`}>
+        <div className={`flex-1 mt-4 lg:mt-0 ${panel}`}>
           <h3 style={{ fontWeight: 700, color: "#FCA5A5", marginTop: 0 }}>Published vehicles</h3>
           {vehicles.length === 0 ? (
             <p>No vehicles yet.</p>
