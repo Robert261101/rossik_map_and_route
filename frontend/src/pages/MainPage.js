@@ -650,88 +650,90 @@ const displayedRoute = (route) => {
   map.addObject(poly);
 
   // ===== VIA PHASE 2/3: ghost via drag scaffold + commit =====
-  poly.addEventListener('pointerdown', (evt) => {
-    evt.stopPropagation();
-    evt.preventDefault();
+  if(!isMobile) {
+    poly.addEventListener('pointerdown', (evt) => {
+      evt.stopPropagation();
+      evt.preventDefault();
 
-    // freeze map panning while we drag the ghost
-    if (behaviorRef.current) {
-      try {
-        behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
-        behaviorRef.current.disable(window.H.mapevents.Behavior.KINETIC);
-      } catch {}
-    }
-
-    const { viewportX, viewportY } = evt.currentPointer || {};
-    if (typeof viewportX !== 'number') return;
-
-    const map = mapRef.current;
-    const geo = map.screenToGeo(viewportX, viewportY);
-    setViaDraft({ lat: geo.lat, lng: geo.lng });
-
-    // Create ghost DOM marker if none
-    if (!ghostMarkerRef.current) {
-      const ghostEl = document.createElement('div');
-      ghostEl.style.width = '14px';
-      ghostEl.style.height = '14px';
-      ghostEl.style.borderRadius = '50%';
-      ghostEl.style.background = 'rgba(30,144,255,0.6)';
-      ghostEl.style.boxShadow = '0 0 6px rgba(30,144,255,0.6)';
-      ghostEl.style.transform = 'translate(-50%,-50%)';
-      const ghostIcon = new window.H.map.DomIcon(ghostEl);
-      const marker = new window.H.map.DomMarker(geo, { icon: ghostIcon });
-      ghostMarkerRef.current = marker;
-      map.addObject(marker);
-    }
-
-    // start listening to pointermove while dragging
-    const onMove = (moveEvt) => {
-      const { viewportX: x, viewportY: y } = moveEvt.currentPointer;
-      const g = map.screenToGeo(x, y);
-      setViaDraft({ lat: g.lat, lng: g.lng });
-      if (ghostMarkerRef.current) ghostMarkerRef.current.setGeometry(g);
-    };
-
-    const onUp = async () => {
-      map.removeEventListener('pointermove', onMove);
-      map.removeEventListener('pointerup', onUp);
+      // freeze map panning while we drag the ghost
       if (behaviorRef.current) {
         try {
-          behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
-          behaviorRef.current.enable(window.H.mapevents.Behavior.KINETIC);
+          behaviorRef.current.disable(window.H.mapevents.Behavior.DRAGGING);
+          behaviorRef.current.disable(window.H.mapevents.Behavior.KINETIC);
         } catch {}
       }
-      // Commit the via: turn ghost into a real via stop and reroute
-      let committed = null;
-      if (ghostMarkerRef.current) {
-        const { lat, lng } = ghostMarkerRef.current.getGeometry();
-        committed = { id: `via_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, lat, lng };
+
+      const { viewportX, viewportY } = evt.currentPointer || {};
+      if (typeof viewportX !== 'number') return;
+
+      const map = mapRef.current;
+      const geo = map.screenToGeo(viewportX, viewportY);
+      setViaDraft({ lat: geo.lat, lng: geo.lng });
+
+      // Create ghost DOM marker if none
+      if (!ghostMarkerRef.current) {
+        const ghostEl = document.createElement('div');
+        ghostEl.style.width = '14px';
+        ghostEl.style.height = '14px';
+        ghostEl.style.borderRadius = '50%';
+        ghostEl.style.background = 'rgba(30,144,255,0.6)';
+        ghostEl.style.boxShadow = '0 0 6px rgba(30,144,255,0.6)';
+        ghostEl.style.transform = 'translate(-50%,-50%)';
+        const ghostIcon = new window.H.map.DomIcon(ghostEl);
+        const marker = new window.H.map.DomMarker(geo, { icon: ghostIcon });
+        ghostMarkerRef.current = marker;
+        map.addObject(marker);
       }
-      if (ghostMarkerRef.current) { map.removeObject(ghostMarkerRef.current); ghostMarkerRef.current = null; }
-      setViaDraft(null);
 
-      if (committed) {
-        // 🔎 Figure out which section is closest to the drop, then map section→leg
-        const sectionIdx = nearestSectionIndex(committed.lat, committed.lng, route);
-        const legIdx = sectionIndexToLegIndex(
-          sectionIdx,
-          viaStopsByLegRef.current,
-          addressesRef.current
-        );
+      // start listening to pointermove while dragging
+      const onMove = (moveEvt) => {
+        const { viewportX: x, viewportY: y } = moveEvt.currentPointer;
+        const g = map.screenToGeo(x, y);
+        setViaDraft({ lat: g.lat, lng: g.lng });
+        if (ghostMarkerRef.current) ghostMarkerRef.current.setGeometry(g);
+      };
 
-        console.log('[via] commit on leg', legIdx, 'coords:', committed.lat, committed.lng);
-        _registerVia(legIdx, committed);
-        setTimeout(() => {
-          const pts = [...addressesRef.current];
-          getRoute(pts, viaStopsByLegRef.current);
-        }, 0);
-      }
-      showHint("Press ESC to remove the last via", 4000);
-    };
+      const onUp = async () => {
+        map.removeEventListener('pointermove', onMove);
+        map.removeEventListener('pointerup', onUp);
+        if (behaviorRef.current) {
+          try {
+            behaviorRef.current.enable(window.H.mapevents.Behavior.DRAGGING);
+            behaviorRef.current.enable(window.H.mapevents.Behavior.KINETIC);
+          } catch {}
+        }
+        // Commit the via: turn ghost into a real via stop and reroute
+        let committed = null;
+        if (ghostMarkerRef.current) {
+          const { lat, lng } = ghostMarkerRef.current.getGeometry();
+          committed = { id: `via_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, lat, lng };
+        }
+        if (ghostMarkerRef.current) { map.removeObject(ghostMarkerRef.current); ghostMarkerRef.current = null; }
+        setViaDraft(null);
 
-    map.addEventListener('pointermove', onMove);
-    map.addEventListener('pointerup', onUp);
-  }, true);
+        if (committed) {
+          // 🔎 Figure out which section is closest to the drop, then map section→leg
+          const sectionIdx = nearestSectionIndex(committed.lat, committed.lng, route);
+          const legIdx = sectionIndexToLegIndex(
+            sectionIdx,
+            viaStopsByLegRef.current,
+            addressesRef.current
+          );
+
+          console.log('[via] commit on leg', legIdx, 'coords:', committed.lat, committed.lng);
+          _registerVia(legIdx, committed);
+          setTimeout(() => {
+            const pts = [...addressesRef.current];
+            getRoute(pts, viaStopsByLegRef.current);
+          }, 0);
+        }
+        showHint("Press ESC to remove the last via", 4000);
+      };
+
+      map.addEventListener('pointermove', onMove);
+      map.addEventListener('pointerup', onUp);
+    }, true);
+  }
   // ==============================================
 
   // fit bounds
@@ -892,7 +894,10 @@ const routeProgressIndex = (lat, lng) => {
   const handleRouteSelect = (index) => {
     setSelectedRouteIndex(index);
     // setSelectedSegmentByIndex(s => ({ ...s, [index]: s[index] ?? "0" }));
-    displayedRoute(routes[index]);
+    if (mapRef.current) {
+      displayedRoute(routes[index]);
+    }
+
     if (routes[index].sections && routes[index].sections.length > 0) {
       let totalDistance = 0;
       let totalDuration = 0;
@@ -1014,24 +1019,146 @@ const initMapIfNeeded = React.useCallback((elId) => {
    window.addEventListener("resize", onResize);
    // Note: if you ever unmount the page entirely, remove the listener.
  }, []);
+
+   const paintAddressMarkers = React.useCallback(() => {
+  if (!mapRef.current) return;
+  if (addresses.length === 0) return;
+
+  const map = mapRef.current;
+
+  const legCount = Math.max(addresses.length - 1, 0);
+  syncLegArrays(legCount);
+
+  if (activeLegIdx >= legCount) {
+    setActiveLegIdx(Math.max(legCount - 1, 0));
+  }
+
+  if (markerGroupRef.current) {
+    map.removeObject(markerGroupRef.current);
+  }
+
+  const group = new window.H.map.Group();
+
+  addresses.forEach((pt, idx) => {
+    const el = document.createElement('div');
+    el.className = 'numbered-marker';
+    el.style.transform = 'translate(-50%,-110%)';
+
+    let color = "blue";
+    if (idx === 0) color = "green";
+    else if (idx === addresses.length - 1) color = "red";
+
+    el.innerHTML = 
+    `<svg viewBox="0 0 24 24" class="arrow-icon">
+      <path d="M12 2 L15 8 H9 L12 2 Z" fill="${ idx===0 ? 'green' : idx===addresses.length-1 ? 'red' : 'blue' }" />
+    </svg>
+    <span class="marker-label">${idx+1}</span>
+    `;
+
+    document.body.appendChild(el);
+    const { offsetWidth } = el;
+    document.body.removeChild(el);
+
+    el.style.marginLeft = `-${offsetWidth/2}px`;
+    el.style.marginTop  = `0px`;
+
+    const domIcon = new window.H.map.DomIcon(el);
+    const marker = new window.H.map.DomMarker(
+      { lat: pt.lat, lng: pt.lng },
+      { icon: domIcon, volatility: false }
+    );
+    marker.__domElement = el;
+    group.addObject(marker);
+  });
+
+  map.addObject(group);
+  markerGroupRef.current = group;
+}, [addresses, activeLegIdx]);
+
+useEffect(() => {
+  paintAddressMarkers();
+}, [addresses, mapOpen, paintAddressMarkers]);
+
  
  // Desktop: init immediately
  React.useEffect(() => {
    if (!isMobile) initMapIfNeeded("mapContainerDesktop");
  }, [isMobile, initMapIfNeeded]);
  // Mobile: init when the sheet opens
- React.useEffect(() => {
-   if (!isMobile) return;
-   if (!mapOpen) return;
-   initMapIfNeeded("mapContainerMobile");
-   // avoid scroll behind the sheet
-   document.body.style.overflow = "hidden";
-   const t = setTimeout(() => mapRef.current?.getViewPort?.().resize?.(), 250);
-   return () => {
-     document.body.style.overflow = "";
-     clearTimeout(t);
-   };
- }, [isMobile, mapOpen, initMapIfNeeded]);
+// Mobile: init (fresh) when the sheet opens
+React.useEffect(() => {
+  if (!isMobile) return;
+  if (!mapOpen) return;
+
+  const el = document.getElementById("mapContainerMobile");
+  if (!el) return;
+
+  // 🔥 1) Always dispose old map when opening the sheet on mobile
+  if (mapRef.current) {
+    try { mapRef.current.dispose(); } catch {}
+    mapRef.current = null;
+  }
+  behaviorRef.current = null;
+  markerGroupRef.current = null;
+  viaGroupRef.current = null;
+  ghostMarkerRef.current = null;
+  fullLineStringRef.current = null;
+
+  // 🔁 2) Create a brand new map instance
+  const platform = new window.H.service.Platform({
+    apikey: process.env.REACT_APP_HERE_API_KEY,
+  });
+  const defaultLayers = platform.createDefaultLayers();
+  const map = new window.H.Map(
+    el,
+    defaultLayers.vector.normal.map,
+    { zoom: 6, center: { lat: 44.4268, lng: 26.1025 } }
+  );
+
+  map.getElement().addEventListener("contextmenu", e => e.preventDefault());
+
+  const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
+  behaviorRef.current = behavior;
+  mapRef.current = map;
+
+  const onResize = () => map.getViewPort().resize();
+  window.addEventListener("resize", onResize);
+
+  // avoid scroll behind the sheet
+  document.body.style.overflow = "hidden";
+
+  // 3) After the slide animation finishes, resize + redraw everything
+  const t = setTimeout(() => {
+    if (!mapRef.current) return;
+
+    mapRef.current.getViewPort().resize();
+
+    // Redraw current route (if any)
+    if (routes.length > 0) {
+      const idx = selectedRouteIndex ?? 0;
+      const rt = routes[idx] || routes[0];
+      if (rt) {
+        displayedRoute(rt);
+      }
+    }
+
+    // Address markers
+    if (addresses.length > 0) {
+      paintAddressMarkers();
+    }
+
+    // Via markers
+    renderViaMarkers();
+  }, 250);
+
+  return () => {
+    document.body.style.overflow = "";
+    clearTimeout(t);
+    window.removeEventListener("resize", onResize);
+    // ❗ do NOT dispose map here – we keep it alive while sheet is just hidden
+    // we dispose only on next open to avoid weird "half-dead" state
+  };
+}, [isMobile, mapOpen, routes, selectedRouteIndex, addresses, paintAddressMarkers]);
 
   // cost per km pt ruta selectată
   const costPerKmForSelected = () => {
@@ -1039,64 +1166,6 @@ const initMapIfNeeded = React.useCallback((elId) => {
     const { costPerKm } = computeRouteMetrics(routes[selectedRouteIndex]);
     return costPerKm;
   };
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    if (addresses.length === 0) return;
-
-    // keep via arrays sized to leg count
-    const legCount = Math.max(addresses.length - 1, 0);
-    syncLegArrays(legCount);
-
-    // keep active leg in range
-    if (activeLegIdx >= legCount) {
-      setActiveLegIdx(Math.max(legCount - 1, 0));
-    }
-
-    if (markerGroupRef.current) {
-      mapRef.current.removeObject(markerGroupRef.current);
-    }
-  
-    const group = new window.H.map.Group();
-  
-    addresses.forEach((pt, idx) => {
-      const el = document.createElement('div');
-      el.className = 'numbered-marker';
-      el.style.transform = 'translate(-50%,-110%)';
-      
-      let color = "blue";
-      if (idx === 0) color = "green";
-      else if (idx === addresses.length - 1) color = "red";
-    
-      el.innerHTML = 
-      `<svg viewBox="0 0 24 24" class="arrow-icon">
-        <path d="M12 2 L15 8 H9 L12 2 Z" fill="${ idx===0 ? 'green' : idx===addresses.length-1 ? 'red' : 'blue' }" />
-      </svg>
-      <span class="marker-label">${idx+1}</span>
-      `;
-    
-      // Fix: asigurăm că dimensiunea DOM-ului e gata
-      document.body.appendChild(el);
-      const { offsetWidth } = el;
-      document.body.removeChild(el);
-
-      el.style.marginLeft = `-${offsetWidth/2}px`;   // center horizontally
-      el.style.marginTop  = `0px`;                   // pin the TOP edge at the geo point
-
-      const domIcon = new window.H.map.DomIcon(el);
-    
-      const marker = new window.H.map.DomMarker(
-        { lat: pt.lat, lng: pt.lng },
-        { icon: domIcon, volatility: false }
-      );
-      marker.__domElement = el;
-      group.addObject(marker);
-    });
-    
-  
-    mapRef.current.addObject(group);
-    markerGroupRef.current = group;
-  }, [addresses]);
 
   // ===== VIA PHASE 1: global ESC handler =====
 useEffect(() => {
@@ -1213,6 +1282,7 @@ useEffect(() => {
 
   // ▶︎ new effect: once routes arrive, pick the fastest by total duration
   useEffect(() => {
+    if (!mapRef.current) return;
     if (routes.length === 0) return;
 
     // Calculate each route’s total travel time (in seconds)
@@ -1228,7 +1298,7 @@ useEffect(() => {
       setSelectedRouteIndex(fastestIdx);
       displayedRoute(routes[fastestIdx]);
     }
-  }, [routes]);  // Re-run whenever the routes array changes
+  }, [routes, mapOpen]);  // Re-run whenever the routes array changes
 
   return (
     <div className="App flex flex-col h-screen">
@@ -1748,6 +1818,6 @@ useEffect(() => {
 export default MainPage;
 
 /* TODOS:
-in the future: possible to have multiple via stations per leg
-vedem daca putem modifica ANUMITE toll-uri dupa nume/contractele noastre (mont blanc, frejous, euro tunelul franta-regatul unit )
+- vedem daca putem modifica ANUMITE toll-uri dupa nume/contractele noastre (mont blanc, frejous, euro tunelul franta-regatul unit )
+- numar de timocom, verificam care e mai vechi si sa verifice daca mai sunt actuale. daca da, sa se importeze datele, daca nu, sa-l blocheze
 */
