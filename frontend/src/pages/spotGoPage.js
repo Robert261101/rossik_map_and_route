@@ -1798,16 +1798,25 @@ export default function SpotGoPage({ user }) {
     <div
         className=" min-h-screen transition-colors bg-gradient-to-br from-red-600 via-white to-gray-400 text-gray-800 dark:from-gray-800 dark:via-gray-900 dark:to-black dark:text-gray-100 " style={{ fontFamily: 'Arial, sans-serif' }} >
         <Header user={user} />
-        <div className="flex items-start gap-0 px-0 md:px-2">
+        <div
+            className="
+                flex flex-col lg:flex-row
+                items-start
+                gap-5
+                px-3 py-4
+            "
+        >
         {/* Left Form */}
         <form
             onSubmit={handleSubmitOffer}
             className="
-            flex-1 mr-0 md:mr-6 p-5 rounded-lg
-            bg-white dark:bg-gray-800/70
-            border border-gray-200 dark:border-gray-700
-            shadow-xl
-            "
+                w-full lg:w-2/3
+                lg:mr-6
+                p-5 rounded-lg
+                bg-white dark:bg-gray-800/70
+                border border-gray-200 dark:border-gray-700
+                shadow-xl
+                "
         >
             <h3 className="mb-4 font-bold text-[#8a1414] dark:text-red-300">Addresses</h3>
 
@@ -2255,7 +2264,16 @@ export default function SpotGoPage({ user }) {
         </form>
 
         {/* Submitted Offers */}
-        <div className=" flex-1 p-5 rounded-lg bg-white dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 shadow-xl ">
+        <div
+            className="
+            w-full lg:w-1/3
+            mt-4 lg:mt-0
+            p-5 rounded-lg
+            bg-white dark:bg-gray-800/70
+            border border-gray-200 dark:border-gray-700
+            shadow-xl
+            "
+        >
             {/*<h3 style={{ color: '#b91c1c' }}>Submitted Offers</h3>*/}
             {offers.length === 0 ? (
             <p>No offers submitted yet.</p>
