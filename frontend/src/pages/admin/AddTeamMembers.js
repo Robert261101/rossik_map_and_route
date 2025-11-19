@@ -89,10 +89,17 @@ export default function AddTeamMembers() {
           p-6 rounded-xl shadow-lg
         "
       >
-        {/* Members picker — always white with black text */}
-        <div className="max-h-72 overflow-y-auto mb-6 border rounded p-3 bg-white dark:bg-white border-gray-300">
+        {/* Members picker — pretty, dark-mode aware list */}
+        <div
+          className="
+            max-h-72 overflow-y-auto mb-6
+            border border-gray-200 dark:border-gray-700
+            rounded-lg p-2
+            bg-white dark:bg-gray-900/40
+          "
+        >
           {users.length === 0 ? (
-            <p className="text-gray-700">
+            <p className="text-gray-700 dark:text-gray-300 text-sm">
               All users are already in a team or no other users available.
             </p>
           ) : (
@@ -100,21 +107,36 @@ export default function AddTeamMembers() {
               <label
                 key={user.id}
                 className="
-                  flex items-center justify-start gap-3
-                  px-3 py-2 rounded-lg cursor-pointer
-                  hover:bg-gray-100
-                  text-gray-900
+                  flex items-center justify-between gap-3
+                  px-3 py-2 rounded-md cursor-pointer
+                  odd:bg-gray-100 even:bg-white
+                  dark:odd:bg-gray-800 dark:even:bg-gray-900
+                  hover:bg-gray-200 dark:hover:bg-gray-600
+                  text-gray-900 dark:text-gray-100
+                  transition
                 "
               >
-                <input
-                  type="checkbox"
-                  checked={selectedUserIds.includes(user.id)}
-                  onChange={() => toggleUserSelection(user.id)}
-                  className="h-5 w-5 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                />
-                <span className="text-base font-medium">
-                  {formatName(user.username)} ({user.role})
-                </span>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedUserIds.includes(user.id)}
+                    onChange={() => toggleUserSelection(user.id)}
+                    className="h-5 w-5 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                  />
+                  <span className="text-base font-medium">
+                    {formatName(user.username)}{" "}
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      ({user.role})
+                    </span>
+                  </span>
+                </div>
+
+                {/* Optional: small pill showing current team or 'No team' */}
+                {user.team_id ? (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
+                    In another team
+                  </span>
+                ) : null}
               </label>
             ))
           )}

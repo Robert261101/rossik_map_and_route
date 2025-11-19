@@ -192,16 +192,45 @@ export default function TeamView() {
           </h1>
 
           {users.length === 0 ? (
-            <p className="text-gray-600 dark:text-gray-800 text-lg">No users found in this team.</p>
+            <p className="text-gray-600 dark:text-gray-300 text-lg">
+              No users found in this team.
+            </p>
           ) : (
-            <ul className="list-disc pl-5 space-y-3 max-h-96 overflow-y-auto">
-              {users.map(u => (
-                <li key={u.id} className="flex justify-between items-center">
-                  <span className="text-lg text-gray-800 dark:text-gray-800 font-medium">
-                    {formatName(u.username)} ({u.role})
+            <ul
+              className="
+                list-none
+                border border-gray-200 dark:border-gray-700
+                rounded-lg p-2
+                max-h-96 overflow-y-auto space-y-1
+                bg-white dark:bg-gray-900/40
+              "
+            >
+              {users.map((u, index) => (
+                <li
+                  key={u.id}
+                  className="
+                    flex items-center justify-between gap-3
+                    px-3 py-2 rounded-md
+                    odd:bg-gray-100 even:bg-white
+                    dark:odd:bg-gray-800 dark:even:bg-gray-900
+                    hover:bg-gray-200 dark:hover:bg-gray-600
+                    transition
+                  "
+                >
+                  <span className="text-base text-gray-900 dark:text-gray-100 font-medium">
+                    {formatName(u.username)}{" "}
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      ({u.role})
+                    </span>
                   </span>
+
                   <button
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-400/60"
+                    className="
+                      bg-red-600 hover:bg-red-700
+                      text-white px-3 py-1 rounded-xl
+                      text-sm font-semibold
+                      focus:outline-none focus:ring-2 focus:ring-red-400/60
+                    "
                     onClick={() => handleRemoveMember(u.id)}
                   >
                     Remove
