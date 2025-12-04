@@ -56,6 +56,7 @@ export default function Header({ user }) {
     navigate("/login");
   };
   const handleSpotGo = () => navigate("/spotgo", { state: {} });
+  const handleSpotGoTrucks = () => navigate("/spotgo/trucks", { state: {} });
   const handleMapGuide = () => navigate("/map-and-guide", { state: { fromMapGuide: true } });
   const handleHistory = () => navigate("/history", { state: { fromHistory: true } });
   const handleConversations = () => navigate("/conversations", { state: {} });
@@ -124,6 +125,13 @@ export default function Header({ user }) {
                       role="menuitem"
                     >
                       SpotGo
+                    </button>
+                    <button
+                      onClick={handleSpotGoTrucks}
+                      className="block w-full text-left px-4 py-2.5 hover:bg-black/5 dark:hover:bg-white/5"
+                      role="menuitem"
+                    >
+                      SpotGo Trucks
                     </button>
                     <button
                       onClick={handleMapGuide}

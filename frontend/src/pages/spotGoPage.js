@@ -1318,9 +1318,11 @@ export default function SpotGoPage({ user }) {
             payload.payment = pay;
         }
 
-        if (externalComment) {
-            payload.comments = externalComment;
-        }
+        // if (externalComment) {
+        //     payload.comments = externalComment;
+        // }
+
+        payload.comments = [shortCodeFor(userEmail), externalComment].filter(Boolean).join(" - ");
 
         const token = session?.access_token;
         const cleanPayload = cleanObject(payload);

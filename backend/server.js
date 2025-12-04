@@ -3,6 +3,9 @@ require('dotenv').config();
 const { supabaseAnon, supabaseService } = require('./lib/supabase');
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
+const multer = require('multer');
+
 const FALLBACK_TEAM_ID = 'cf70d8dc-5451-4979-a50d-c288365c77b4';
 
 // for now, keep existing code working by aliasing:
@@ -24,6 +27,11 @@ const vehiclesUpdate = require('./routes/spotgo/trucks/update');
 const cleanupExpiredRoutes = require("./routes/spotgo/cleanupExpired");
 
 const app = express();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
+});
+
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 app.use(cors());
@@ -36,8 +44,287 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token: data.session.access_token, user: data.user });
 });
 
+function hashToken(rawToken) {
+  return crypto.createHash('sha256').update(String(rawToken)).digest('hex');
+}
+
+
+// === HAULIER ONBOARDING: VALIDATE INVITE (public) ===
+app.get('/api/onboarding/validate', async (req, res) => {
+  const { token } = req.query;
+
+  if (!token) {
+    return res.status(400).json({ error: 'Missing token' });
+  }
+
+  try {
+    const tokenHash = hashToken(String(token));
+
+    const { data: invite, error } = await supabaseAdmin
+      .from('haulier_invites')
+      .select('id, carrier_name, contact_email, status, expires_at')
+      .eq('token_hash', tokenHash)
+      .single();
+
+    if (error || !invite) {
+      return res.status(404).json({ error: 'Invalid or unknown invite' });
+    }
+
+    const now = new Date();
+    if (
+      invite.status !== 'pending' ||
+      (invite.expires_at && new Date(invite.expires_at) < now)
+    ) {
+      return res.status(404).json({ error: 'Invite expired or already used' });
+    }
+
+    return res.json({
+      inviteId: invite.id,
+      carrierName: invite.carrier_name,
+      contactEmail: invite.contact_email,
+    });
+  } catch (err) {
+    console.error('Error in /api/onboarding/validate:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// === HAULIER ONBOARDING: SUBMIT FORM (public) ===
+app.post(
+  '/api/onboarding/submit',
+  upload.fields([
+    { name: 'cmrInsurance', maxCount: 1 },
+    { name: 'cmrPayment', maxCount: 1 },
+    { name: 'euLicense', maxCount: 1 },
+    { name: 'ibanConfirmation', maxCount: 1 },
+    { name: 'otherDocs', maxCount: 10 },
+  ]),
+  async (req, res) => {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Missing token' });
+    }
+
+    try {
+      const tokenHash = hashToken(String(token));
+
+      // 1) Validate invite
+      const { data: invite, error: inviteError } = await supabaseAdmin
+      .from('haulier_invites')
+      .select('id, status, expires_at, carrier_name, contact_email')
+      .eq('token_hash', tokenHash)
+      .single();
+
+      if (inviteError || !invite) {
+        return res.status(404).json({ error: 'Invalid invite' });
+      }
+
+      const now = new Date();
+      if (
+        invite.status !== 'pending' ||
+        (invite.expires_at && new Date(invite.expires_at) < now)
+      ) {
+        return res.status(400).json({ error: 'Invite expired or already used' });
+      }
+
+      const body = req.body;
+
+      // default company + email from invite, rest optional for now
+      const company_name        = body.companyName || invite.carrier_name || null;
+      const legal_address       = body.legalAddress || null;
+      const country             = body.country || null;
+      const vat_number          = body.vatNumber || null;
+      const registration_number = body.registrationNumber || null;
+      const contact_name        = body.contactName || null;
+      const contact_email       = body.contactEmail || invite.contact_email || null;
+      const contact_phone       = body.contactPhone || null;
+      const iban                = body.iban || null;
+      const bank_name           = body.bankName || null;
+      const swift_bic           = body.swiftBic || null;
+      const notes               = body.notes || null;
+      const language            = body.language || null;
+
+      // no required-field check here; for now only docs are required
+
+      if (!company_name || !legal_address || !country || !vat_number ||
+          !contact_name || !contact_email || !contact_phone || !iban || !bank_name) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // 3) Upload files to Supabase Storage
+      const bucket = 'haulier-onboarding';
+      const prefix = invite.id; // one folder per invite
+
+      async function uploadOne(file, subfolder) {
+        if (!file) return null;
+        const filename = `${Date.now()}-${file.originalname}`;
+        const path = `${prefix}/${subfolder}/${filename}`;
+
+        const { error: uploadError } = await supabaseAdmin.storage
+          .from(bucket)
+          .upload(path, file.buffer, {
+            contentType: file.mimetype || 'application/octet-stream',
+          });
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          throw new Error(`Failed to upload ${subfolder}`);
+        }
+        return path;
+      }
+
+      const files = req.files || {};
+
+      const cmrInsuranceFile   = files.cmrInsurance?.[0];
+      const cmrPaymentFile     = files.cmrPayment?.[0];
+      const euLicenseFile      = files.euLicense?.[0];
+      const ibanConfirmFile    = files.ibanConfirmation?.[0];
+      const otherDocsFiles     = files.otherDocs || [];
+
+      if (!cmrInsuranceFile || !euLicenseFile || !ibanConfirmFile) {
+        return res.status(400).json({ error: 'Required documents missing' });
+      }
+
+      const cmr_insurance_path     = await uploadOne(cmrInsuranceFile, 'cmr-insurance');
+      const cmr_payment_path       = cmrPaymentFile ? await uploadOne(cmrPaymentFile, 'cmr-payment') : null;
+      const eu_license_path        = await uploadOne(euLicenseFile, 'eu-license');
+      const iban_confirmation_path = await uploadOne(ibanConfirmFile, 'iban-confirmation');
+
+      const other_docs = [];
+      for (const f of otherDocsFiles) {
+        const path = await uploadOne(f, 'other');
+        other_docs.push({
+          type: 'other',
+          path,
+          name: f.originalname,
+          mimeType: f.mimetype,
+          size: f.size,
+        });
+      }
+
+      // 4) Insert submission
+      const raw_payload = {
+        ...body,
+        hasCmrInsurance: !!cmrInsuranceFile,
+        hasEuLicense: !!euLicenseFile,
+        hasIbanConfirmation: !!ibanConfirmFile,
+        otherDocsCount: other_docs.length,
+      };
+
+      const { data: submission, error: insertError } = await supabaseAdmin
+        .from('haulier_submissions')
+        .insert({
+          invite_id: invite.id,
+          company_name,
+          legal_address,
+          country,
+          vat_number,
+          registration_number,
+          contact_name,
+          contact_email,
+          contact_phone,
+          iban,
+          bank_name,
+          swift_bic,
+          notes,
+          language,
+          cmr_insurance_path,
+          cmr_payment_path,
+          eu_license_path,
+          iban_confirmation_path,
+          other_docs,
+          raw_payload,
+          sync_status: 'received',
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error('Insert submission error:', insertError);
+        return res.status(500).json({ error: 'Failed to save submission' });
+      }
+
+      // 5) Mark invite as completed
+      const { error: updateError } = await supabaseAdmin
+        .from('haulier_invites')
+        .update({ status: 'completed' })
+        .eq('id', invite.id);
+
+      if (updateError) {
+        console.error('Failed to update invite status:', updateError);
+        // not fatal for the user
+      }
+
+      return res.status(200).json({
+        success: true,
+        submissionId: submission.id,
+      });
+    } catch (err) {
+      console.error('Error in /api/onboarding/submit:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 // -- PROTECTED: All /api routes after this get user+role loaded --
 app.use('/api', getUserWithRole);
+
+// === HAULIER ONBOARDING: CREATE INVITE (internal only) ===
+app.post(
+  '/api/onboarding/invite',
+  requireRole('dispatcher', 'transport_manager', 'team_lead', 'admin'),
+  async (req, res) => {
+    const { carrier_name, contact_email, contact_name, expires_in_days } = req.body;
+
+    if (!carrier_name || !contact_email) {
+      return res.status(400).json({ error: 'carrier_name and contact_email are required' });
+    }
+
+    try {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashToken(rawToken);
+
+      let expires_at = null;
+      if (expires_in_days && Number.isFinite(Number(expires_in_days))) {
+        const days = Number(expires_in_days);
+        const d = new Date();
+        d.setDate(d.getDate() + days);
+        expires_at = d.toISOString();
+      }
+
+      const { data: invite, error } = await supabaseAdmin
+        .from('haulier_invites')
+        .insert({
+          token_hash: tokenHash,
+          carrier_name,
+          contact_email,
+          contact_name: contact_name || null,
+          expires_at,
+          created_by_user_id: req.user.id,
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Error inserting haulier_invite:', error);
+        return res.status(500).json({ error: 'Failed to create invite' });
+      }
+
+      const frontendBase = process.env.FRONTEND_BASE_URL || 'http://localhost:3000';
+      const inviteUrl = `${frontendBase}/onboarding/${rawToken}`;
+
+      return res.status(201).json({
+        inviteId: invite.id,
+        token: rawToken,      // raw token; only internal users see this
+        inviteUrl,
+      });
+    } catch (err) {
+      console.error('Error in /api/onboarding/invite:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
 
 // cleanup expired (admin only, now behind auth)
 app.use('/api/admin/spotgo/cleanup-expired', requireRole('admin'), cleanupExpiredRoutes);

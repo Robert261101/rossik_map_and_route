@@ -20,6 +20,8 @@ import SpotGoPage from './spotGoPage';
 import RossikTools from './LandingPage'
 import SpotGoTrucks from './spotGoTrucks'
 import ConversationsPage from './ConversationsPage'
+import OnboardingPage from './onboarding/OnboardingPage';
+
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -151,6 +153,9 @@ export default function App() {
         <Route
           path="/conversations"
           element={user ? <ConversationsPage user={user} /> : <Navigate to="/login" />} />
+        <Route
+          path="/onboarding/:token"
+          element={<OnboardingPage />} />
       </Routes>
     </BrowserRouter>
   )
