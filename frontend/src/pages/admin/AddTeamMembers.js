@@ -1,33 +1,68 @@
 // src/pages/AddTeamMembers.js
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useNavigate, useParams } from 'react-router-dom';
-import { roleForTeam } from '../../lib/roles';
+import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { useNavigate, useParams } from "react-router-dom";
+import { roleForTeam } from "../../lib/roles";
 
 export default function AddTeamMembers() {
-  const { teamId } = useParams();
+  const { key } = useParams(); // url_key from route
   const navigate = useNavigate();
 
+  const [team, setTeam] = useState(null); // {id, name, url_key}
   const [users, setUsers] = useState([]);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const NO_TEAM_ID = "cf70d8dc-5451-4979-a50d-c288365c77b4";
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, username, role, team_id')
-        .not('team_id', 'eq', teamId)
-        .order('username');
+    const run = async () => {
+      setErr("");
+      console.log("[AddTeamMembers] route key:", key);
 
-      if (error) {
-        console.error('Error fetching users:', error);
+      // 1) Resolve team by url_key -> get UUID id
+      const { data: teamData, error: teamErr } = await supabase
+        .from("teams")
+        .select("id, name, url_key")
+        .eq("url_key", key)
+        .single();
+
+      console.log("[AddTeamMembers] team lookup:", { teamErr, teamData });
+
+      if (teamErr || !teamData) {
+        setTeam(null);
+        setUsers([]);
+        setErr("Team not found");
         return;
       }
+
+      setTeam(teamData);
+
+      // 2) Fetch eligible users (No Team or null)
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, username, role, team_id")
+        .or(`team_id.eq."${NO_TEAM_ID}",team_id.is.null`)
+        .order("username");
+
+      console.log("[AddTeamMembers] fetchUsers:", {
+        error,
+        count: data?.length,
+        sample: data?.slice?.(0, 5),
+      });
+
+      if (error) {
+        setUsers([]);
+        setErr("Failed to load users");
+        return;
+      }
+
       setUsers(data || []);
     };
-    fetchUsers();
-  }, [teamId]);
+
+    run();
+  }, [key]);
 
   const toggleUserSelection = (userId) => {
     setSelectedUserIds((prev) =>
@@ -36,35 +71,68 @@ export default function AddTeamMembers() {
   };
 
   const formatName = (username) => {
-    if (!username?.includes('@')) return 'Fără Nume';
+    if (!username?.includes("@")) return "Fără Nume";
     return username
-      .split('@')[0]
-      .split('.')
+      .split("@")[0]
+      .split(".")
       .map((p) => p[0]?.toUpperCase() + p.slice(1))
-      .join(' ');
+      .join(" ");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (selectedUserIds.length === 0) {
-      alert('Selectează cel puțin un membru pentru a adăuga.');
+
+    console.log("[AddTeamMembers] submit team:", team);
+    console.log("[AddTeamMembers] submit selectedUserIds:", selectedUserIds);
+
+    if (!team?.id) {
+      alert("Team not found / not loaded.");
       return;
     }
+
+    if (selectedUserIds.length === 0) {
+      alert("Selectează cel puțin un membru pentru a adăuga.");
+      return;
+    }
+
     setLoading(true);
 
-    const { error } = await supabase
-      .from('users')
-      .update({ team_id: teamId, role: roleForTeam(teamId) })
-      .in('id', selectedUserIds);
+    const newRole = roleForTeam(team.id); // or roleForTeam(team.url_key) — depends on your helper
+    console.log("[AddTeamMembers] assigning role:", newRole);
 
-    if (error) {
-      console.error('Error adding members:', error);
-      alert('Eroare la adăugarea membrilor.');
+    const { data: updated, error: updErr } = await supabase
+      .from("users")
+      .update({ team_id: team.id, role: newRole })
+      .in("id", selectedUserIds)
+      .select("id, username, team_id, role");
+
+    console.log("[AddTeamMembers] update result:", { updErr, updated });
+
+    if (updErr) {
+      alert(`Update error: ${updErr.message}`);
       setLoading(false);
       return;
     }
-    navigate(`/admin/teams/${teamId}`);
+
+    navigate(`/admin/teams/${team.url_key}`);
   };
+
+  // Optional: show error state
+  if (err) {
+    return (
+      <div className="min-h-screen grid place-items-center p-6">
+        <div className="bg-white p-6 rounded-xl shadow border max-w-md w-full text-center">
+          <p className="mb-4">{err}</p>
+          <button
+            className="px-4 py-2 bg-red-600 text-white rounded-xl"
+            onClick={() => navigate("/admin/teams")}
+          >
+            Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -89,7 +157,6 @@ export default function AddTeamMembers() {
           p-6 rounded-xl shadow-lg
         "
       >
-        {/* Members picker — pretty, dark-mode aware list */}
         <div
           className="
             max-h-72 overflow-y-auto mb-6
@@ -100,7 +167,7 @@ export default function AddTeamMembers() {
         >
           {users.length === 0 ? (
             <p className="text-gray-700 dark:text-gray-300 text-sm">
-              All users are already in a team or no other users available.
+              No eligible users found.
             </p>
           ) : (
             users.map((user) => (
@@ -130,13 +197,6 @@ export default function AddTeamMembers() {
                     </span>
                   </span>
                 </div>
-
-                {/* Optional: small pill showing current team or 'No team' */}
-                {user.team_id ? (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
-                    In another team
-                  </span>
-                ) : null}
               </label>
             ))
           )}
@@ -167,7 +227,7 @@ export default function AddTeamMembers() {
               focus:outline-none focus:ring-2 focus:ring-red-400/60
             "
           >
-            {loading ? 'Adding...' : 'Add Members'}
+            {loading ? "Adding..." : "Add Members"}
           </button>
         </div>
       </form>
