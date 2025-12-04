@@ -5,12 +5,9 @@ export const USER_SHORT_CODES = {
   "erwin.rossik@rossik.eu": "ER1",
   "jessika.birsan@rossik.eu": "JB1",
   "laura.demian@rossik.eu": "LD2",
-  "robert.sava@rossik.eu": "RS1",
   "dragana.petra@rossik.eu": "DP1",
   "catalin.ivan@rossik.eu": "CI1",
   "mihaela.balogh@rossik.eu": "MB1",
-  "mihai.cernea@rossik.eu": "MC1",
-  "vlad.erdei@rossik.eu": "VE1",
   "claudiu.negura@rossik.eu": "CN1",
   "aleksandar.misic@rossik.eu": "AM2",
   "alexandru.moldovan@rossik.eu": "AIM1",
@@ -26,10 +23,11 @@ export const USER_SHORT_CODES = {
   "mert.aksoy@rossik.eu": "MA1",
   "dan.calciu@rossik.eu": "DC1",
   "vanessa.redl@rossik.eu": "VR1",         // al doilea „VR”
-  "cosmin.rotariu@rossik.eu": "CR1",
-  "george.serbanescu@rossik.eu": "GS1",
-  "ovidiu.maran@rossik.eu": "OM1",
-  "filip.lukic@rossik.eu": "FL1"
+  "filip.lukic@rossik.eu": "FL1",
+  "bogdan.ilies@rossik.eu": "BI1",
+  "gordana.domaneant@rossik.eu": "GD2",
+  "sorina.stroia@rossik.eu": "SS1",
+  "sebastian.adam@rossik.eu": "SA2"
   // adaugi restul aici...
 };
 
