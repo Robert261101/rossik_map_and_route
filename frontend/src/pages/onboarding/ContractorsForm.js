@@ -1,5 +1,119 @@
 // src/pages/onboarding/ContractorsForm.js
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from "react";
+
+function FileField({
+  label,
+  required,
+  description,
+  accept,
+  multiple,
+  value, // File | File[] | null
+  onChange,
+}) {
+  const inputRef = useRef(null);
+
+  const files = useMemo(() => {
+    if (!value) return [];
+    return Array.isArray(value) ? value : [value];
+  }, [value]);
+
+  const pick = () => inputRef.current?.click();
+
+  const removeAt = (idx) => {
+    if (multiple) {
+      const next = files.filter((_, i) => i !== idx);
+      onChange(next);
+    } else {
+      onChange(null);
+    }
+  };
+
+  const onInput = (e) => {
+    const picked = Array.from(e.target.files || []);
+    if (!picked.length) return;
+
+    if (multiple) {
+      // merge + dedupe by name/size/lastModified
+      const merged = [...files, ...picked];
+      const dedup = [];
+      const seen = new Set();
+      for (const f of merged) {
+        const k = `${f.name}|${f.size}|${f.lastModified}`;
+        if (!seen.has(k)) {
+          seen.add(k);
+          dedup.push(f);
+        }
+      }
+      onChange(dedup);
+    } else {
+      onChange(picked[0]);
+    }
+
+    // allow picking the same file again if user removed it
+    e.target.value = "";
+  };
+
+  const hasFile = files.length > 0;
+
+  return (
+    <div style={styles.card}>
+      <div style={styles.cardHeader}>
+        <div style={{ minWidth: 0 }}>
+          <div style={styles.labelRow}>
+            <h3 style={styles.cardTitle}>
+              {label} {required ? <span style={styles.req}>*</span> : null}
+            </h3>
+            {hasFile ? <span style={styles.badgeOk}>Attached</span> : <span style={styles.badge}>Optional</span>}
+          </div>
+          {description ? <p style={styles.helpText}>{description}</p> : null}
+        </div>
+
+        <button type="button" onClick={pick} style={styles.pickBtn}>
+          Choose file{multiple ? "s" : ""}
+        </button>
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          multiple={multiple}
+          onChange={onInput}
+          style={{ display: "none" }}
+        />
+      </div>
+
+      <div style={styles.fileArea} onClick={pick} role="button" tabIndex={0}>
+        {!hasFile ? (
+          <div style={styles.dropHint}>
+            <div style={styles.dropTitle}>Drop files here or click to browse</div>
+            <div style={styles.dropSub}>Accepted: {accept}</div>
+          </div>
+        ) : (
+          <div style={styles.chipsWrap}>
+            {files.map((f, idx) => (
+              <div key={`${f.name}-${f.size}-${f.lastModified}-${idx}`} style={styles.chip}>
+                <span style={styles.chipName} title={f.name}>
+                  {f.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeAt(idx);
+                  }}
+                  style={styles.chipX}
+                  aria-label={`Remove ${f.name}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ContractorsForm({ token, invite }) {
   const [cmrInsurance, setCmrInsurance] = useState(null);
@@ -10,21 +124,23 @@ export default function ContractorsForm({ token, invite }) {
 
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const canSubmit =
+    !!cmrInsurance && !!euLicense && !!ibanConfirmation && confirmed && !submitting;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
+    setErrorMsg("");
+    setSuccessMsg("");
 
     if (!cmrInsurance || !euLicense || !ibanConfirmation) {
-      setErrorMsg('Please upload all required documents.');
+      setErrorMsg("Please upload all required documents.");
       return;
     }
-
     if (!confirmed) {
-      setErrorMsg('Please confirm that the uploaded data is complete and correct.');
+      setErrorMsg("Please confirm that the uploaded data is complete and correct.");
       return;
     }
 
@@ -33,195 +149,325 @@ export default function ContractorsForm({ token, invite }) {
 
       const fd = new FormData();
 
-      // (Optional) send companyName/contactEmail to backend,
-      // even though backend can default from invite.
-      if (invite?.carrierName) {
-        fd.append('companyName', invite.carrierName);
-      }
-      if (invite?.contactEmail) {
-        fd.append('contactEmail', invite.contactEmail);
-      }
+      if (invite?.carrierName) fd.append("companyName", invite.carrierName);
+      if (invite?.contactEmail) fd.append("contactEmail", invite.contactEmail);
 
-      fd.append('cmrInsurance', cmrInsurance);
-      if (cmrPayment) fd.append('cmrPayment', cmrPayment);
-      fd.append('euLicense', euLicense);
-      fd.append('ibanConfirmation', ibanConfirmation);
+      fd.append("cmrInsurance", cmrInsurance);
+      if (cmrPayment) fd.append("cmrPayment", cmrPayment);
+      fd.append("euLicense", euLicense);
+      fd.append("ibanConfirmation", ibanConfirmation);
 
-      if (otherDocs && otherDocs.length) {
-        Array.from(otherDocs).forEach((file) => {
-          fd.append('otherDocs', file);
-        });
+      if (otherDocs?.length) {
+        otherDocs.forEach((file) => fd.append("otherDocs", file));
       }
 
-      const res = await fetch(`/api/onboarding/submit?token=${encodeURIComponent(token)}`, {
-        method: 'POST',
-        body: fd,
-      });
+      const res = await fetch(
+        `/api/onboarding/submit?token=${encodeURIComponent(token)}`,
+        { method: "POST", body: fd }
+      );
 
       const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Submission failed");
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Submission failed');
-      }
-
-      setSuccessMsg('Thank you! Your documents have been submitted.');
+      setSuccessMsg("Thank you! Your documents have been submitted.");
     } catch (err) {
       console.error(err);
-      setErrorMsg(err.message || 'Something went wrong');
+      setErrorMsg(err.message || "Something went wrong");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} style={styles.form}>
-      {successMsg && <div style={{ ...styles.alert, ...styles.alertSuccess }}>{successMsg}</div>}
-      {errorMsg && <div style={{ ...styles.alert, ...styles.alertError }}>{errorMsg}</div>}
+    <div style={styles.wrap}>
+      <div style={styles.header}>
+        <div>
+          <h2 style={styles.h1}>Upload contractor documents</h2>
+          <p style={styles.sub}>
+            PDFs or images are fine. Required files are marked with{" "}
+            <span style={styles.req}>*</span>.
+          </p>
+        </div>
+        <div style={styles.progressPill}>
+          <span style={{ opacity: 0.7 }}>Step</span> <strong>2</strong> <span style={{ opacity: 0.7 }}>/</span>{" "}
+          <strong>2</strong>
+        </div>
+      </div>
 
-      <div style={styles.grid}>
-        {/* CMR Insurance */}
-        <div style={styles.card}>
-          <h3 style={styles.cardTitle}>CMR-Insurance *</h3>
-          <p style={styles.helpText}>Upload your valid CMR insurance document (PDF/image).</p>
-          <input
-            type="file"
-            accept=".pdf,image/*"
-            onChange={(e) => setCmrInsurance(e.target.files?.[0] || null)}
+      {successMsg ? <div style={{ ...styles.alert, ...styles.alertSuccess }}>{successMsg}</div> : null}
+      {errorMsg ? <div style={{ ...styles.alert, ...styles.alertError }}>{errorMsg}</div> : null}
+
+      <form onSubmit={handleSubmit} style={styles.form}>
+        <div style={styles.grid}>
+          <FileField
+            label="CMR Insurance"
             required
-          />
-        </div>
-
-        {/* Payment Confirmation */}
-        <div style={styles.card}>
-          <h3 style={styles.cardTitle}>Payment Confirmation for CMR-Insurance</h3>
-          <p style={styles.helpText}>Optional upload of the payment confirmation.</p>
-          <input
-            type="file"
+            description="Upload your valid CMR insurance document (PDF/image)."
             accept=".pdf,image/*"
-            onChange={(e) => setCmrPayment(e.target.files?.[0] || null)}
+            multiple={false}
+            value={cmrInsurance}
+            onChange={setCmrInsurance}
           />
-        </div>
 
-        {/* EU License */}
-        <div style={styles.card}>
-          <h3 style={styles.cardTitle}>EU-License *</h3>
-          <p style={styles.helpText}>Upload your EU transport license.</p>
-          <input
-            type="file"
+          <FileField
+            label="Payment Confirmation for CMR Insurance"
+            description="Optional upload of the payment confirmation."
             accept=".pdf,image/*"
-            onChange={(e) => setEuLicense(e.target.files?.[0] || null)}
+            multiple={false}
+            value={cmrPayment}
+            onChange={setCmrPayment}
+          />
+
+          <FileField
+            label="EU License"
             required
-          />
-        </div>
-
-        {/* Bank Confirmation of IBAN */}
-        <div style={styles.card}>
-          <h3 style={styles.cardTitle}>Bank Confirmation of your IBAN *</h3>
-          <p style={styles.helpText}>Document from your bank confirming your IBAN.</p>
-          <input
-            type="file"
+            description="Upload your EU transport license."
             accept=".pdf,image/*"
-            onChange={(e) => setIbanConfirmation(e.target.files?.[0] || null)}
-            required
+            multiple={false}
+            value={euLicense}
+            onChange={setEuLicense}
           />
-        </div>
 
-        {/* Other uploads */}
-        <div style={styles.card}>
-          <h3 style={styles.cardTitle}>Other uploads</h3>
-          <p style={styles.helpText}>Any additional documents (optional).</p>
-          <input
-            type="file"
+          <FileField
+            label="Bank Confirmation of your IBAN"
+            required
+            description="Document from your bank confirming your IBAN."
+            accept=".pdf,image/*"
+            multiple={false}
+            value={ibanConfirmation}
+            onChange={setIbanConfirmation}
+          />
+
+          <FileField
+            label="Other uploads"
+            description="Any additional documents (optional)."
             accept=".pdf,image/*"
             multiple
-            onChange={(e) => setOtherDocs(e.target.files || [])}
+            value={otherDocs}
+            onChange={setOtherDocs}
           />
         </div>
-      </div>
 
-      {/* Confirmation checkbox */}
-      <div style={{ marginTop: '1.5rem' }}>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
-          />
-          <span>
-            I confirm that I have uploaded all required files completely and that the data is correct.
-          </span>
-        </label>
-      </div>
+        <div style={styles.footer}>
+          <label style={styles.checkboxRow}>
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+              style={{ marginTop: 3 }}
+            />
+            <span style={{ color: "#1f2937" }}>
+              I confirm that I have uploaded all required files completely and that the data is correct.
+            </span>
+          </label>
 
-      {/* Submit button */}
-      <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
-        <button
-          type="submit"
-          disabled={submitting || !confirmed}
-          style={{
-            ...styles.button,
-            opacity: submitting || !confirmed ? 0.7 : 1,
-            cursor: submitting || !confirmed ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {submitting ? 'Submitting…' : 'Next'}
-        </button>
-      </div>
-    </form>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            style={{
+              ...styles.primaryBtn,
+              opacity: canSubmit ? 1 : 0.6,
+              cursor: canSubmit ? "pointer" : "not-allowed",
+            }}
+          >
+            {submitting ? "Submitting…" : "Next"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
 const styles = {
+  wrap: {
+    maxWidth: 1020,
+    margin: "0 auto",
+    padding: "1.25rem",
+  },
+  header: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "1rem",
+    marginBottom: "1rem",
+  },
+  h1: {
+    margin: 0,
+    fontSize: "1.35rem",
+    fontWeight: 750,
+    letterSpacing: "-0.02em",
+    color: "#111827",
+  },
+  sub: {
+    margin: "0.35rem 0 0",
+    color: "#6b7280",
+    fontSize: "0.95rem",
+  },
+  progressPill: {
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    borderRadius: 999,
+    padding: "0.35rem 0.65rem",
+    fontSize: "0.9rem",
+    color: "#111827",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+    whiteSpace: "nowrap",
+  },
   form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1rem',
+    display: "flex",
+    flexDirection: "column",
+    gap: "1rem",
   },
   grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-    gap: '1rem',
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: "1rem",
   },
   card: {
-    border: '1px solid #ddd',
-    borderRadius: '6px',
-    padding: '1rem',
-    background: '#fafafa',
+    border: "1px solid #e5e7eb",
+    borderRadius: 14,
+    padding: "1rem",
+    background: "linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%)",
+    boxShadow: "0 1px 2px rgba(16,24,40,0.06)",
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    marginBottom: "0.75rem",
+  },
+  labelRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    flexWrap: "wrap",
   },
   cardTitle: {
-    margin: '0 0 0.25rem 0',
-    fontSize: '1rem',
-    fontWeight: 600,
+    margin: 0,
+    fontSize: "1rem",
+    fontWeight: 700,
+    color: "#111827",
   },
+  req: { color: "#e11d48", fontWeight: 800 },
   helpText: {
-    margin: '0 0 0.5rem 0',
-    fontSize: '0.85rem',
-    color: '#666',
+    margin: "0.25rem 0 0",
+    fontSize: "0.9rem",
+    color: "#6b7280",
+    lineHeight: 1.35,
   },
-  button: {
-    padding: '0.6rem 1.4rem',
-    borderRadius: '4px',
-    border: 'none',
-    background: '#e6007a', // go full GCT pink if you want
-    color: 'white',
-    fontWeight: 600,
-    fontSize: '0.95rem',
+  pickBtn: {
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    borderRadius: 10,
+    padding: "0.45rem 0.75rem",
+    fontWeight: 650,
+    fontSize: "0.9rem",
+    color: "#111827",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+  fileArea: {
+    border: "1px dashed #d1d5db",
+    borderRadius: 12,
+    padding: "0.9rem",
+    background: "#fff",
+    cursor: "pointer",
+  },
+  dropHint: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.25rem",
+  },
+  dropTitle: { fontWeight: 650, color: "#111827" },
+  dropSub: { fontSize: "0.85rem", color: "#6b7280" },
+  chipsWrap: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+  },
+  chip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.45rem",
+    maxWidth: "100%",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    background: "#f9fafb",
+    padding: "0.35rem 0.6rem",
+  },
+  chipName: {
+    maxWidth: 260,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: "0.9rem",
+    color: "#111827",
+  },
+  chipX: {
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    fontSize: "1.1rem",
+    lineHeight: 1,
+    color: "#6b7280",
+  },
+  badge: {
+    fontSize: "0.75rem",
+    padding: "0.15rem 0.5rem",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    color: "#6b7280",
+    background: "#fff",
+  },
+  badgeOk: {
+    fontSize: "0.75rem",
+    padding: "0.15rem 0.5rem",
+    borderRadius: 999,
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    background: "#f0fdf4",
+  },
+  footer: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "1rem",
+    marginTop: "0.25rem",
+    borderTop: "1px solid #f1f5f9",
+    paddingTop: "1rem",
+  },
+  checkboxRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.6rem",
+    maxWidth: 700,
+  },
+  primaryBtn: {
+    padding: "0.7rem 1.25rem",
+    borderRadius: 12,
+    border: "1px solid rgba(0,0,0,0.08)",
+    background: "#e6007a",
+    color: "white",
+    fontWeight: 800,
+    fontSize: "0.95rem",
+    boxShadow: "0 8px 18px rgba(230,0,122,0.22)",
   },
   alert: {
-    padding: '0.75rem 1rem',
-    borderRadius: '4px',
-    fontSize: '0.9rem',
+    padding: "0.85rem 1rem",
+    borderRadius: 12,
+    fontSize: "0.95rem",
+    border: "1px solid transparent",
   },
   alertSuccess: {
-    background: '#e6ffed',
-    border: '1px solid #2ecc71',
-    color: '#1e7e34',
+    background: "#f0fdf4",
+    borderColor: "#bbf7d0",
+    color: "#166534",
   },
   alertError: {
-    background: '#ffe6e6',
-    border: '1px solid #e74c3c',
-    color: '#c0392b',
+    background: "#fef2f2",
+    borderColor: "#fecaca",
+    color: "#991b1b",
   },
 };
-
-//In Translogica sunt toate datele de firma dupa numarul de timocom si sa le luam de acolo - CONTINUA SA CAUTI API

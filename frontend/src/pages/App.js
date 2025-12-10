@@ -115,7 +115,7 @@ export default function App() {
           path="/spotgo"
           element={user ? <SpotGoPage user={user} /> : <Navigate to="/login" />} />
         <Route 
-          path="/spotgotrucks"
+          path="/spotgo/trucks"
           element={user ? <SpotGoTrucks user={user} /> : <Navigate to="/login" />} />
         <Route
           path="/history"
