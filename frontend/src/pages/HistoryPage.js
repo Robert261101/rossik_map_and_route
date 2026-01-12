@@ -450,7 +450,7 @@ export default function HistoryPage({ user }) {
                           >
                             Edit
                           </button>
-                          <button
+                          {/* <button
                             type="button"
                             onClick={e => { e.stopPropagation(); openConvoForRoute(rt); }}
                             className="
@@ -461,7 +461,7 @@ export default function HistoryPage({ user }) {
                             "
                           >
                             Conversation
-                          </button>
+                          </button> */}
                           <button
                             type="button"
                             onClick={e => {
