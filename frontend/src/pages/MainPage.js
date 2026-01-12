@@ -33,6 +33,7 @@ const MainPage = ({ user })  => {
   const [rawDuration, setRawDuration] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasCalculated, setHasCalculated] = useState(false);
+  const [draggingId, setDraggingId] = useState(null);
   const mapRef = useRef(null);
   const markerGroupRef = useRef(null);
   const navigate = useNavigate();
@@ -64,6 +65,14 @@ const MainPage = ({ user })  => {
   // =================================================================
 
   const [activeLegIdx, setActiveLegIdx] = useState(0);
+
+  const moveItem = (arr, from, to) => {
+  const copy = arr.slice();
+  const [item] = copy.splice(from, 1);
+  copy.splice(to, 0, item);
+  return copy;
+};
+
 
   const ghostMarkerRef = useRef(null);
   const behaviorRef = useRef(null);
@@ -272,7 +281,11 @@ const buildOrderedVias = (pts, legs) => {
       }
 
       // Prefill core fields
-      setAddresses(rt.addresses || []);
+      setAddresses((rt.addresses || []).map(a => ({
+  id: a.id || `addr_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+  ...a
+})));
+
       setIdentifier(rt.identifier || "");
       setPlate(rt.truck_id || "");
 
@@ -603,9 +616,19 @@ const _registerVia = (legIdx, via) => {
       .toUpperCase();
 
     setAddresses(prev => {
-      const next = [...prev, { ...coordsWithLabel, postal: code || "", country: countryCode, city }];
-      return next // hard-cap at 2 (origin, destination)
-    });
+  const next = [
+    ...prev,
+    {
+      id: `addr_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+      ...coordsWithLabel,
+      postal: code || "",
+      country: countryCode,
+      city,
+    }
+  ];
+  return next;
+});
+
     console.log('picked address: ', coordsWithLabel)
   };
   const moveUp = (index) => {
@@ -620,14 +643,14 @@ const _registerVia = (legIdx, via) => {
     [newArr[index], newArr[index + 1]] = [newArr[index + 1], newArr[index]];
     setAddresses(newArr);
   };
-  const removeAddress = (index) => {
-    const newArr = [...addresses];
-    newArr.splice(index, 1);
-    setAddresses(newArr);
-    if (newArr.length === 0) {
-      resetRouteState();
-    }
-  };
+  const removeAddressById = (id) => {
+  setAddresses((prev) => {
+    const next = prev.filter((a) => a.id !== id);
+    if (next.length === 0) resetRouteState();
+    return next;
+  });
+};
+
 
 const getRoute = async (pts = addresses, viasByLeg = viaStopsByLegRef.current) => {
   setIsLoading(true);
@@ -1471,36 +1494,87 @@ useEffect(() => {
                         display = `${countryCode}-${postal} ${addressOnly}`;
                       }
 
+                      const canDrag = addresses.length > 1;
+
+
                       return (
                         <li
-                          key={index}
-                          className="
-                            py-2 px-2 rounded-md
-                            odd:bg-gray-100 even:bg-white
-                            dark:odd:bg-gray-800 dark:even:bg-gray-900
-                            hover:bg-gray-200 dark:hover:bg-gray-600
-                            transition
-                          "
-                        >
-                          <div className="text-sm text-gray-900 dark:text-gray-100">{display}</div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => moveUp(index)}
-                              className="text-xs text-red-600 hover:underline"
-                            >Up</button>
-                            <button
-                              type="button"
-                              onClick={() => moveDown(index)}
-                              className="text-xs text-red-600 hover:underline"
-                            >Down</button>
-                            <button
-                              type="button"
-                              onClick={() => removeAddress(index)}
-                              className="text-xs text-red-600 hover:underline"
-                            >X</button>
-                          </div>
-                        </li>
+  key={pt.id || index}
+  draggable={addresses.length > 1}
+  onDragStart={(e) => {
+    if (addresses.length <= 1) return;
+    setDraggingId(pt.id);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", pt.id);
+  }}
+  onDragEnd={() => setDraggingId(null)}
+  onDragOver={(e) => {
+    if (addresses.length <= 1) return;
+    e.preventDefault(); // enables drop
+    e.dataTransfer.dropEffect = "move";
+  }}
+  onDrop={(e) => {
+    if (addresses.length <= 1) return;
+    e.preventDefault();
+
+    const fromId = e.dataTransfer.getData("text/plain");
+    const toId = pt.id;
+    if (!fromId || !toId || fromId === toId) return;
+
+    setAddresses((prev) => {
+      const from = prev.findIndex((a) => a.id === fromId);
+      const to = prev.findIndex((a) => a.id === toId);
+      if (from < 0 || to < 0) return prev;
+      return moveItem(prev, from, to);
+    });
+  }}
+  className={`
+    py-2 px-2 rounded-md transition
+    odd:bg-gray-100 even:bg-white
+    dark:odd:bg-gray-800 dark:even:bg-gray-900
+    hover:bg-gray-200 dark:hover:bg-gray-600
+    ${draggingId === pt.id ? "opacity-60" : ""}
+  `}
+>
+  <div className="flex items-center gap-3">
+    <span
+      className={`
+        mt-0.5 select-none
+        ${addresses.length > 1
+          ? "cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+          : "opacity-30 cursor-not-allowed"}
+      `}
+      title={addresses.length > 1 ? "Drag to reorder" : ""}
+      aria-hidden="true"
+    >
+      ⋮⋮
+    </span>
+
+    <div className="min-w-0 flex-1">
+      <div className="text-sm text-gray-900 dark:text-gray-100 break-words">
+        {display}
+      </div>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => removeAddressById(pt.id)}
+      className="
+        ml-auto shrink-0
+        h-7 w-7 rounded
+        grid place-items-center
+        text-red-700 hover:text-white
+        hover:bg-red-600
+        transition
+      "
+      aria-label="Remove address"
+      title="Remove"
+    >
+      ×
+    </button>
+  </div>
+</li>
+
                       );
                     })}
                   </ul>
