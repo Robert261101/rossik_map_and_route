@@ -73,6 +73,11 @@ const MainPage = ({ user })  => {
   return copy;
 };
 
+const routesRef = useRef(routes);
+useEffect(() => { routesRef.current = routes; }, [routes]);
+
+const selectedRouteIndexRef = useRef(selectedRouteIndex);
+useEffect(() => { selectedRouteIndexRef.current = selectedRouteIndex; }, [selectedRouteIndex]);
 
   const ghostMarkerRef = useRef(null);
   const behaviorRef = useRef(null);
@@ -1144,6 +1149,58 @@ const initMapIfNeeded = React.useCallback((elId) => {
    const behavior = new window.H.mapevents.Behavior(new window.H.mapevents.MapEvents(map));
    behaviorRef.current = behavior;
    mapRef.current = map;
+
+   // Right-click anywhere on the map = add a via at that point
+map.getElement().addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+
+  if ((addressesRef.current?.length || 0) < 2) {
+    showHint("Add at least 2 addresses first (start + destination).", 2500);
+    return;
+  }
+
+
+  // Only if we have a route drawn (otherwise we can't map click -> leg)
+  const rts = routesRef.current || [];
+  if (rts.length === 0) return;
+
+  const idx = selectedRouteIndexRef.current ?? 0;
+  const route = rts[idx] || rts[0];
+  if (!route?.sections?.length) return;
+
+  // Convert DOM click -> map viewport coords -> geo
+  const rect = map.getElement().getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const geo = map.screenToGeo(x, y);
+  if (!geo) return;
+
+  const committed = {
+    id: `via_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    lat: geo.lat,
+    lng: geo.lng,
+  };
+
+  // Find closest section on current route, then map section -> leg
+  const sectionIdx = nearestSectionIndex(committed.lat, committed.lng, route);
+  const legIdx = sectionIndexToLegIndex(
+    sectionIdx,
+    viaStopsByLegRef.current,
+    addressesRef.current
+  );
+
+  _registerVia(legIdx, committed);
+
+  // Re-route using the updated vias (give state a tick)
+  setTimeout(() => {
+    if (addressesRef.current?.length >= 2) {
+      getRoute([...addressesRef.current], viaStopsByLegRef.current);
+    }
+  }, 0);
+
+  showHint("Via added (right-click). Press ESC to remove last via", 2500);
+});
+
 
    // first resize tick
    setTimeout(() => map.getViewPort().resize(), 0);
