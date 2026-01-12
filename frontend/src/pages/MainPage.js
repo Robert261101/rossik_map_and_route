@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import AutoCompleteInput from "../AutoCompleteInput";
 import TollCalculator from "../TollCalculator";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from "../lib/supabase";
 import { formatNum } from "../utils/number";
 import { addLegalBreaks } from "../utils/driverTime";
 import { fetchPostalCode } from "./helpers/reversePostal.js";
 import DebugMouseOverlay from "../components/mouseOverlay.js";
 import { extractCityFromLabel } from "../utils/segments.js";
+
 
 import "./App.css";
 import Header from "../components/header.js";
@@ -37,6 +38,12 @@ const MainPage = ({ user })  => {
   const navigate = useNavigate();
   const isManager = ['transport_manager','team_lead','admin'].includes(user.role);
 
+  const location = useLocation();
+  const editId = new URLSearchParams(location.search).get("edit"); // route id from History
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [parentRouteId, setParentRouteId] = useState(null);
+
+  
   //de aici am butonul de salvare rute
   const [trucks, setTrucks] = useState([]);        // lista de { id, plate }
   const [plate, setPlate] = useState('');          // selected truck plate
@@ -76,6 +83,12 @@ const MainPage = ({ user })  => {
   const [hudMsg, setHudMsg] = useState("");
   const [hudVisible, setHudVisible] = useState(false);
   const hudTimerRef = useRef(null);
+
+  function canEditRoute(route, user) {
+  if (user.role === "admin") return true;
+  if (user.role === "team_lead") return String(route.team_id) === String(user.team_id);
+  return String(route.created_by) === String(user.id); // transport_manager
+}
 
   // ——— mobile breakpoint (Tailwind: <640px) ———
   function useIsMobile() {
@@ -217,6 +230,92 @@ const buildOrderedVias = (pts, legs) => {
       if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+  if (!editId) {
+    setIsEditMode(false);
+    setParentRouteId(null);
+    return;
+  }
+
+  (async () => {
+    try {
+      setIsEditMode(true);
+      setParentRouteId(editId);
+
+      // simplest: load directly from supabase (since you already have it)
+      const { data: rt, error } = await supabase
+        .from("routes")
+        .select("*")
+        .eq("id", editId)
+        .single();
+
+      if (error) throw error;
+      if (!rt) throw new Error("Route not found");
+
+      const { data: me, error: meErr } = await supabase
+        .from("users")
+        .select("team_id, role")
+        .eq("id", user.id)
+        .single();
+      if (meErr) throw meErr;
+
+      const can =
+        me.role === "admin" ||
+        (me.role === "team_lead" && String(rt.team_id) === String(me.team_id)) ||
+        (me.role === "transport_manager" && String(rt.created_by) === String(user.id));
+
+      if (!can) {
+        alert("You don't have access to edit this route.");
+        navigate("/history");
+        return;
+      }
+
+      // Prefill core fields
+      setAddresses(rt.addresses || []);
+      setIdentifier(rt.identifier || "");
+      setPlate(rt.truck_id || "");
+
+      // Restore via stops IF we store them (see section 4)
+      if (rt.via_stops_by_leg) {
+        const legs = ensureLegSlots(rt.via_stops_by_leg, Math.max((rt.addresses?.length || 0) - 1, 0));
+        setViaStopsByLeg(legs);
+        viaStopsByLegRef.current = legs;
+        // rebuild stack so ESC works
+        const stack = [];
+        legs.forEach((arr, legIdx) => (arr || []).forEach(v => stack.push({ legIdx, id: v.id })));
+        setViaStack(stack);
+      } else {
+        setViaStopsByLeg([]);
+        setViaStack([]);
+      }
+
+      // All-in vs €/km (best is store flags, but we can infer for now)
+      const inferredAllIn = (rt.euro_per_km === 0 && rt.cost_per_km === 0);
+      setAllIn(inferredAllIn);
+      setFixedTotalCost(inferredAllIn ? String(rt.total_cost ?? "") : "");
+
+      setVehicleType(prev => ({
+        ...prev,
+        EuroPerKm: inferredAllIn ? prev.EuroPerKm : (rt.euro_per_km ?? prev.EuroPerKm),
+        // axles / weight are NOT stored currently in your route payload
+        // if you add them later, hydrate here
+      }));
+
+      // Make sure map is ready and then calculate route from loaded addresses/vias
+      setTimeout(() => {
+        if ((rt.addresses || []).length >= 2) {
+          getRoute([...rt.addresses], rt.via_stops_by_leg || []);
+          setHasCalculated(true);
+        }
+      }, 0);
+    } catch (err) {
+      console.error("Failed to load route for edit:", err);
+      alert("Could not load route for editing: " + err.message);
+    }
+  })();
+}, [editId]);
+
 
   const resetRouteState = () => {
    // clear computed data
@@ -420,12 +519,18 @@ const _registerVia = (legIdx, via) => {
       const costPerKmValue = allIn ? 0 : costPerKmForSelected();
       const euroPerKmValue = allIn ? 0 : vehicleType.EuroPerKm;
 
+      let identifierToSave = identifier;
+
+      if (isEditMode) {
+        // naive: timestamp suffix (fast + collision-proof)
+        identifierToSave = `${identifier}-rev${new Date().toISOString().slice(0,19).replace(/[-:T]/g,'')}`;
+      }
 
       const newRoute = {
         team_id: profile.team_id,
         created_by: user.id,
         date: new Date().toISOString(),
-        identifier,
+        identifier: identifierToSave,
         truck_id: plate,
         euro_per_km: euroPerKmValue,
         distance_km: parseFloat(distance),
@@ -438,6 +543,8 @@ const _registerVia = (legIdx, via) => {
         duration,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        parent_route_id: isEditMode ? parentRouteId : null,
+        via_stops_by_leg: viaStopsByLegRef.current,
       };
 
       const { data: { session }, error: sessErr } = await supabase.auth.getSession();
@@ -460,9 +567,11 @@ const _registerVia = (legIdx, via) => {
         throw new Error(errBody.error || errBody.message || res.statusText);
       }
 
-      alert('Route saved ✔️');
-      setHasCalculated(false);
+      alert(isEditMode ? "Route updated (new version saved) ✔️" : "Route saved ✔️");
       resetRouteState();
+      if (isEditMode) {
+  navigate(`/history?filter=${encodeURIComponent(identifier)}`);
+}
     } catch (err) {
       console.error('Save failed:', err);
       alert('Save failed: ' + err.message);
@@ -1525,7 +1634,7 @@ useEffect(() => {
                             onClick={handleSaveRoute}
                             className="bg-green-600 text-white font-bold px-4 py-2 rounded shadow hover:bg-green-700 transition"
                           >
-                            Save Route
+                            {isEditMode ? "Update Route" : "Save Route"}
                           </button>
                         </div>
                       </div>

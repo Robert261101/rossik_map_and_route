@@ -363,7 +363,7 @@ app.post(
     const {
       truck_id, identifier, addresses, sections, duration,
       euroPerKm, distance, costPerKm, tolls, tollCost, totalCost,
-      euro_per_km, distance_km, cost_per_km, toll_cost, total_cost
+      euro_per_km, distance_km, cost_per_km, toll_cost, total_cost, parent_route_id, via_stops_by_leg
     } = req.body;
 
     // unify names
@@ -420,6 +420,8 @@ app.post(
         toll_cost:   t_cost,
         total_cost:  tot,
         duration,
+        parent_route_id: parent_route_id ?? null,
+        via_stops_by_leg: via_stops_by_leg ?? null,
         created_at:  new Date().toISOString(),
         updated_at:  new Date().toISOString()
       })
@@ -449,7 +451,7 @@ app.delete(
       .eq('id', routeId)
       .single();
     if (existErr || !existing) return res.status(404).json({ error: 'Route not found' });
-    if (existing.team_id !== req.user.team_id) {
+    if (req.user.role !== 'admin' && String(existing.team_id) !== String(req.user.team_id)) {
       return res.status(403).json({ error: 'Cannot delete route outside your team' });
     }
     const { error: delErr } = await supabase

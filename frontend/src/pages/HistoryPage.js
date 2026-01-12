@@ -15,7 +15,8 @@ export default function HistoryPage({ user }) {
   const [selectedId, setSelectedId] = useState(null);
   const mapRef = useRef(null);
   const mapVisible = Boolean(selectedId);
-  const isLeadOrAdmin = ['team_lead','admin'].includes(user.role);
+  const isAdmin = user.role === 'admin';
+  const isTeamLead = user.role === 'team_lead';
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const normalize = str => str.toLowerCase().replace(/\s+/g, '');
@@ -26,6 +27,8 @@ export default function HistoryPage({ user }) {
   const [activeConvo, setActiveConvo] = useState(null);
   const [convByRoute, setConvByRoute] = useState(new Map());
   const [convByPlate, setConvByPlate] = useState(new Map());
+
+  const navigate = useNavigate();
 
   const openModal = id => setModalOpenId(id);
   const closeModal = () => setModalOpenId(null);
@@ -38,6 +41,14 @@ export default function HistoryPage({ user }) {
       normalizedTruckPlate.includes(normalizedQuery)
     );
   });
+
+  const canSeeRowActions = (rt) => {
+    // team_lead/admin -> always
+    if (isAdmin || isTeamLead) return true;
+    // transport_manager -> only for routes they created
+    return String(rt.created_by) === String(user.id);
+  };
+
 
   const rowsToShow = selectedId
     ? savedRoutes.filter(r => r.id === selectedId)
@@ -54,11 +65,19 @@ export default function HistoryPage({ user }) {
           .single();
         if (profileError) throw profileError;
 
-        const { data: routes, error: routesError } = await supabase
+        let q = supabase
           .from('routes')
           .select('*, trucks(plate,price_per_day), users(username)')
-          .eq('team_id', profile.team_id)
           .order('created_at', { ascending: false });
+
+        if (user.role === 'admin') {
+          // all routes
+        } else {
+          // transport_manager + team_lead: both see all routes in their team
+          q = q.eq('team_id', profile.team_id);
+        }
+
+        const { data: routes, error: routesError } = await q;
 
         if (routesError) throw routesError;
 
@@ -417,8 +436,20 @@ export default function HistoryPage({ user }) {
                     </td>
 
                     <td className="px-3 py-2 border border-gray-200 dark:border-neutral-700">
-                      {isLeadOrAdmin && (
+                      {canSeeRowActions(rt) && (
                         <div className="flex items-center justify-between space-x-2">
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); navigate(`/map-and-guide?edit=${rt.id}`); }}
+                            className="
+                              w-24 whitespace-nowrap text-center
+                              bg-yellow-600 hover:bg-yellow-700
+                              text-white text-sm rounded px-2 py-1
+                              focus:outline-none focus:ring-2 focus:ring-yellow-400/60
+                            "
+                          >
+                            Edit
+                          </button>
                           <button
                             type="button"
                             onClick={e => { e.stopPropagation(); openConvoForRoute(rt); }}

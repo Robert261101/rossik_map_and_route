@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     const {
       truck_id, identifier, addresses, sections, duration,
       euroPerKm, distance, costPerKm, tolls, tollCost, totalCost,
-      euro_per_km, distance_km, cost_per_km, toll_cost, total_cost
+      euro_per_km, distance_km, cost_per_km, toll_cost, total_cost, parent_route_id, via_stops_by_leg
     } = req.body
 
     // unify names & basic validation
@@ -67,6 +67,8 @@ export default async function handler(req, res) {
         toll_cost:   tollCost ?? toll_cost,
         total_cost:  totalCost ?? total_cost,
         duration,
+        parent_route_id: parent_route_id ?? null,
+        via_stops_by_leg: via_stops_by_leg ?? null,
         created_at:  new Date().toISOString(),
         updated_at:  new Date().toISOString(),
       })
