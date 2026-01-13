@@ -56,7 +56,67 @@ const MainPage = ({ user })  => {
   const [resetKey, setResetKey] = useState(0);
 
   const [contractPopupsByRoute, setContractPopupsByRoute] = useState([]); 
-// Array where index = routeIndex, value = [{id,name,msg}, ...]
+  // Array where index = routeIndex, value = [{id,name,msg}, ...]
+
+  // ---- route sorting UI ----
+const [routeSortMode, setRouteSortMode] = useState("time"); // "time" | "cost" | "km"
+
+const routeSeconds = (rt) =>
+  (rt?.sections || []).reduce((sum, s) => sum + (s.summary?.duration || 0), 0);
+
+const routeMeters = (rt) =>
+  (rt?.sections || []).reduce((sum, s) => sum + (s.summary?.length || 0), 0);
+
+const routeKm = (rt) => routeMeters(rt) / 1000;
+
+const totalCostForIndex = (idx) => {
+  const rt = routes[idx];
+  if (!rt) return Infinity;
+
+  const km = routeKm(rt);
+  const secs = routeSeconds(rt);
+
+  const toll = routeTaxCosts[idx] || 0;
+
+  const daysLocal = secs ? Math.ceil(secs / 86400) : 0;
+  const dayCostLocal =
+    vehicleType.pricePerDay != null ? daysLocal * vehicleType.pricePerDay : 0;
+
+  if (allIn) return Number(fixedTotalCost || 0);
+
+  const euroPerKm = Number(vehicleType.EuroPerKm || 0);
+  const costPerKm = km * euroPerKm;
+
+  return costPerKm + toll + dayCostLocal;
+};
+
+// derived list of indices to render (keeps arrays aligned)
+const displayedRouteIndices = React.useMemo(() => {
+  const idxs = routes.map((_, i) => i);
+
+  const compare = (a, b) => {
+    if (routeSortMode === "time") {
+      return routeSeconds(routes[a]) - routeSeconds(routes[b]);
+    }
+    if (routeSortMode === "km") {
+      return routeKm(routes[a]) - routeKm(routes[b]);
+    }
+    // "cost"
+    return totalCostForIndex(a) - totalCostForIndex(b);
+  };
+
+  idxs.sort(compare);
+  return idxs;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  routes,
+  routeSortMode,
+  routeTaxCosts,
+  vehicleType.EuroPerKm,
+  vehicleType.pricePerDay,
+  allIn,
+  fixedTotalCost
+]);
 
 
   // ===== VIA PHASE 1: state scaffolding (per-leg) =====
@@ -79,6 +139,17 @@ const MainPage = ({ user })  => {
 
 const routesRef = useRef(routes);
 useEffect(() => { routesRef.current = routes; }, [routes]);
+
+useEffect(() => {
+  if (!routes.length) return;
+  // if nothing selected yet, select the first in the current sort mode
+  if (selectedRouteIndex == null) {
+    const firstIdx = displayedRouteIndices[0] ?? 0;
+    setSelectedRouteIndex(firstIdx);
+    if (routes[firstIdx]) displayedRoute(routes[firstIdx]);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [routes.length, routeSortMode]);
 
 const selectedRouteIndexRef = useRef(selectedRouteIndex);
 useEffect(() => { selectedRouteIndexRef.current = selectedRouteIndex; }, [selectedRouteIndex]);
@@ -1486,25 +1557,20 @@ useEffect(() => {
     }
   }, [routes]);
 
-  // ▶︎ new effect: once routes arrive, pick the fastest by total duration
-  useEffect(() => {
-    if (!mapRef.current) return;
-    if (routes.length === 0) return;
+useEffect(() => {
+  if (!mapRef.current) return;
+  if (routes.length === 0) return;
+  if (selectedRouteIndex != null) return; // 👈 don't override user
 
-    // Calculate each route’s total travel time (in seconds)
-    const durations = routes.map(r =>
-      r.sections.reduce((sum, s) => sum + (s.summary?.duration || 0), 0)
-    );
-
-    // Find the index of the shortest one
-    const fastestIdx = durations.indexOf(Math.min(...durations));
-
-    // Only switch if it’s a different route
-    if (fastestIdx !== selectedRouteIndex) {
-      setSelectedRouteIndex(fastestIdx);
-      displayedRoute(routes[fastestIdx]);
-    }
-  }, [routes, mapOpen]);  // Re-run whenever the routes array changes
+  // default to fastest
+  const durations = routes.map(r =>
+    r.sections.reduce((sum, s) => sum + (s.summary?.duration || 0), 0)
+  );
+  const fastestIdx = durations.indexOf(Math.min(...durations));
+  setSelectedRouteIndex(fastestIdx);
+  displayedRoute(routes[fastestIdx]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [routes, mapOpen]);
 
   return (
     <div className="App flex flex-col h-screen">
@@ -1800,8 +1866,36 @@ useEffect(() => {
             {/* ROW 2: Alternative Routes */}
             {routes.length > 0 && (
               <div className="w-full bg-white dark:bg-gray-800/70 p-4 rounded shadow-sm ring-2 ring-red-300 dark:ring-white/10 hover:ring-red-500 transition">
+                <div className="flex items-center mb-3">
                 <h2 className="text-md font-semibold mb-2 text-gray-900 dark:text-white">Alternative Routes</h2>
 
+                  <div className="flex items-center gap-2 ml-auto">
+                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                      {[
+                        { key: "time", label: "Time" },
+                        { key: "cost", label: "Cost" },
+                        { key: "km", label: "Km" },
+                      ].map((opt) => {
+                        const active = routeSortMode === opt.key;
+                        return (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => setRouteSortMode(opt.key)}
+                            className={[
+                              "px-3 py-1.5 text-sm font-semibold transition",
+                              active
+                                ? "bg-red-600 text-white"
+                                : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            ].join(" ")}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
                 {/* 👇 horizontal scroll container (mobile) */}
                 <div className="relative -mx-2 sm:mx-0">
                   <div className="overflow-x-auto px-2">
@@ -1823,15 +1917,26 @@ useEffect(() => {
                         </tr>
                       </thead>
                       <tbody>
-                        {routes.map((rt, index) => {
+                        {displayedRouteIndices.map((index) => {
+                          const rt = routes[index];
                           const { totalDuration, km, costPerKm } = computeRouteMetrics(rt);
+
                           const hours = Math.floor(totalDuration / 3600);
                           const minutes = Math.floor((totalDuration % 3600) / 60);
                           const displayTime = `${hours}h ${minutes}m`;
+
                           const routeTax = routeTaxCosts[index] || 0;
+
+                          // IMPORTANT: dayCost is currently global (based on rawDuration of selected route)
+                          // For per-row accuracy, compute it per route:
+                          const perRouteDays = Math.ceil(totalDuration / 86400) || 0;
+                          const perRouteDayCost = showPricePerDay
+                            ? perRouteDays * Number(vehicleType.pricePerDay || 0)
+                            : 0;
+
                           const totalCost = allIn
                             ? parseFloat(fixedTotalCost || 0)
-                            : costPerKm + routeTax + dayCost;
+                            : costPerKm + routeTax + perRouteDayCost;
 
                           const segs = getSegmentsForRoute(rt);
                           const selected = String(index === selectedRouteIndex ? activeLegIdx : 0);
@@ -1862,10 +1967,16 @@ useEffect(() => {
                                 )}
                               </td>
                               <td className="px-3 py-2 border dark:border-gray-700 text-center">{displayTime}</td>
-                              {!allIn && <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(costPerKm)}</td>}
+                              {!allIn && (
+                                <td className="px-3 py-2 border dark:border-gray-700 text-center">
+                                  {formatNum(costPerKm)}
+                                </td>
+                              )}
                               <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(routeTax)}</td>
                               {showPricePerDay && (
-                                <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(vehicleType.pricePerDay)}</td>
+                                <td className="px-3 py-2 border dark:border-gray-700 text-center">
+                                  {formatNum(perRouteDayCost)}
+                                </td>
                               )}
                               <td className="px-3 py-2 border dark:border-gray-700 text-center">{formatNum(totalCost)}</td>
                             </tr>
