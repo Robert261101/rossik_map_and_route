@@ -3,6 +3,32 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 // Caching pentru prețurile de rovinietă (dacă este necesar)
 let rovinietaPricesCache = null;
 
+const normalize = (s = "") =>
+  String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+// Your “contract price” rules
+const CONTRACT_TOLLS = [
+  {
+    id: "MONTBLANC_290",
+    fixedCostEUR: 290,
+    // match on any of: fare name, toll system name, collection location names
+    match: ({ name, tollSystem, locations, country }) => {
+      const hay = normalize([name, tollSystem, ...(locations || [])].join(" | "));
+
+      return (
+        country === "FRA" || country === "ITA" || country === "CHE" // optional: keep loose
+      ) && (
+        hay.includes("mont blanc") ||
+        hay.includes("tunnel du mont") ||
+        hay.includes("tunnel") && hay.includes("mont") ||
+        hay.includes("sftrf") // ⚠️ remove this if it catches Frejus etc.
+      );
+    },
+    popupText: "Mont Blanc contract applied: fixed price €290.",
+  }
+];
+
+
 const fetchRovinietaPrices = async () => {
   if (rovinietaPricesCache) return rovinietaPricesCache;
   try {
@@ -140,6 +166,15 @@ const TollCalculator = ({
   // Folosim un useRef pentru a reține id-urile rutelor deja procesate
   const processedRoutes = useRef(new Set());
 
+  const applyContractOverride = ({ name, tollSystem, locations, country, cost }) => {
+  for (const rule of CONTRACT_TOLLS) {
+    if (rule.match({ name, tollSystem, locations, country })) {
+      return { cost: rule.fixedCostEUR, contractId: rule.id, popupText: rule.popupText };
+    }
+  }
+  return null;
+};
+
    // Fallback pentru procesarea taxelor din array-ul "tolls" - memoized
   const processTollsFallback = useCallback(async (route) => {
     let tollMap = {};
@@ -151,68 +186,114 @@ const TollCalculator = ({
           const countryCode = toll.countryCode;
           if (toll.pass?.returnJourney) continue;
           // Dacă nu există tarife în toll.fares, folosim numele din toll.tollSystem (acum cu înlocuire)
-          if ((!toll.fares || toll.fares.length === 0) && countryCode && countryCalculators[countryCode]) {
-            const dummyFare = { 
-              name: toll.tollSystem ? toll.tollSystem : `${countryCode}`,
-              price: { value: 0, currency: "EUR" }
-            };
-            const sectionMetric = (section.summary?.length || 0);
-            const result = await countryCalculators[countryCode](dummyFare, sectionMetric, vehicleType.axles);
-            const key = `${countryCode}-Default`;
-            
-            tollMap[key] = {
-              name: toll.tollSystem ? toll.tollSystem : `${countryCode}`,
-              country: countryCode,
-              cost: result.cost,
-              currency: "EUR",
-              tollCollectionLocations: toll.tollCollectionLocations || [],
-            };
-            continue;
-          }
+if ((!toll.fares || toll.fares.length === 0) && countryCode && countryCalculators[countryCode]) {
+  const dummyFare = {
+    name: toll.tollSystem ? toll.tollSystem : `${countryCode}`,
+    price: { value: 0, currency: "EUR" }
+  };
+
+  const sectionMetric = (section.summary?.length || 0);
+  const result = await countryCalculators[countryCode](dummyFare, sectionMetric, vehicleType.axles);
+
+  const key = `${countryCode}-Default`;
+
+  const locations = (toll.tollCollectionLocations || [])
+    .map(l => l?.name)
+    .filter(Boolean);
+
+  const override = applyContractOverride({
+    name: dummyFare.name,              // ✅ was fare.name (doesn't exist here)
+    tollSystem: toll.tollSystem || "",
+    locations,
+    country: countryCode,
+    cost: result.cost
+  });
+
+  const finalCost = override ? override.cost : result.cost;
+
+  // If this key somehow repeats, keep contract fixed, otherwise keep max (or sum — your choice)
+  if (tollMap[key]) {
+    if (tollMap[key].contractId) {
+      // already fixed by contract, do nothing
+    } else if (override) {
+      tollMap[key].cost = finalCost;
+      tollMap[key].contractId = override.contractId;
+      tollMap[key].popupText = override.popupText;
+    } else {
+      // pick a strategy; for "default/no-fares" I'd keep the max to avoid double counting
+      tollMap[key].cost = Math.max(tollMap[key].cost, finalCost);
+    }
+  } else {
+    tollMap[key] = {
+      name: dummyFare.name,            // ✅ was fare.name
+      country: countryCode,
+      cost: finalCost,
+      currency: "EUR",
+      tollCollectionLocations: toll.tollCollectionLocations || [],
+      contractId: override?.contractId,
+      popupText: override?.popupText,
+    };
+  }
+
+  continue;
+}
           
           if (toll.fares && toll.fares.length > 0) {
             for (const fare of toll.fares) {
               if (fare.pass?.returnJourney) continue;
               if (countryCode && countryCalculators[countryCode]) {
-                const sectionMetric = (["DEU", "HUN", "AUT", "FRA", "ITA", "SVN", "PRT", "ESP", "BEL", "POL", "CZE", "SVK", "CHE"].includes(countryCode))
-                  ? (section.summary?.length || 0)
-                  : rawDuration;
-                const result = await countryCalculators[countryCode](fare, sectionMetric, vehicleType.axles);
-                const key = `${countryCode}-${fare.name || "Default"}`;
-                if (tollMap[key]) {
-                  if (["ROU", "NLD", "LUX"].includes(countryCode)) {
-                    // Nu facem adunare suplimentară pentru vigniete
-                    continue;
-                  } else {
-                    tollMap[key].cost += result.cost;
-                  }
-                } else {
-                  tollMap[key] = {
-                    name: fare.name || (toll.tollSystem ? toll.tollSystem : `${countryCode}`),
-                    country: countryCode,
-                    cost: result.cost,
-                    currency: "EUR",
-                    tollCollectionLocations: toll.tollCollectionLocations || [],
-                  };
-                }
-              } else if (fare.price && fare.price.value) {
-                const locKey = (toll.tollCollectionLocations && toll.tollCollectionLocations.length > 0)
-                  ? toll.tollCollectionLocations.map((loc) => loc.name).join("_")
-                  : "";
-                const key = `${toll.countryCode || "Unknown"}-${fare.name || "Default"}-${locKey}`;
-                const costInEuro = await convertToEuro(fare.price.value, fare.price.currency || "EUR");
-                if (tollMap[key]) {
-                  tollMap[key].cost = Math.min(tollMap[key].cost, costInEuro);
-                } else {
-                  tollMap[key] = {
-                    name: fare.name || (toll.tollSystem ? toll.tollSystem : `${toll.countryCode || "Unknown"}`),
-                    country: toll.countryCode || "Unknown",
-                    cost: costInEuro,
-                    currency: "EUR",
-                    tollCollectionLocations: toll.tollCollectionLocations || [],
-                  };
-                }
-              }
+  const sectionMetric = (["DEU","HUN","AUT","FRA","ITA","SVN","PRT","ESP","BEL","POL","CZE","SVK","CHE"].includes(countryCode))
+    ? (section.summary?.length || 0)
+    : rawDuration;
+
+  const result = await countryCalculators[countryCode](fare, sectionMetric, vehicleType.axles);
+
+  const locations = (toll.tollCollectionLocations || [])
+    .map(l => l?.name)
+    .filter(Boolean);
+
+  const override = applyContractOverride({
+    name: fare.name || "",
+    tollSystem: toll.tollSystem || "",
+    locations,
+    country: countryCode,
+    cost: result.cost
+  });
+
+  const finalCost = override ? override.cost : result.cost;
+
+  // 🔑 IMPORTANT: your old key used fare.name -> splits the same toll into multiple rows.
+  // For contracts we want ONE stable bucket, so they don't stack.
+  const key = override
+    ? `${countryCode}-${override.contractId}`
+    : `${countryCode}-${fare.name || "Default"}`;
+
+  if (tollMap[key]) {
+    // vignette rule stays
+    if (["ROU", "NLD", "LUX"].includes(countryCode)) {
+      continue;
+    }
+
+    // contract should NEVER be added multiple times
+    if (tollMap[key].contractId) {
+      continue;
+    }
+
+    // normal tolls sum
+    tollMap[key].cost += finalCost;
+  } else {
+    tollMap[key] = {
+      name: override ? `CONTRACT: ${fare.name || toll.tollSystem || countryCode}` : (fare.name || (toll.tollSystem ? toll.tollSystem : `${countryCode}`)),
+      country: countryCode,
+      cost: finalCost,
+      currency: "EUR",
+      tollCollectionLocations: toll.tollCollectionLocations || [],
+      contractId: override?.contractId,
+      popupText: override?.popupText,
+    };
+  }
+}
+
             }
           }
         }
@@ -278,11 +359,11 @@ const TollCalculator = ({
       const minutes = Math.floor((totalDuration % 3600) / 60);
       const formattedDuration = `${hours}h ${minutes}m`;
             
-      const newTollDetails = {
-        totalCost,
-        tollList,
-        duration: formattedDuration,
-      };
+      // const newTollDetails = {
+      //   totalCost,
+      //   tollList,
+      //   duration: formattedDuration,
+      // };
 
       console.log(`🛣️ [Route ${routeIndex+1}] Toll Breakdown:`)
       tollList.forEach(toll => {
@@ -297,6 +378,19 @@ const TollCalculator = ({
         );
 
       });
+
+      const contractHits = tollList.filter(t => t.contractId);
+
+const newTollDetails = {
+  totalCost,
+  tollList,
+  duration: formattedDuration,
+  contractHits: contractHits.map(t => ({
+    id: t.contractId,
+    name: t.name,
+    msg: t.popupText || "Contract pricing applied."
+  }))
+};
 
       setTollDetails(newTollDetails);
       onTollUpdate(newTollDetails);

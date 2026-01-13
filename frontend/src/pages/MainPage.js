@@ -55,6 +55,10 @@ const MainPage = ({ user })  => {
   const [addressQuery, setAddressQuery] = useState("");
   const [resetKey, setResetKey] = useState(0);
 
+  const [contractPopupsByRoute, setContractPopupsByRoute] = useState([]); 
+// Array where index = routeIndex, value = [{id,name,msg}, ...]
+
+
   // ===== VIA PHASE 1: state scaffolding (per-leg) =====
   // viaStopsByLeg: Array of arrays, length = max(addresses.length - 1, 0)
   // Example for A->B->C: [ [vias on A-B], [vias on B-C] ]
@@ -702,6 +706,7 @@ const getRoute = async (pts = addresses, viasByLeg = viaStopsByLegRef.current) =
     setRoutes(sorted);
     setRouteTaxCosts(Array(sorted.length).fill(0));
     setTollCosts(Array(sorted.length).fill({ totalCost: 0, tollList: [] }));
+    setContractPopupsByRoute(Array(sorted.length).fill([]));
     setSelectedRouteIndex(idx => (idx == null ? 0 : Math.max(0, Math.min(idx, sorted.length - 1))));
 
 
@@ -1077,22 +1082,34 @@ const handleSubmit = async (e) => {
 };
 
   // 3) Callback - când TollCalculator calculează costul pt o rută, îl salvăm și într-un array numeric simplu routeTaxCosts, și în tollCosts (pt listă).
-  const updateTollCostForRoute = (index, tollData) => {
+const updateTollCostForRoute = (index, tollData) => {
+  // numeric totals
+  setRouteTaxCosts((prev) => {
+    const newArr = [...prev];
+    newArr[index] = tollData.totalCost || 0;
+    return newArr;
+  });
 
-    // actualizăm array-ul numeric
-    setRouteTaxCosts((prev) => {
-      const newArr = [...prev];
-      newArr[index] = tollData.totalCost || 0;
-      return newArr;
-    });
+  // full toll object (includes tollList + contractHits now)
+  setTollCosts((prev) => {
+    const newArr = [...prev];
+    newArr[index] = tollData;
+    return newArr;
+  });
 
-    // actualizăm array-ul complet
-    setTollCosts((prev) => {
-      const newArr = [...prev];
-      newArr[index] = tollData; // { totalCost, tollList, duration }
-      return newArr;
-    });
-  };
+  // ✅ store contract hits for this route
+  const hits = tollData?.contractHits || [];
+  setContractPopupsByRoute((prev) => {
+    const next = [...prev];
+    next[index] = hits;
+    return next;
+  });
+
+  // ✅ optional: show a popup immediately when hits appear
+if (hits.length) {
+  showHint(hits.map(h => h.msg).join(" • "), 5000);
+}
+};
   
   // useEffect(() => {
   //   if (mapRef.current) return; 
