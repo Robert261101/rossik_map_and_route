@@ -1754,107 +1754,111 @@ useEffect(() => {
                         />
                       </div>
                   </div>
-                  {addresses.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400">No address entered.</p>}
-                  {/* …inside your render… */}
-                  <ul className="border border-gray-200 dark:border-gray-700 rounded p-2 max-h-40 overflow-y-auto space-y-1 bg-white dark:bg-gray-900/40">
-                    {addresses.map((pt, index) => {
-                      const parts = pt.label.split(",").map(s => s.trim());
-                      const countryName = parts.pop();
-                      const countryCode = (pt.country || countryName.slice(0,2)).toUpperCase();
-                      const postal = pt.postal || "";
-                      if (parts[0] === postal) parts.shift();
-                      const addressOnly = parts.join(", ");
-                      let display = "";
-                      if(postal === ""){
-                        display = `${addressOnly}, ${countryName}`;
-                      } else {
-                        display = `${countryCode}-${postal} ${addressOnly}`;
-                      }
+                    {addresses.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No address entered.
+                      </p>
+                    ) : (
+                    <ul className="border border-gray-200 dark:border-gray-700 rounded p-2 max-h-40 overflow-y-auto space-y-1 bg-white dark:bg-gray-900/40">
+                      {addresses.map((pt, index) => {
+                        const parts = pt.label.split(",").map(s => s.trim());
+                        const countryName = parts.pop();
+                        const countryCode = (pt.country || countryName.slice(0,2)).toUpperCase();
+                        const postal = pt.postal || "";
+                        if (parts[0] === postal) parts.shift();
+                        const addressOnly = parts.join(", ");
+                        let display = "";
+                        if(postal === ""){
+                          display = `${addressOnly}, ${countryName}`;
+                        } else {
+                          display = `${countryCode}-${postal} ${addressOnly}`;
+                        }
 
-                      const canDrag = addresses.length > 1;
+                        const canDrag = addresses.length > 1;
 
 
-                      return (
-                        <li
-  key={pt.id || index}
-  draggable={addresses.length > 1}
-  onDragStart={(e) => {
-    if (addresses.length <= 1) return;
-    setDraggingId(pt.id);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", pt.id);
-  }}
-  onDragEnd={() => setDraggingId(null)}
-  onDragOver={(e) => {
-    if (addresses.length <= 1) return;
-    e.preventDefault(); // enables drop
-    e.dataTransfer.dropEffect = "move";
-  }}
-  onDrop={(e) => {
-    if (addresses.length <= 1) return;
-    e.preventDefault();
+                        return (
+                          <li
+                          key={pt.id || index}
+                          draggable={addresses.length > 1}
+                          onDragStart={(e) => {
+                            if (addresses.length <= 1) return;
+                            setDraggingId(pt.id);
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", pt.id);
+                          }}
+                          onDragEnd={() => setDraggingId(null)}
+                          onDragOver={(e) => {
+                            if (addresses.length <= 1) return;
+                            e.preventDefault(); // enables drop
+                            e.dataTransfer.dropEffect = "move";
+                          }}
+                          onDrop={(e) => {
+                            if (addresses.length <= 1) return;
+                            e.preventDefault();
 
-    const fromId = e.dataTransfer.getData("text/plain");
-    const toId = pt.id;
-    if (!fromId || !toId || fromId === toId) return;
+                            const fromId = e.dataTransfer.getData("text/plain");
+                            const toId = pt.id;
+                            if (!fromId || !toId || fromId === toId) return;
 
-    setAddresses((prev) => {
-      const from = prev.findIndex((a) => a.id === fromId);
-      const to = prev.findIndex((a) => a.id === toId);
-      if (from < 0 || to < 0) return prev;
-      return moveItem(prev, from, to);
-    });
-  }}
-  className={`
-    py-2 px-2 rounded-md transition
-    odd:bg-gray-100 even:bg-white
-    dark:odd:bg-gray-800 dark:even:bg-gray-900
-    hover:bg-gray-200 dark:hover:bg-gray-600
-    ${draggingId === pt.id ? "opacity-60" : ""}
-  `}
->
-  <div className="flex items-center gap-3">
-    <span
-      className={`
-        mt-0.5 select-none
-        ${addresses.length > 1
-          ? "cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-          : "opacity-30 cursor-not-allowed"}
-      `}
-      title={addresses.length > 1 ? "Drag to reorder" : ""}
-      aria-hidden="true"
-    >
-      ⋮⋮
-    </span>
+                            setAddresses((prev) => {
+                              const from = prev.findIndex((a) => a.id === fromId);
+                              const to = prev.findIndex((a) => a.id === toId);
+                              if (from < 0 || to < 0) return prev;
+                              return moveItem(prev, from, to);
+                            });
+                          }}
+                          className={`
+                            py-2 px-2 rounded-md transition
+                            odd:bg-gray-100 even:bg-white
+                            dark:odd:bg-gray-800 dark:even:bg-gray-900
+                            hover:bg-gray-200 dark:hover:bg-gray-600
+                            ${draggingId === pt.id ? "opacity-60" : ""}
+                          `}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`
+                                mt-0.5 select-none
+                                ${addresses.length > 1
+                                  ? "cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                                  : "opacity-30 cursor-not-allowed"}
+                              `}
+                              title={addresses.length > 1 ? "Drag to reorder" : ""}
+                              aria-hidden="true"
+                            >
+                              ⋮⋮
+                            </span>
 
-    <div className="min-w-0 flex-1">
-      <div className="text-sm text-gray-900 dark:text-gray-100 break-words">
-        {display}
-      </div>
-    </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm text-gray-900 dark:text-gray-100 break-words">
+                                {display}
+                              </div>
+                            </div>
 
-    <button
-      type="button"
-      onClick={() => removeAddressById(pt.id)}
-      className="
-        ml-auto shrink-0
-        h-7 w-7 rounded
-        grid place-items-center
-        text-red-700 hover:text-white
-        hover:bg-red-600
-        transition
-      "
-      aria-label="Remove address"
-      title="Remove"
-    >
-      ×
-    </button>
-  </div>
-</li>
+                            <button
+                              type="button"
+                              onClick={() => removeAddressById(pt.id)}
+                              className="
+                                ml-auto shrink-0
+                                h-7 w-7 rounded
+                                grid place-items-center
+                                text-red-700 hover:text-white
+                                hover:bg-red-600
+                                transition
+                              "
+                              aria-label="Remove address"
+                              title="Remove"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </li>
 
-                      );
-                    })}
-                  </ul>
+                          );
+                      })}
+                    </ul>
+                  )}
 
                   <button
                     type="submit"
