@@ -151,7 +151,7 @@ export default function AddUser({ user }) {
             focus:outline-none focus:ring-2 focus:ring-emerald-400/60
           "
         >
-          Creează cont
+          Create User
         </button>
       </div>
     </div>

@@ -118,6 +118,136 @@ const displayedRouteIndices = React.useMemo(() => {
   fixedTotalCost
 ]);
 
+// meters -> lat/lng offset (approx)
+const offsetLatLng = (lat, lng, metersEast, metersNorth) => {
+  const R = 6378137; // Earth radius in meters
+  const dLat = metersNorth / R;
+  const dLng = metersEast / (R * Math.cos((Math.PI * lat) / 180));
+  return {
+    lat: lat + (dLat * 180) / Math.PI,
+    lng: lng + (dLng * 180) / Math.PI,
+  };
+};
+
+const makeCandidatesWithin1km = (lat, lng) => {
+  const bearingsDeg = [0,45,90,135,180,225,270,315];
+  const radii = [0, 400, 1000]; // <= 1km (tweak as you like)
+
+  const out = [];
+  for (const r of radii) {
+    if (r === 0) {
+      out.push({ lat, lng, meta: "click" });
+      continue;
+    }
+    for (const b of bearingsDeg) {
+      const rad = (b * Math.PI) / 180;
+      const east = Math.cos(rad) * r;
+      const north = Math.sin(rad) * r;
+      const p = offsetLatLng(lat, lng, east, north);
+      out.push({ ...p, meta: `${r}m@${b}°` });
+    }
+  }
+  return out;
+};
+
+// Lightweight router call that returns just duration/length (no polyline)
+const fetchRouteSummary = async ({ pts, viasByLeg }) => {
+  const origin = pts?.[0];
+  const destination = pts?.[pts.length - 1];
+  if (!origin || !destination) return null;
+
+  // Ensure numeric
+  const oLat = Number(origin.lat), oLng = Number(origin.lng);
+  const dLat = Number(destination.lat), dLng = Number(destination.lng);
+  if (![oLat,oLng,dLat,dLng].every(Number.isFinite)) return null;
+
+  const params = new URLSearchParams();
+  params.set("apikey", process.env.REACT_APP_HERE_API_KEY);
+  params.set("origin", `${oLat},${oLng}`);
+  params.set("destination", `${dLat},${dLng}`);
+
+  const orderedVias = buildOrderedVias(pts, viasByLeg);
+  for (const v of orderedVias) {
+    const vLat = Number(v.lat), vLng = Number(v.lng);
+    if (Number.isFinite(vLat) && Number.isFinite(vLng)) {
+      params.append("via", `${vLat},${vLng}`);
+    }
+  }
+
+  params.set("return", "summary,tolls");
+  // ✅ do NOT set alternatives at all
+
+  // keep same truck params so comparisons are apples-to-apples
+  params.set("transportMode", "truck");
+  params.set("vehicle[weightPerAxle]", "11500");
+  params.set("vehicle[height]", "400");
+  params.set("vehicle[width]", "255");
+  params.set("vehicle[length]", "1875");
+  params.set("truck[axleCount]", String(vehicleType.axles));
+  params.set("vehicle[grossWeight]", String(vehicleType.weight));
+  params.set("truck[limitedWeight]", "7500");
+  params.set("tolls[emissionType]", "euro6");
+
+  const url = `https://router.hereapi.com/v8/routes?${params.toString()}`;
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    console.warn("[candidate] routing failed:", res.status, txt.slice(0, 500));
+    return null;
+  }
+
+  const data = await res.json();
+  const rt = data?.routes?.[0];
+  if (!rt?.sections?.length) return null;
+
+  let dur = 0;
+  let len = 0;
+  for (const s of rt.sections) {
+    dur += s.summary?.duration || 0;
+    len += s.summary?.length || 0;
+  }
+  return { duration: dur, length: len };
+};
+
+// Candidate chooser: pick the via point that yields fastest total route
+const pickBestViaCandidate = async ({ clickGeo, legIdx }) => {
+  const pts = [...addressesRef.current];
+  const legCount = Math.max((pts?.length || 0) - 1, 0);
+
+  const baseLegs = ensureLegSlots(viaStopsByLegRef.current, legCount).map(arr => [...(arr || [])]);
+
+  const candidates = makeCandidatesWithin1km(clickGeo.lat, clickGeo.lng);
+
+  // cap concurrency so you don't nuke the network
+  const CONCURRENCY = 6;
+  let best = null;
+
+  for (let i = 0; i < candidates.length; i += CONCURRENCY) {
+    const chunk = candidates.slice(i, i + CONCURRENCY);
+
+    const results = await Promise.all(chunk.map(async (cand) => {
+      const legs = baseLegs.map(arr => [...arr]);
+      legs[legIdx] = [...(legs[legIdx] || []), { id: "tmp", lat: cand.lat, lng: cand.lng }];
+
+      // buildOrderedVias will sort within the leg anyway
+      const sum = await fetchRouteSummary({ pts, viasByLeg: legs });
+      if (!sum) return null;
+
+      return { cand, sum };
+    }));
+
+    for (const r of results) {
+      if (!r) continue;
+      const score = r.sum.duration * 1e6 + r.sum.length; // duration dominates; length is tiebreaker
+      if (!best || score < best.score) {
+        best = { ...r, score };
+      }
+    }
+  }
+
+  return best?.cand || { lat: clickGeo.lat, lng: clickGeo.lng };
+};
 
   // ===== VIA PHASE 1: state scaffolding (per-leg) =====
   // viaStopsByLeg: Array of arrays, length = max(addresses.length - 1, 0)
@@ -528,14 +658,15 @@ const sortViasAlongLeg = (vias, legStart, legEnd) => {
   return vias.slice().sort((a, b) => progress(a) - progress(b));
 };
 
-
-// Register a new via into a specific leg
 const _registerVia = (legIdx, via) => {
-  setViaStopsByLeg(prev => {
-    const base = ensureLegSlots(prev, Math.max((addressesRef.current?.length || 0) - 1, 0));
-    base[legIdx] = [...(base[legIdx] || []), via];
-    return base;
-  });
+  const legCount = Math.max((addressesRef.current?.length || 0) - 1, 0);
+  const base = ensureLegSlots(viaStopsByLegRef.current, legCount).map(a => [...a]);
+  base[legIdx] = [...(base[legIdx] || []), via];
+
+  // ✅ sync both
+  viaStopsByLegRef.current = base;
+  setViaStopsByLeg(base);
+
   setViaStack(stack => [...stack, { legIdx, id: via.id }]);
   setSelectedVia({ legIdx, id: via.id });
 };
@@ -954,7 +1085,7 @@ const bounds = fullLineString.getBoundingBox();
 if (bounds) {
    // Tweak factor: 1.06 (subtle) … 1.15 (more generous)
    const padded = inflateRect(bounds, 1.10);
-   map.getViewModel().setLookAtData({ bounds: padded });
+   map.getViewModel().setLookAtData({ bounds: padded, animate: false });
  }
   // Paint via dots right after the new polyline settles
   setTimeout(renderViaMarkers, 0);
@@ -1238,8 +1369,7 @@ const initMapIfNeeded = React.useCallback((elId) => {
    behaviorRef.current = behavior;
    mapRef.current = map;
 
-   // Right-click anywhere on the map = add a via at that point
-map.getElement().addEventListener("contextmenu", (e) => {
+map.getElement().addEventListener("contextmenu", async (e) => {
   e.preventDefault();
 
   if ((addressesRef.current?.length || 0) < 2) {
@@ -1247,8 +1377,6 @@ map.getElement().addEventListener("contextmenu", (e) => {
     return;
   }
 
-
-  // Only if we have a route drawn (otherwise we can't map click -> leg)
   const rts = routesRef.current || [];
   if (rts.length === 0) return;
 
@@ -1256,39 +1384,48 @@ map.getElement().addEventListener("contextmenu", (e) => {
   const route = rts[idx] || rts[0];
   if (!route?.sections?.length) return;
 
-  // Convert DOM click -> map viewport coords -> geo
   const rect = map.getElement().getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   const geo = map.screenToGeo(x, y);
   if (!geo) return;
 
-  const committed = {
-    id: `via_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    lat: geo.lat,
-    lng: geo.lng,
-  };
-
-  // Find closest section on current route, then map section -> leg
-  const sectionIdx = nearestSectionIndex(committed.lat, committed.lng, route);
+  // Determine leg as you already do
+  const sectionIdx = nearestSectionIndex(geo.lat, geo.lng, route);
   const legIdx = sectionIndexToLegIndex(
     sectionIdx,
     viaStopsByLegRef.current,
     addressesRef.current
   );
 
+  showHint("Finding best road-side via…", 1200);
+
+  // ✅ Pick best nearby candidate within 1km by routing score
+  let bestPoint = null;
+  try {
+    bestPoint = await pickBestViaCandidate({ clickGeo: geo, legIdx });
+  } catch (err) {
+    console.warn("Candidate picking failed, falling back to click:", err);
+    bestPoint = { lat: geo.lat, lng: geo.lng };
+  }
+
+  const committed = {
+    id: `via_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    lat: bestPoint.lat,
+    lng: bestPoint.lng,
+  };
+
   _registerVia(legIdx, committed);
 
-  // Re-route using the updated vias (give state a tick)
+  // Re-route using updated vias
   setTimeout(() => {
     if (addressesRef.current?.length >= 2) {
       getRoute([...addressesRef.current], viaStopsByLegRef.current);
     }
   }, 0);
 
-  showHint("Via added (right-click). Press ESC to remove last via", 2500);
+  showHint("Via added (smart). Press ESC to remove last via", 2500);
 });
-
 
    // first resize tick
    setTimeout(() => map.getViewPort().resize(), 0);
