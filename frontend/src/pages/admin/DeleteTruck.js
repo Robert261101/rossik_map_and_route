@@ -91,7 +91,7 @@ export default function DeleteTruck({ user }) {
           value={selectedTruckId}
           onChange={e => setSelectedTruckId(e.target.value)}
         >
-          <option value="">Selectează un camion</option>
+          <option value="">Select a truck</option>
           {trucks.map(t => (
             <option key={t.id} value={t.id}>
               {t.plate}

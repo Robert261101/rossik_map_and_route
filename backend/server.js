@@ -468,11 +468,11 @@ app.post(
   '/api/trucks',
   requireRole('admin'),
   async (req, res) => {
-    const { plate, team_id } = req.body;
-    if (!plate || !team_id) return res.status(400).json({ error: 'plate and team_id are required' });
+    const { plate } = req.body;
+    if (!plate) return res.status(400).json({ error: 'plate is required' });
     const { data, error } = await supabase
       .from('trucks')
-      .insert({ plate, team_id, created_by: req.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .insert({ plate, created_by: req.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .select();
     if (error) return res.status(500).json({ error: error.message });
     res.status(201).json(data[0]);
@@ -575,25 +575,40 @@ app.post('/api/admin/user/:id/reset-password', requireRole('admin'), async (req,
 
 // /api/admin/truck (POST)
 app.post('/api/admin/trucks/add', requireRole('admin'), async (req, res) => {
-  const { plate, team_id } = req.body;
-  const created_by = req.user.id; // presupunând că req.user e injectat de `requireRole`
+  const { plate, euro_per_km, price_per_day } = req.body;
+  const created_by = req.user.id;
 
-  if (!plate || !team_id) {
-    return res.status(400).json({ error: 'Date lipsă' });
+  if (!plate) {
+    return res.status(400).json({ error: 'Missing plate number' }); // or "plate missing"
   }
 
+  const rate =
+    typeof euro_per_km === 'number' && Number.isFinite(euro_per_km)
+      ? euro_per_km
+      : 0.1;
+
+  const pday =
+    typeof price_per_day === 'number' && Number.isFinite(price_per_day)
+      ? price_per_day
+      : null;
+
   try {
-    const { error } = await supabaseAdmin.from('trucks').insert({
-      plate,
-      team_id,
-      created_by,
-    });
+    const { data, error } = await supabaseAdmin
+      .from('trucks')
+      .insert({
+        plate,
+        created_by,
+        euro_per_km: rate,
+        price_per_day: pday,
+      })
+      .select('*')
+      .single();
 
     if (error) throw error;
-    res.status(200).json({ message: 'Camion adăugat' });
+    return res.status(201).json({ message: 'Camion adăugat', truck: data });
   } catch (err) {
     console.error('Eroare la adăugare camion:', err);
-    res.status(500).json({ error: 'Eroare la adăugare camion' });
+    return res.status(500).json({ error: err.message || 'Eroare la adăugare camion' });
   }
 });
 
@@ -602,10 +617,10 @@ app.get('/api/admin/trucks', requireRole('admin'), async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('trucks')
-      .select('*'); // sau .select('id, plate') dacă vrei doar astea
+      .select('id, plate, euro_per_km, price_per_day')
+      .order('plate');
 
     if (error) throw error;
-
     res.status(200).json(data);
   } catch (err) {
     console.error('Eroare la fetch camioane:', err);

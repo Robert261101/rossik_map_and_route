@@ -39,21 +39,25 @@ export default function AdminDashboard({ user }) {
 
   const fetchTrucks = async () => {
     const { data, error } = await supabase
-      .from('trucks')
-      .select('id, plate, teams(name), euro_per_km, price_per_day')
-      .order('plate');
+      .from("trucks")
+      .select("id, plate, euro_per_km, price_per_day")
+      .order("plate");
 
-    if (!error) {
-      const formatted = (data || []).map(truck => ({
-        id: truck.id,
-        plate: truck.plate,
-        team_name: truck.teams?.name || null,
-        euroPerKm: truck.euro_per_km,
-        pricePerDay: truck.price_per_day
-      }));
-      setTrucks(formatted);
-      setShowTrucksModal(true);
+    if (error) {
+      console.error("Fetch trucks error:", error);
+      alert("Failed to load trucks: " + error.message);
+      return;
     }
+
+    const formatted = (data || []).map((truck) => ({
+      id: truck.id,
+      plate: truck.plate,
+      euroPerKm: truck.euro_per_km,
+      pricePerDay: truck.price_per_day,
+    }));
+
+    setTrucks(formatted);
+    setShowTrucksModal(true);
   };
 
   // same layout, just dark-aware styles
