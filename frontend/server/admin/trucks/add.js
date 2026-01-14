@@ -48,9 +48,9 @@ export default async function addTruckHandler(req, res) {
   }
 
   // — validate payload
-  const { plate, team_id, euro_per_km, price_per_day } = req.body
-    if (!plate || !team_id) {
-      return res.status(400).json({ error: 'plate and team_id are required' })
+  const { plate, euro_per_km, price_per_day } = req.body
+    if (!plate) {
+      return res.status(400).json({ error: 'plate is required' })
     }
 
   const rate = typeof euro_per_km === 'number'
@@ -65,7 +65,7 @@ export default async function addTruckHandler(req, res) {
     // — insert new truck
     const { data: newTruck, error: insertErr } = await supabaseAdmin
       .from('trucks')
-      .insert({ plate, team_id, created_by: user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), euro_per_km: rate, price_per_day: pday })
+      .insert({ plate, created_by: user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), euro_per_km: rate, price_per_day: pday })
       .single()
     if (insertErr) throw insertErr
 

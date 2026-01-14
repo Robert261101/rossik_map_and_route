@@ -53,9 +53,9 @@ export default async function handler(req, res) {
 
   // — POST: create a new truck
   if (req.method === 'POST') {
-    const { plate, team_id, euro_per_km, price_per_day } = req.body
-    if (!plate || !team_id) {
-      return res.status(400).json({ error: 'plate and team_id are required' })
+    const { plate, euro_per_km, price_per_day } = req.body
+    if (!plate) {
+      return res.status(400).json({ error: 'plate is required' })
     }
 
     // coerce numeric values
@@ -70,7 +70,6 @@ export default async function handler(req, res) {
       .from('trucks')
       .insert({
         plate,
-        team_id,
         created_by: user.id,
         created_at: now,
         updated_at: now,
@@ -89,7 +88,7 @@ export default async function handler(req, res) {
   // — GET: fetch all trucks
   const { data: trucks, error: fetchErr } = await supabaseAdmin
     .from('trucks')
-    .select('id, plate, teams(name), euro_per_km, price_per_day')
+    .select('id, plate, euro_per_km, price_per_day')
     .order('plate')
 
   if (fetchErr) {
